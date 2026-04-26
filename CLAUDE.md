@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Django Base Site is an opinionated Django starter template that provides a production-ready foundation with modern tooling and best practices. It uses Django 5 with a custom user model, Celery for background tasks, and includes authentication via Django Allauth.
+Budgeteer is a Django 5 web application built on the Django Base Site template. It uses a custom user model, Celery for background tasks, and Django Allauth for authentication. All development tasks run inside Docker via Just.
 
 ## Architecture
 
@@ -16,13 +16,14 @@ Django Base Site is an opinionated Django starter template that provides a produ
 
 ## Development Commands
 
-Use Just for all development tasks. Key commands:
+All commands run inside Docker containers by default. Override with `PYTHON_CMD_PREFIX` / `NODE_CMD_PREFIX` env vars to run locally.
 
 **Setup & Management:**
-- `just start` - Start Docker Compose development environment
+- `just start` - Start Docker Compose environment
+- `just start_full` - Start with full profile (includes docs server)
 - `just build` - Build Docker images and collect static files
 - `just stop` - Stop all services
-- `just clean` - Remove build files and cache
+- `just clean` - Remove build artifacts, caches, coverage data
 
 **Code Quality:**
 - `just format` - Format all code (Python with Ruff, JS with ESLint, SASS with Stylelint, HTML with djLint)
@@ -30,32 +31,35 @@ Use Just for all development tasks. Key commands:
 - `just pre_commit` - Run format, lint, and test pipeline
 
 **Testing:**
-- `just test` - Run pytest without coverage
-- `just test_with_coverage` - Run tests with coverage report
+- `just test` - Run pytest
+- `just test_with_coverage` - Run tests with coverage HTML report
+- Run a single test: `docker compose exec web pytest --ds=config.settings.test_runner path/to/test.py::TestClass::test_method`
 
 **Asset Building:**
 - `just build_frontend` - Build frontend assets with Vite
 - `just collectstatic` - Run Django's collectstatic
 
+**Database:**
+- `just db_dump` - Dump database to `~/Downloads/`
+- `just db_restore [dump_file]` - Restore from dump (defaults to latest in `~/Downloads/`)
+
 **Dependencies:**
-- `just upgrade_python_packages` - Upgrade Python deps using uv
-- `just upgrade_node_packages` - Upgrade Node deps
+- `just upgrade_python_packages [pkg...]` - Upgrade all or specific Python packages via uv
+- `just upgrade_node_packages` - Upgrade Node packages
+- `just upgrade_all_packages` - Upgrade both, rebuild, and run pre-commit
 
 ## Testing
 
-- Uses pytest with pytest-django plugin
-- Test settings in `config.settings.test_runner`
-- Model Bakery for test data generation
-- Django Test Plus for additional test helpers
-- Coverage configuration in `config/coverage.ini`
+- pytest + pytest-django; settings module: `config.settings.test_runner`
+- Model Bakery for fixture-free test data; Django Test Plus for extra helpers
+- Coverage config: `config/coverage.ini`
 
 ## Code Standards
 
 - **Python**: Formatted with Ruff, type-checked with ty, follows Django conventions
 - **JavaScript**: ESLint with Airbnb base config
-- **SASS/CSS**: Stylelint with standard SCSS config and recess order
-- **HTML**: djLint for Django template formatting and linting
-- **Line Length**: 120 characters for Python and HTML
+- **SASS/CSS**: Stylelint with standard SCSS + recess order
+- **HTML**: djLint; 120-char line length, 2-space indent
 
 ## Debugging
 
@@ -102,11 +106,12 @@ Key variables:
 - `DEBUG=on` for development
 - `SECRET_KEY` - Django secret key (auto-generated)
 - `DATABASE_URL` - PostgreSQL connection string
+- `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB`
 - `INTERNAL_IPS` - For Django Debug Toolbar
 - `USE_DEBUGPY=true` - Enable remote debugging (optional)
 
 ## Key Dependencies
 
-- **Backend**: Django 5, Celery, Redis, PostgreSQL, Django Allauth, Crispy Forms
+- **Backend**: Django 5, Celery, Redis, PostgreSQL, Django Allauth, Crispy Forms, django-alive (health checks), django-maintenance-mode
 - **Frontend**: Vite, Bootstrap 5, SASS
 - **Development**: Docker, pytest, Ruff, ty, ESLint, Stylelint

@@ -65,6 +65,7 @@
               <a class="nav-link" href="{% url 'site_index' %}">Home <span class="visually-hidden">(current)</span></a>
             </li>
             <li class="nav-item">
+              <a class="nav-link" href="{% url 'account_login' %}">Sign In</a>
               <a class="nav-link" href="#">About</a>
             </li>
             <li class="nav-item">
@@ -107,6 +108,7 @@
                     </li>
                   {% endif %}
                   <li>
+                    <a class="dropdown-item" href="{% url 'admin:index' %}">Administration</a>
                     <a class="dropdown-item" href="{% url 'account_logout' %}">Sign Out</a>
                   </li>
                 </ul>
