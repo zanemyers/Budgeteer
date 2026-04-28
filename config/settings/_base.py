@@ -55,12 +55,12 @@ INSTALLED_APPS = [
     "apps.base",
     "apps.accounts",
     "apps.budget",
-    "rest_framework",
+    "inertia",
+    "crispy_forms",
+    "crispy_bootstrap5",
     "maintenance_mode",
     "allauth",
     "allauth.account",
-    "crispy_forms",
-    "crispy_bootstrap5",
     "storages",
 ]
 
@@ -69,10 +69,12 @@ MIDDLEWARE = [
     "django_alive.middleware.healthcheck_bypass_host_check",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
+    "inertia.middleware.InertiaMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
+    "apps.base.inertia_middleware.InertiaShareMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "maintenance_mode.middleware.MaintenanceModeMiddleware",
 ]
@@ -208,7 +210,8 @@ CACHES = {
 CELERY_BROKER_URL = REDIS_URL
 CELERY_BROKER_TRANSPORT_OPTIONS = {"global_keyprefix": REDIS_PREFIX}
 
-# CRISPY-FORMS
+INERTIA_LAYOUT = "app.html"
+
 CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
 CRISPY_TEMPLATE_PACK = "bootstrap5"
 
@@ -318,15 +321,3 @@ MAINTENANCE_MODE_STATE_BACKEND = "maintenance_mode.backends.CacheBackend"
 MAINTENANCE_MODE_STATE_BACKEND_FALLBACK_VALUE = True
 
 VITE_DEV_MODE = env.bool("VITE_DEV_MODE", default=DEBUG)
-
-REST_FRAMEWORK = {
-    "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework.authentication.SessionAuthentication",
-    ],
-    "DEFAULT_PERMISSION_CLASSES": [
-        "rest_framework.permissions.IsAuthenticated",
-    ],
-    "DEFAULT_RENDERER_CLASSES": [
-        "rest_framework.renderers.JSONRenderer",
-    ],
-}

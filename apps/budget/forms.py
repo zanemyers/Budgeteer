@@ -8,7 +8,7 @@ from crispy_forms.bootstrap import FormActions
 from crispy_forms.helper import FormHelper
 from crispy_forms.layout import HTML, Field, Layout, Submit
 
-from apps.budget.models import Budget, BudgetMembership, Category, RecurringTransaction, Transaction, TransactionLine
+from apps.budget.models import Budget, BudgetMembership, Category, PaymentMethod, RecurringTransaction, Transaction, TransactionLine
 
 
 
@@ -117,22 +117,26 @@ def make_transaction_line_formset(budget=None, extra=1):
 class RecurringTransactionForm(forms.ModelForm):
     class Meta:
         model = RecurringTransaction
-        fields = ["name", "description", "amount", "category", "frequency", "interval", "start_date", "end_date", "is_active"]
+        fields = ["name", "description", "amount", "category", "payment_method", "frequency", "interval", "start_date", "end_date", "is_active"]
         widgets = {
             "start_date": forms.DateInput(attrs={"type": "date"}),
             "end_date": forms.DateInput(attrs={"type": "date"}),
         }
 
-    def __init__(self, *args, budget=None, **kwargs):
+    def __init__(self, *args, budget=None, user=None, **kwargs):
         super().__init__(*args, **kwargs)
         if budget is not None:
             self.fields["category"].queryset = Category.objects.filter(budget=budget)
+        if user is not None:
+            self.fields["payment_method"].queryset = PaymentMethod.objects.filter(user=user, is_active=True)
+        self.fields["payment_method"].required = False
         self.helper = FormHelper()
         self.helper.layout = Layout(
             FloatingField("name"),
             Field("description", rows=3),
             FloatingField("amount"),
             Field("category"),
+            Field("payment_method"),
             Field("frequency"),
             Field("interval", id="id_interval"),
             Field("start_date"),

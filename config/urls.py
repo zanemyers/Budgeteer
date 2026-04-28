@@ -1,10 +1,11 @@
 from django.conf import settings
 from django.contrib import admin
+from django.contrib.auth.decorators import login_required
 from django.urls import URLPattern, URLResolver, include, path
 
 from apps.accounts.views import NameChange, SignInView
 from apps.base.views import IndexView, http_404, http_500
-from apps.budget.views import BudgetHistoryView, BudgetHomeView, PaymentMethodsView
+from apps.budget.views import BudgetHistoryView, PaymentMethodsView
 
 # Includes
 urlpatterns: list[URLResolver | URLPattern] = [path(r"admin/", admin.site.urls)]
@@ -21,8 +22,6 @@ urlpatterns += [
     path("accounts/login/", SignInView.as_view(), name="account_login"),
     path("accounts/", include("allauth.urls")),
     path("budgets/", include("apps.budget.urls", namespace="budget")),
-    path("api/budgets/<int:budget_pk>/", include("apps.budget.api.urls")),
-    path("api/payment-methods/", include("apps.budget.api.payment_methods_urls")),
 ]
 
 # Debug/Development URLs

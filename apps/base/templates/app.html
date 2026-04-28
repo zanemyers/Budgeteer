@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+{% load vite %}
+
+<html lang="en" class="h-100">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" href="data:,">
+    <title>{{ SITE_NAME }}</title>
+
+    {% vite_asset 'js/main.css' %}
+
+    {% include "blocks/google-analytics.html" %}
+  </head>
+  <body class="d-flex flex-column h-100">
+
+    {% include "blocks/nav.html" %}
+
+    <main class="container-fluid">
+      {% block inertia %}{% endblock %}
+    </main>
+
+    <footer class="footer mt-auto container-fluid border-top border-top-1 pt-2">
+      <p>©{{ SITE_NAME }} {% now "Y" %}</p>
+    </footer>
+
+    {% vite_hmr_client %}
+    {% vite_asset 'js/main.js' %}
+    {% vite_asset 'tsx/main.tsx' %}
+
+  </body>
+</html>

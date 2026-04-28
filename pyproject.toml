@@ -1,13 +1,12 @@
 [project]
-name = "django-base-site"
-description = "A Django project template for creating new Django projects."
+name = "budgeteer"
+description = "A personal budgeting web application."
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
-    "Django~=5.0",
-    "boto3~=1.34",
-    "celery-types>=0.26.0",
-    "celery~=5.5",
+    "Django~=6.0",
+    "boto3~=1.42",
+    "celery~=5.6",
     "crispy-bootstrap5~=2026.3",
     "django-alive~=2.0",
     "django-allauth~=65.16",
@@ -16,17 +15,19 @@ dependencies = [
     "django-ses~=4.3",
     "django-storages~=1.8",
     "epicenv[django]~=1.2",
-    "hiredis~=3.0",  # needed for Django's native cache and sessions
+    "inertia-django~=1.2",
+    "hiredis~=3.0", # needed for Django's native cache and sessions
     "psycopg2-binary~=2.9",
-    "pytest-cov~=7.0",
-    "pytest-django~=4.5",
     "python-json-logger~=4.1",
-    "redis~=7.1",  # needed for celery
+    "redis~=7.1", # needed for celery
     "uwsgi~=2.0",
+    "pytest-cov>=7.1.0",
+    "pytest-django>=4.12.0",
 ]
 
 [dependency-groups]
 dev = [
+    "celery-types",
     "debugpy",
     "django-debug-toolbar",
     "django-stubs",
@@ -39,15 +40,13 @@ dev = [
     "mkdocs-material",
     "mkdocstrings[python]",
     "model-bakery",
+    "pytest-cov",
+    "pytest-django",
     "ty",
     "readable-log-formatter",
     "ruff",
     "ruff-lsp",
 ]
-
-[tool.ty]
-# Ty type checker configuration: https://docs.astral.sh/ty/
-# Ty is a fast, modern type checker for Python
 
 [tool.django-stubs]
 django_settings_module = "config.settings.test_runner"
@@ -78,14 +77,14 @@ directory = "htmlcov"
 
 [tool.djlint]
 indent = 2
-profile="django"
-max_line_length=120
-blank_line_after_tag="endblock,extends,load"
-format_css=true
-format_js=true
-use_gitignore=true
-ignore="H030,H031,H017"
-exclude="base-email.html"
+profile = "django"
+max_line_length = 120
+blank_line_after_tag = "endblock,extends,load"
+format_css = true
+format_js = true
+use_gitignore = true
+ignore = "H030,H031,H017"
+exclude = "base-email.html"
 
 [tool.djlint.js]
 indent_size=2
@@ -171,6 +170,3 @@ EMAIL_URL = { type = "str", default="smtp://mailpit:1025", help_text = "Email se
 
 # Instance Settings
 INSTANCE = { type = "str", default = "dev", help_text = "Instance name (e.g., dev, staging, prod)" }
-
-[tool.uv]
-exclude-newer = "P7D"

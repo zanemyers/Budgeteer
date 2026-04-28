@@ -8,7 +8,10 @@
       <h1 class="h3 mb-0" id="rt-title">{{ recurring.name }}</h1>
       <p class="text-muted small mb-0" id="rt-subtitle">{{ recurring.get_frequency_display }}{% if recurring.frequency == "every_n_months" %} (every {{ recurring.interval }} months){% endif %} — ${{ recurring.amount }}</p>
     </div>
-    <a href="{% url 'budget:recurring-list' budget_pk=budget.pk %}" class="btn btn-sm btn-outline-secondary">Back</a>
+    <div class="d-flex gap-2">
+      <button class="btn btn-sm btn-outline-danger" id="btn-delete-rt">Delete</button>
+      <a href="{% url 'budget:recurring-list' budget_pk=budget.pk %}" class="btn btn-sm btn-outline-secondary">Back</a>
+    </div>
   </div>
 
   <div class="row g-4 mb-4">
@@ -23,7 +26,8 @@
               data-rt-id="{{ recurring.pk }}"
               data-category-id="{{ recurring.category.pk }}"
               data-frequency="{{ recurring.frequency }}"
-              data-interval="{{ recurring.interval }}">
+              data-interval="{{ recurring.interval }}"
+              data-payment-method-id="{{ recurring.payment_method_id|default:'' }}">
             <dt>Name</dt>
             <dd><span class="rt-edit-field" data-field="name" style="cursor:text">{{ recurring.name }}</span></dd>
             <dt>Category</dt>
@@ -36,6 +40,8 @@
             <dd><span class="rt-edit-field" data-field="start_date" data-raw="{{ recurring.start_date|date:'Y-m-d' }}" style="cursor:pointer">{{ recurring.start_date|date:"M j, Y" }}</span></dd>
             <dt>End Date</dt>
             <dd><span class="rt-edit-field" data-field="end_date" data-raw="{{ recurring.end_date|date:'Y-m-d'|default:'' }}" style="cursor:pointer">{{ recurring.end_date|date:"M j, Y"|default:"No end date" }}</span></dd>
+            <dt>Payment Method</dt>
+            <dd><span class="rt-edit-field" data-field="payment_method" style="cursor:pointer">{{ recurring.payment_method|default:"—" }}</span></dd>
             <dt>Description</dt>
             <dd><span class="rt-edit-field" data-field="description" style="cursor:text">{{ recurring.description|default:"—" }}</span></dd>
           </dl>
@@ -120,6 +126,12 @@
       const CATEGORIES = [
         {% for cat in categories %}
         { id: {{ cat.pk }}, name: '{{ cat.name|escapejs }}', type: '{{ cat.category_type }}' },
+        {% endfor %}
+      ];
+
+      const PAYMENT_METHODS = [
+        {% for pm in payment_methods %}
+        { id: {{ pm.pk }}, name: '{{ pm.name|escapejs }}{% if pm.last_four %} ···{{ pm.last_four|escapejs }}{% endif %}' },
         {% endfor %}
       ];
 
@@ -335,6 +347,83 @@
           sel.addEventListener('keydown', function (e) {
             if (e.key === 'Escape') { sel.removeEventListener('blur', save); span.textContent = originalText; }
           });
+        });
+      }());
+
+      // Payment method select
+      (function () {
+        const span = dl.querySelector('[data-field="payment_method"]');
+        span.addEventListener('click', function () {
+          if (span.querySelector('select')) return;
+          const originalId = dl.dataset.paymentMethodId;
+          const originalText = span.textContent.trim();
+          const sel = document.createElement('select');
+          sel.className = 'form-select form-select-sm';
+          sel.appendChild(new Option('— None —', ''));
+          PAYMENT_METHODS.forEach(function (pm) {
+            const opt = new Option(pm.name, pm.id);
+            if (String(pm.id) === originalId) opt.selected = true;
+            sel.appendChild(opt);
+          });
+          if (!originalId) sel.value = '';
+          span.textContent = ''; span.appendChild(sel); sel.focus();
+          let committed = false;
+          async function save() {
+            if (committed) return;
+            committed = true;
+            const val = sel.value;
+            if (val === originalId || (!val && !originalId)) { span.textContent = originalText; return; }
+            try {
+              await apiRequest(`${API_BASE}/recurring/${RT_ID}/`, 'PATCH', { payment_method: val ? parseInt(val) : null });
+              dl.dataset.paymentMethodId = val;
+              span.textContent = val ? sel.options[sel.selectedIndex].text : '—';
+            } catch { span.textContent = originalText; }
+          }
+          sel.addEventListener('change', save);
+          document.addEventListener('click', function outsideClick(e) {
+            if (!span.contains(e.target)) {
+              document.removeEventListener('click', outsideClick, true);
+              save();
+            }
+          }, true);
+          sel.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') { committed = true; span.textContent = originalText; }
+          });
+        });
+      }());
+
+      // ── Permanent delete ─────────────────────────────────────────────────
+      (function () {
+        const btn = document.getElementById('btn-delete-rt');
+        const LIST_URL = "{% url 'budget:recurring-list' budget_pk=budget.pk %}";
+
+        btn.addEventListener('click', function () {
+          if (btn.dataset.confirming) return;
+          btn.dataset.confirming = '1';
+          const confirmBtn = document.createElement('button');
+          confirmBtn.className = 'btn btn-sm btn-danger ms-2';
+          confirmBtn.textContent = 'Confirm Delete';
+          btn.insertAdjacentElement('afterend', confirmBtn);
+          btn.textContent = 'Cancel';
+          btn.classList.replace('btn-outline-danger', 'btn-outline-secondary');
+
+          confirmBtn.addEventListener('click', async function () {
+            confirmBtn.disabled = true;
+            try {
+              await apiRequest(`${API_BASE}/recurring/${RT_PK}/?permanent=true`, 'DELETE');
+              window.location.href = LIST_URL;
+            } catch {
+              confirmBtn.disabled = false;
+            }
+          });
+
+          btn.addEventListener('click', function reset() {
+            delete btn.dataset.confirming;
+            btn.textContent = 'Delete';
+            btn.classList.replace('btn-outline-secondary', 'btn-outline-danger');
+            confirmBtn.remove();
+            btn.removeEventListener('click', reset);
+          }, { once: true });
         });
       }());
 

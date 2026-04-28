@@ -1,15 +1,19 @@
-import { StrictMode } from "react";
+import { createInertiaApp } from "@inertiajs/react";
 import { createRoot } from "react-dom/client";
-import DashboardPage from "./pages/DashboardPage";
 
-const container = document.getElementById("budget-app");
-if (container) {
-  const budgetPk = parseInt(container.dataset.budgetPk ?? "0", 10);
-  const initialMonth = container.dataset.month || undefined;
-
-  createRoot(container).render(
-    <StrictMode>
-      <DashboardPage budgetPk={budgetPk} initialMonth={initialMonth} />
-    </StrictMode>
-  );
-}
+createInertiaApp({
+  resolve: (name) => {
+    const pages = import.meta.glob("./pages/**/*.tsx", { eager: true }) as Record<
+      string,
+      { default: React.ComponentType }
+    >;
+    const page = pages[`./pages/${name}.tsx`];
+    if (!page) {
+      throw new Error(`Inertia page not found: ${name}`);
+    }
+    return page;
+  },
+  setup({ el, App, props }) {
+    createRoot(el).render(<App {...props} />);
+  },
+});

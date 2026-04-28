@@ -26,6 +26,7 @@ project_slug := 'budgeteer'
     docker stop $(docker ps -a -q) || true
     # remove all stopped containers
     docker rm $(docker ps -a -q) || true
+    just start
     just upgrade_python_packages
     just upgrade_node_packages
     just build

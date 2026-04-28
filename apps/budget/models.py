@@ -69,6 +69,7 @@ class Category(models.Model):
     budget = models.ForeignKey(Budget, on_delete=models.CASCADE, related_name="categories")
     name = models.CharField(max_length=100)
     category_type = models.CharField(max_length=10, choices=TYPE_CHOICES)
+    monthly_budget = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -96,6 +97,9 @@ class RecurringTransaction(models.Model):
 
     budget = models.ForeignKey(Budget, on_delete=models.CASCADE, related_name="recurring_transactions")
     category = models.ForeignKey(Category, on_delete=models.PROTECT, related_name="recurring_transactions")
+    payment_method = models.ForeignKey(
+        "PaymentMethod", null=True, blank=True, on_delete=models.SET_NULL, related_name="recurring_transactions"
+    )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -172,6 +176,7 @@ class RecurringTransaction(models.Model):
                     "created_by": self.created_by,
                     "description": self.name,
                     "is_paid": False,
+                    "payment_method": self.payment_method,
                 },
             )
             if is_new:

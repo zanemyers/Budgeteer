@@ -12,18 +12,16 @@
     <div class="table-responsive">
       <table class="table table-hover mb-0 align-middle" id="recurring-table">
         <colgroup>
-          <col style="width:22%">
+          <col style="width:26%">
+          <col style="width:20%">
+          <col style="width:12%">
+          <col style="width:14%">
+          <col style="width:12%">
           <col style="width:16%">
-          <col style="width:18%">
-          <col style="width:10%">
-          <col style="width:12%">
-          <col style="width:10%">
-          <col style="width:12%">
         </colgroup>
         <thead>
           <tr>
             <th>Name</th>
-            <th>Category</th>
             <th>Frequency</th>
             <th class="text-end">Amount</th>
             <th>Start Date</th>
@@ -35,6 +33,8 @@
           {% for rt in recurring_transactions %}
             <tr data-rt-id="{{ rt.pk }}"
                 data-category-id="{{ rt.category.pk }}"
+                data-category-name="{{ rt.category.name|escapejs }}"
+                data-category-type="{{ rt.category.category_type }}"
                 data-frequency="{{ rt.frequency }}"
                 data-interval="{{ rt.interval }}"
                 data-start-date="{{ rt.start_date|date:'Y-m-d' }}"
@@ -44,7 +44,6 @@
                 <span class="rt-field rt-name" style="cursor:text">{{ rt.name }}</span>
                 <a href="{% url 'budget:recurring-detail' budget_pk=budget.pk pk=rt.pk %}" class="ms-1 small text-muted" title="View instances">↗</a>
               </td>
-              <td><span class="rt-field rt-category" style="cursor:pointer">{{ rt.category.name }}</span></td>
               <td>
                 <span class="rt-field rt-frequency" style="cursor:pointer">{{ rt.get_frequency_display }}{% if rt.frequency == "every_n_months" %} ({{ rt.interval }}mo){% endif %}</span>
               </td>
@@ -142,24 +141,36 @@
 
       {% include "blocks/inline_crud.js" %}
 
-      // ── Build a category <select> ────────────────────────────────────────
-      function buildCategorySelect(currentId) {
-        const sel = document.createElement('select');
-        sel.className = 'form-select form-select-sm';
-        sel.style.maxWidth = '160px';
-        const blank = new Option('-- Select --', '');
-        sel.appendChild(blank);
-        ['income', 'expense'].forEach(function (type) {
-          const grp = document.createElement('optgroup');
-          grp.label = type.charAt(0).toUpperCase() + type.slice(1);
-          CATEGORIES.filter(c => c.type === type).forEach(function (c) {
-            const opt = new Option(c.name, c.id);
-            if (c.id == currentId) opt.selected = true;
-            grp.appendChild(opt);
-          });
-          sel.appendChild(grp);
+      // ── Group rows by category, sorted by type → name → start date ────────
+      const TYPE_ORDER = { income: 0, expense: 1 };
+
+      function rebuildGroups() {
+        const tbody = document.querySelector('#recurring-table tbody');
+        const rows = Array.from(tbody.querySelectorAll('tr[data-rt-id]'));
+
+        tbody.querySelectorAll('tr.table-secondary').forEach(function (h) { h.remove(); });
+
+        rows.sort(function (a, b) {
+          const tA = TYPE_ORDER[a.dataset.categoryType] ?? 2;
+          const tB = TYPE_ORDER[b.dataset.categoryType] ?? 2;
+          if (tA !== tB) return tA - tB;
+          const nCmp = (a.dataset.categoryName || '').localeCompare(b.dataset.categoryName || '');
+          if (nCmp !== 0) return nCmp;
+          return (a.dataset.startDate || '').localeCompare(b.dataset.startDate || '');
         });
-        return sel;
+
+        let lastCatId = null;
+        rows.forEach(function (tr) {
+          if (tr.dataset.categoryId !== lastCatId) {
+            lastCatId = tr.dataset.categoryId;
+            const header = document.createElement('tr');
+            header.className = 'table-secondary';
+            const typeLabel = tr.dataset.categoryType === 'income' ? 'Income' : 'Expense';
+            header.innerHTML = `<td colspan="6" class="py-1 px-3"><strong>${tr.dataset.categoryName || ''}</strong> <span class="text-muted small ms-1">(${typeLabel})</span></td>`;
+            tbody.appendChild(header);
+          }
+          tbody.appendChild(tr);
+        });
       }
 
       // ── Build a frequency <select> ───────────────────────────────────────
@@ -198,6 +209,7 @@
                 await apiRequest(`${API_BASE}/recurring/${rtId}/`, 'PATCH', { [field]: val });
                 span.dataset.raw = raw;
                 span.textContent = format(raw);
+                if (field === 'start_date') { tr.dataset.startDate = raw; rebuildGroups(); }
               } catch { span.textContent = format(original); }
             }
             input.addEventListener('blur', save);
@@ -220,32 +232,6 @@
           wireText(startSpan, 'start_date', v => v, function (v) {
             const d = new Date(v + 'T00:00:00');
             return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-          });
-        }
-
-        // Category select
-        const catSpan = tr.querySelector('.rt-category');
-        if (catSpan) {
-          catSpan.addEventListener('click', function () {
-            if (catSpan.querySelector('select')) return;
-            const originalId = tr.dataset.categoryId;
-            const originalText = catSpan.textContent.trim();
-            const sel = buildCategorySelect(originalId);
-            catSpan.textContent = ''; catSpan.appendChild(sel); sel.focus();
-            async function save() {
-              const val = sel.value;
-              if (!val || val == originalId) { catSpan.textContent = originalText; return; }
-              try {
-                await apiRequest(`${API_BASE}/recurring/${rtId}/`, 'PATCH', { category: parseInt(val) });
-                tr.dataset.categoryId = val;
-                catSpan.textContent = sel.options[sel.selectedIndex].text;
-              } catch { catSpan.textContent = originalText; }
-            }
-            sel.addEventListener('blur', save);
-            sel.addEventListener('change', function () { sel.blur(); });
-            sel.addEventListener('keydown', function (e) {
-              if (e.key === 'Escape') { sel.removeEventListener('blur', save); catSpan.textContent = originalText; }
-            });
           });
         }
 
@@ -361,7 +347,7 @@
         });
       }
 
-      // Wire existing rows
+      // Wire existing rows and build initial grouping
       document.querySelectorAll('#recurring-table tbody tr[data-rt-id]').forEach(function (tr) {
         wireInlineEdit(tr);
         const xBtn = tr.querySelector('.btn-x-delete');
@@ -369,6 +355,7 @@
         const reactBtn = tr.querySelector('.btn-reactivate');
         if (reactBtn) wireReactivate(reactBtn, tr.dataset.rtId, tr);
       });
+      rebuildGroups();
 
       // ── Inline create ────────────────────────────────────────────────────
       const showCreateBtn = document.getElementById('btn-show-create');
@@ -421,6 +408,8 @@
           const tr = document.createElement('tr');
           tr.dataset.rtId = rt.id;
           tr.dataset.categoryId = rt.category;
+          tr.dataset.categoryName = rt.category_name || '';
+          tr.dataset.categoryType = rt.category_type || '';
           tr.dataset.frequency = rt.frequency;
           tr.dataset.interval = rt.interval || 1;
           tr.dataset.startDate = rt.start_date;
@@ -431,7 +420,6 @@
               <span class="rt-field rt-name" style="cursor:text">${rt.name}</span>
               <a href="/budgets/${BUDGET_PK}/recurring/${rt.id}/" class="ms-1 small text-muted" title="View instances">↗</a>
             </td>
-            <td><span class="rt-field rt-category" style="cursor:pointer">${rt.category_name || ''}</span></td>
             <td><span class="rt-field rt-frequency" style="cursor:pointer">${freqLabel}</span></td>
             <td class="text-end"><span class="rt-field rt-amount ${rt.category_type === 'income' ? 'text-success' : 'text-danger'}" style="cursor:text">$${parseFloat(rt.amount).toFixed(2)}</span></td>
             <td><span class="rt-field rt-start-date" style="cursor:pointer" data-raw="${rt.start_date}">${startFormatted}</span></td>
@@ -442,6 +430,7 @@
           tbody.appendChild(tr);
           wireInlineEdit(tr);
           wireDeactivate(tr.querySelector('.btn-x-delete'), rt.id, tr);
+          rebuildGroups();
 
           document.getElementById('new-rt-name').value = '';
           document.getElementById('new-rt-amount').value = '';

@@ -2,6 +2,7 @@ export interface Category {
   id: number;
   name: string;
   category_type: "income" | "expense";
+  monthly_budget: string;
 }
 
 export interface TransactionLine {
@@ -98,6 +99,7 @@ export interface BudgetOverviewCategory {
   id: number;
   name: string;
   category_type: "income" | "expense";
+  budgeted: string;
   assigned: string;
   activity: string;
   available: string;

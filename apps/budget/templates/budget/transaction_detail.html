@@ -13,7 +13,11 @@
         {% csrf_token %}
         <input type="hidden" name="next" value="{{ request.get_full_path }}">
         <button type="submit" class="btn btn-sm {% if transaction.is_paid %}btn-outline-secondary{% else %}btn-success{% endif %}">
-          {% if transaction.is_paid %}Mark Unpaid{% else %}Mark Paid{% endif %}
+          {% if transaction.is_paid %}
+            {% if transaction.transaction_type == "income" %}Mark Unreceived{% else %}Mark Unpaid{% endif %}
+          {% else %}
+            {% if transaction.transaction_type == "income" %}Mark Received{% else %}Mark Paid{% endif %}
+          {% endif %}
         </button>
       </form>
       <a href="{% url 'budget:transaction-edit' budget_pk=budget.pk pk=transaction.pk %}" class="btn btn-sm btn-outline-secondary">Edit</a>
@@ -29,8 +33,13 @@
             <dt>Status</dt>
             <dd>
               {% if transaction.is_paid %}
-                <span class="badge bg-success">Paid</span>
-                {% if transaction.paid_date %}<span class="text-muted small ms-1">on {{ transaction.paid_date }}</span>{% endif %}
+                {% if transaction.transaction_type == "income" %}
+                  <span class="badge bg-success">Received</span>
+                  {% if transaction.paid_date %}<span class="text-muted small ms-1">on {{ transaction.paid_date }}</span>{% endif %}
+                {% else %}
+                  <span class="badge bg-success">Paid</span>
+                  {% if transaction.paid_date %}<span class="text-muted small ms-1">on {{ transaction.paid_date }}</span>{% endif %}
+                {% endif %}
               {% else %}
                 <span class="badge bg-warning text-dark">Unpaid</span>
               {% endif %}
