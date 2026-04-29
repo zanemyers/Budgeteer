@@ -4,15 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Budgeteer is a Django 5 web application built on the Django Base Site template. It uses a custom user model, Celery for background tasks, and Django Allauth for authentication. All development tasks run inside Docker via Just.
-
-## Architecture
-
-- **Apps Structure**: Located in `apps/` directory with `accounts/` (custom user model) and `base/` (core utilities)
-- **Configuration**: Settings split into modules in `config/settings/` with environment-based configuration via epicenv (schema defined in pyproject.toml)
-- **Frontend**: Vite-based build system with Bootstrap 5, assets in `src/` directory
-- **Docker**: Multi-stage production Dockerfile with development compose setup using Docker Desktop
-- **Static Files**: Custom storage backend in `apps/base/storage.py`, collected to `collected_static/`
+Budgeteer is a Django 5 + Inertia.js + React SPA. The backend serves data via `inertia_render()`; the frontend is a persistent React app with no full-page reloads. Authentication is handled by Django Allauth with all views overridden to return Inertia responses.
 
 ## Development Commands
 
@@ -20,7 +12,6 @@ All commands run inside Docker containers by default. Override with `PYTHON_CMD_
 
 **Setup & Management:**
 - `just start` - Start Docker Compose environment
-- `just start_full` - Start with full profile (includes docs server)
 - `just build` - Build Docker images and collect static files
 - `just stop` - Stop all services
 - `just clean` - Remove build artifacts, caches, coverage data
@@ -46,7 +37,82 @@ All commands run inside Docker containers by default. Override with `PYTHON_CMD_
 **Dependencies:**
 - `just upgrade_python_packages [pkg...]` - Upgrade all or specific Python packages via uv
 - `just upgrade_node_packages` - Upgrade Node packages
-- `just upgrade_all_packages` - Upgrade both, rebuild, and run pre-commit
+
+## Architecture
+
+### Inertia.js Request/Response Pattern
+
+Every page is a React component rendered server-side via Inertia. Django views call `inertia_render(request, "ComponentName", props_dict)` which returns either a full HTML page (first load) or a JSON response (SPA navigation). The React component name must exactly match a file in `src/tsx/pages/`.
+
+```python
+# views.py pattern
+from inertia import render as inertia_render
+
+class MyView(BudgetMemberMixin, View):
+    def get(self, request, budget_pk):
+        return inertia_render(request, "MyPage", {
+            "budget_pk": self.budget.pk,
+            "items": lambda: [...],  # lambdas are evaluated lazily
+        })
+```
+
+### Shared Props via Middleware
+
+`apps/base/inertia_middleware.py` (`InertiaShareMiddleware`) shares `auth.user` and `flash` messages with every Inertia response. The `auth.user` object contains `id`, `email`, `name`, `gravatar`, `is_staff`. Pages access this via `usePage<PageProps>().props.auth?.user`.
+
+### Layouts
+
+- **`AppLayout`** (`src/tsx/layouts/AppLayout.tsx`) — persistent sidebar + main content. Applied as the default layout for all pages in `main.tsx` via `page.default.layout ??= ...`.
+- **`AuthLayout`** (`src/tsx/layouts/AuthLayout.tsx`) — centered card, no sidebar. Applied per-component: `Login.layout = (page) => createElement(AuthLayout, null, page)`.
+
+`budget_pk` and `month` props on any page cause the sidebar to show a "Current Budget" section with budget-specific links.
+
+### Budget Permission Mixins
+
+All budget-scoped views use one of two mixins defined at the top of `apps/budget/views.py`:
+
+- **`BudgetMemberMixin`** — verifies the user is a member of the budget from `budget_pk` URL kwarg, sets `self.budget`.
+- **`BudgetOwnerMixin`** — extends `BudgetMemberMixin`, additionally requires `role=owner`.
+
+Never use `LoginRequiredMixin` alone for budget views — always use one of these mixins.
+
+### Allauth Override Pattern
+
+Auth views in `apps/accounts/views.py` use `InertiaAllauthMixin` to intercept allauth's `render_to_response`. GET requests and POST errors return Inertia responses; POST successes do an `HttpResponseRedirect` (bypassing the override). Custom auth views are registered **before** `include("allauth.urls")` in `config/urls.py` to take precedence.
+
+Frontend auth forms POST with `Content-Type: application/x-www-form-urlencoded` + `X-Requested-With: XMLHttpRequest`. On `res.redirected`, call `router.visit(res.url)`.
+
+### API Pattern for React Components
+
+Non-page React components (modals, inline forms) communicate with the backend via `fetch`. All mutating requests send `X-CSRFToken` from `document.cookie`. Views return `JsonResponse`. GET requests that return a full page use `inertia_render`; API-only endpoints return `JsonResponse` directly.
+
+### Frontend Structure
+
+```
+src/tsx/
+  main.tsx              # Inertia app bootstrap, assigns AppLayout as default
+  layouts/              # AppLayout, AuthLayout
+  pages/                # One file per Inertia component (name must match Django view arg)
+  components/           # Shared components: ThemeToggle, TransactionModal, LoadingSpinner
+src/scss/
+  main.scss             # Design tokens (CSS vars), Bootstrap import, global styles
+  _main_nav.scss        # Sidebar styles
+  _color_mode_picker.scss # Theme toggle styles + spin animation
+```
+
+Bootstrap 5 CSS variables are overridden in `src/scss/main.scss`. Dark mode tokens are in `[data-bs-theme="dark"]`. The `data-bs-theme` attribute is set on `<html>` by an inline script in `app.html` (reads from `localStorage`) before CSS loads to prevent FOUC.
+
+### Apps Structure
+
+- **`apps/accounts/`** — custom user model, Allauth adapter, auth views, account settings
+- **`apps/base/`** — `InertiaShareMiddleware`, Vite template tags, base views, storage backend
+- **`apps/budget/`** — all budget domain logic: models, views, data serializers, migrations
+
+`apps/budget/data.py` contains all serializer functions (`serialize_transaction`, `serialize_payment_method`, etc.) used by views to build Inertia props.
+
+### Configuration
+
+Settings are split in `config/settings/` (base, local, production, test_runner). Environment variables are defined in `pyproject.toml` under `[tool.epicenv.variables]` and loaded from `.env` via epicenv. Generate a fresh `.env` with `just create_env`.
 
 ## Testing
 
@@ -56,62 +122,7 @@ All commands run inside Docker containers by default. Override with `PYTHON_CMD_
 
 ## Code Standards
 
-- **Python**: Formatted with Ruff, type-checked with ty, follows Django conventions
-- **JavaScript**: ESLint with Airbnb base config
-- **SASS/CSS**: Stylelint with standard SCSS + recess order
+- **Python**: Ruff (format + lint), type-checked with ty
+- **JavaScript/TypeScript**: ESLint with Airbnb base config
+- **SASS/CSS**: Stylelint with standard SCSS + recess property order
 - **HTML**: djLint; 120-char line length, 2-space indent
-
-## Debugging
-
-The project supports remote debugging with VS Code, LazyVim/Neovim, or any DAP-compatible editor.
-
-**Quick Start:**
-1. Start with debugging: `just start_with_debugpy`
-2. Wait for "Debugger listening on 0.0.0.0:5678"
-3. Attach your debugger (see below for editor-specific instructions)
-
-**Important:** Auto-reload is disabled when debugging. You must manually restart the server after code changes. Use `just start` for normal development with auto-reload.
-
-**VS Code:**
-
-1. Run: `just start_with_debugpy`
-2. Press F5 or select "Django: Attach Debugger" from debug dropdown
-3. Set breakpoints and debug your code
-
-VS Code tasks are also available via Command Palette for convenience.
-
-**PyCharm:**
-1. Configure Docker Compose Python interpreter (Settings → Python Interpreter)
-2. Create Django Server run configuration
-3. Click Debug button - PyCharm handles everything automatically
-4. See [docs/debugging.md](docs/debugging.md) for detailed setup
-
-**LazyVim/Neovim:**
-- Configure nvim-dap to connect to `localhost:5678`
-- The debugger uses the standard Debug Adapter Protocol (DAP)
-- See [docs/debugging.md](docs/debugging.md) for full configuration
-
-**Notes:**
-- Debugger listens on port 5678
-- Use `just stop` then `just start` to switch back to normal mode
-- PyCharm uses native Docker Compose debugging (doesn't require debugpy)
-
-## Environment Configuration
-
-Uses `.env` file for local development. Environment variable schema is defined in `pyproject.toml` under `[tool.epicenv.variables]`.
-
-Generate a new `.env` file with `just create_env` (uses epicenv).
-
-Key variables:
-- `DEBUG=on` for development
-- `SECRET_KEY` - Django secret key (auto-generated)
-- `DATABASE_URL` - PostgreSQL connection string
-- `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB`
-- `INTERNAL_IPS` - For Django Debug Toolbar
-- `USE_DEBUGPY=true` - Enable remote debugging (optional)
-
-## Key Dependencies
-
-- **Backend**: Django 5, Celery, Redis, PostgreSQL, Django Allauth, Crispy Forms, django-alive (health checks), django-maintenance-mode
-- **Frontend**: Vite, Bootstrap 5, SASS
-- **Development**: Docker, pytest, Ruff, ty, ESLint, Stylelint
