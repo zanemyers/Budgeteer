@@ -15,6 +15,7 @@ interface TypeChoice {
 }
 
 interface Props {
+  budget_pk: number;
   payment_methods: PaymentMethod[];
   type_choices: TypeChoice[];
 }
@@ -38,7 +39,7 @@ async function apiFetch(url: string, method: string, body?: object) {
   return res.json();
 }
 
-export default function PaymentMethods({ payment_methods: initialMethods, type_choices }: Props) {
+export default function PaymentMethods({ budget_pk, payment_methods: initialMethods, type_choices }: Props) {
   const [methods, setMethods] = useState(initialMethods);
   const [showForm, setShowForm] = useState(false);
   const [newName, setNewName] = useState("");
@@ -56,7 +57,7 @@ export default function PaymentMethods({ payment_methods: initialMethods, type_c
     setSaving(true);
     setFormError("");
     try {
-      const pm = await apiFetch("/accounts/payment-methods/", "POST", {
+      const pm = await apiFetch(`/budgets/${budget_pk}/payment-methods/`, "POST", {
         name: newName,
         payment_type: newType,
         last_four: newLastFour,
@@ -80,7 +81,7 @@ export default function PaymentMethods({ payment_methods: initialMethods, type_c
 
   async function handleSaveEdit(pm: PaymentMethod) {
     try {
-      const updated = await apiFetch(`/accounts/payment-methods/${pm.id}/`, "PATCH", editValues) as PaymentMethod;
+      const updated = await apiFetch(`/budgets/${budget_pk}/payment-methods/${pm.id}/`, "PATCH", editValues) as PaymentMethod;
       setMethods((prev) => prev.map((m) => (m.id === pm.id ? updated : m)));
     } finally {
       setEditingId(null);
@@ -90,7 +91,7 @@ export default function PaymentMethods({ payment_methods: initialMethods, type_c
   async function handleDelete(pm: PaymentMethod) {
     if (deletingId !== pm.id) { setDeletingId(pm.id); return; }
     try {
-      await apiFetch(`/accounts/payment-methods/${pm.id}/`, "DELETE");
+      await apiFetch(`/budgets/${budget_pk}/payment-methods/${pm.id}/`, "DELETE");
       setMethods((prev) => prev.filter((m) => m.id !== pm.id));
     } catch {
       setDeleteError((prev) => ({ ...prev, [pm.id]: "Cannot delete — payment method is in use." }));

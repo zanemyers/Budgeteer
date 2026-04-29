@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     "django.contrib.sites",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django_vite",
     "apps.base",
     "apps.accounts",
     "apps.budget",
@@ -212,6 +213,14 @@ CELERY_BROKER_TRANSPORT_OPTIONS = {"global_keyprefix": REDIS_PREFIX}
 
 INERTIA_LAYOUT = "app.html"
 
+DJANGO_VITE = {
+    "default": {
+        "dev_mode": DEBUG,
+        "dev_server_host": "localhost",
+        "dev_server_port": 3000,
+    }
+}
+
 CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
 CRISPY_TEMPLATE_PACK = "bootstrap5"
 
@@ -321,3 +330,20 @@ MAINTENANCE_MODE_STATE_BACKEND = "maintenance_mode.backends.CacheBackend"
 MAINTENANCE_MODE_STATE_BACKEND_FALLBACK_VALUE = True
 
 VITE_DEV_MODE = env.bool("VITE_DEV_MODE", default=DEBUG)
+
+# django-vite settings
+# If using HMR (hot module replacement)
+DJANGO_VITE = {
+    "default": {
+        "dev_mode": DEBUG,
+        "dev_server_host": env.str("DJANGO_VITE_DEV_SERVER_HOST", default="localhost"),
+        "dev_server_port": env.int("DJANGO_VITE_DEV_SERVER_PORT", default=5173),
+    }
+}
+
+# Where ViteJS assets are built.
+DJANGO_VITE_ASSETS_PATH = BASE_DIR / "src" / "dist"
+
+# Include DJANGO_VITE_ASSETS_PATH into STATICFILES_DIRS to be copied inside
+# when run command python manage.py collectstatic
+STATICFILES_DIRS = [DJANGO_VITE_ASSETS_PATH]

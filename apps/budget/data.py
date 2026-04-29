@@ -40,6 +40,20 @@ def serialize_transaction_line(line) -> dict:
 
 
 def serialize_transaction(txn) -> dict:
+    lines = [serialize_transaction_line(line) for line in txn.lines.all()]
+    # Recurring instances have no TransactionLine rows — synthesize one from the template.
+    if not lines and txn.recurring_id:
+        rt = txn.recurring
+        lines = [
+            {
+                "id": None,
+                "category": rt.category_id,
+                "category_name": rt.category.name,
+                "category_type": rt.category.category_type,
+                "amount": str(rt.amount),
+                "description": rt.name,
+            }
+        ]
     return {
         "id": txn.pk,
         "description": txn.description,
@@ -50,7 +64,7 @@ def serialize_transaction(txn) -> dict:
         "recurring": txn.recurring_id,
         "payment_method": txn.payment_method_id,
         "payment_method_name": str(txn.payment_method) if txn.payment_method else None,
-        "lines": [serialize_transaction_line(line) for line in txn.lines.all()],
+        "lines": lines,
         "total_amount": str(txn.total_amount),
         "transaction_type": txn.transaction_type,
         "created_at": txn.created_at.isoformat(),

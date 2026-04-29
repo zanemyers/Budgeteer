@@ -1,0 +1,6 @@
+{% extends inertia_layout %}
+{% load vite %}
+{% block inertia %}
+  <script data-page="app" type="application/json">{{ page|safe_json }}</script>
+  <div id="app"></div>
+{% endblock inertia %}

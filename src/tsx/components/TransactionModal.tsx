@@ -134,7 +134,13 @@ class TransactionModal extends Component<Props, State> {
     const isRecurring = Boolean(transaction?.recurring);
 
     return (
-      <div className="modal fade show d-block" tabIndex={-1} role="dialog" ref={this.modalRef}>
+      <div
+        className="modal fade show d-block"
+        tabIndex={-1}
+        role="dialog"
+        ref={this.modalRef}
+        onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      >
         <div className="modal-dialog modal-lg" role="document">
           <div className="modal-content">
             <form onSubmit={(e) => { void this.handleSubmit(e); }}>

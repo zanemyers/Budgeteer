@@ -8,6 +8,7 @@ from django.db.models import Sum
 
 
 class Budget(models.Model):
+    name = models.CharField(max_length=150, blank=True, default="")
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -260,8 +261,8 @@ class PaymentMethod(models.Model):
         (TYPE_OTHER, "Other"),
     ]
 
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
+    budget = models.ForeignKey(
+        "Budget",
         on_delete=models.CASCADE,
         related_name="payment_methods",
     )

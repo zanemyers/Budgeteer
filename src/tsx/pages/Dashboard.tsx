@@ -204,24 +204,10 @@ export default function Dashboard({ budget_pk, month, overview, categories, paym
   return (
     <div>
       {/* Header */}
-      <div className="d-flex align-items-center justify-content-between mb-4">
-        <div className="d-flex align-items-center gap-3">
-          <button className="btn btn-outline-secondary btn-sm" onClick={() => navigateMonth(prevMonth(month))}>&laquo;</button>
-          <h4 className="mb-0">{formatMonth(month)}</h4>
-          <button className="btn btn-outline-secondary btn-sm" onClick={() => navigateMonth(nextMonth(month))} disabled={isCurrentMonth}>&raquo;</button>
-        </div>
-        <div className="d-flex gap-2">
-          <a className="btn btn-outline-secondary btn-sm" href={`/budgets/${budget_pk}/transactions/?month=${month}&category=`}>All Transactions</a>
-          <div className="dropdown">
-            <button className="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">Manage</button>
-            <ul className="dropdown-menu dropdown-menu-end">
-              <li><a className="dropdown-item" href={`/budgets/${budget_pk}/categories/`}>Categories</a></li>
-              <li><a className="dropdown-item" href={`/budgets/${budget_pk}/recurring/`}>Recurring</a></li>
-              <li><a className="dropdown-item" href={`/budgets/${budget_pk}/members/`}>Members</a></li>
-              <li><a className="dropdown-item" href="/accounts/payment-methods/">Payment Methods</a></li>
-            </ul>
-          </div>
-        </div>
+      <div className="d-flex align-items-center gap-3 mb-4">
+        <button className="btn btn-outline-secondary btn-sm" onClick={() => navigateMonth(prevMonth(month))}>&laquo;</button>
+        <h4 className="mb-0">{formatMonth(month)}</h4>
+        <button className="btn btn-outline-secondary btn-sm" onClick={() => navigateMonth(nextMonth(month))} disabled={isCurrentMonth}>&raquo;</button>
       </div>
 
       {/* Ready to Assign */}

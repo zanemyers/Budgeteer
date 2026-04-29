@@ -33,7 +33,7 @@ features.
 
 ### 🧑‍💻 Best Practices
 
-* [Epicenv](https://github.com/epicserve/epicenv) - A delightful environment variable manager with schema validation, type coercion, and CLI tools for generating `.env` files. See the [epicenv documentation](https://github.com/epicserve/epicenv#readme) for more details.
+* [epicenv](https://github.com/epicserve/epicenv) - A delightful environment variable manager with schema validation, type coercion, and CLI tools for generating `.env` files. See the [epicenv documentation](https://github.com/epicserve/epicenv#readme) for more details.
 * [Docker](https://www.docker.com/) - Docker Compose for development and a multi-stage Dockerfile for production ready
   Docker image
 * [Mailpit](https://mailpit.axllent.org/) - Email testing tool for local development with a web UI at http://localhost:8025
@@ -79,7 +79,7 @@ features.
 * [Django Debug Toolbar](https://github.com/jazzband/django-debug-toolbar) - A toolbar for debugging and
   optimizing Django queries
 * [Stylelint](https://stylelint.io/) - Automatic Sass formatting and linting
-* [Eslint](https://eslint.org/) - Automatic Javascript formatting and linting
+* [Eslint](https://eslint.org/) - Automatic JavaScript formatting and linting
 
 ### 💄Frontend
 
@@ -109,13 +109,13 @@ used for common project commands.
 
 ### Quickstart Install Script
 
-Copy and paste the following into your terminal to run the install script:
+Copy and paste the following into your terminal to run the installation script:
 
 ```bash
 bash <(curl -s https://raw.githubusercontent.com/epicserve/django-base-site/main/scripts/start_new_project)
 ```
 
-Running the script mostly does the same thing as manual method. The exception is that the install script has
+Running the script mostly does the same thing as manual method. The exception is that the installation script has
 questions to customize your new project setup.
 
 **Note:** When starting the Django runserver it will take several seconds before the CSS styles take effect. This is
@@ -186,6 +186,6 @@ me know, and I can link to the post here.
    going about the new feature or bug that you've discovered.
 2. Fork the [repository](https://github.com/epicserve/django-base-site) on GitHub to start making your changes to the
    main branch (or branch off of it).
-4. Make a pull request.
+3. Make a pull request.
 
 <!--readme-end-->

@@ -97,15 +97,16 @@ class BudgetOwnerMixin(BudgetMemberMixin):
 # ---------------------------------------------------------------------------
 
 
-class PaymentMethodsView(LoginRequiredMixin, View):
-    def get(self, request):
-        methods = PaymentMethod.objects.filter(user=request.user)
+class PaymentMethodsView(BudgetMemberMixin, View):
+    def get(self, request, budget_pk):
+        methods = PaymentMethod.objects.filter(budget=self.budget)
         return inertia_render(request, "PaymentMethods", {
+            "budget_pk": self.budget.pk,
             "payment_methods": [serialize_payment_method(pm) for pm in methods],
             "type_choices": [{"value": v, "label": l} for v, l in PaymentMethod.TYPE_CHOICES],
         })
 
-    def post(self, request):
+    def post(self, request, budget_pk):
         data = _parse_json_body(request)
         name = data.get("name", "").strip()
         payment_type = data.get("payment_type", PaymentMethod.TYPE_OTHER)
@@ -113,7 +114,7 @@ class PaymentMethodsView(LoginRequiredMixin, View):
         if not name:
             return JsonResponse({"errors": {"name": ["Name is required."]}}, status=400)
         pm = PaymentMethod.objects.create(
-            user=request.user,
+            budget=self.budget,
             name=name,
             payment_type=payment_type,
             last_four=last_four,
@@ -122,12 +123,12 @@ class PaymentMethodsView(LoginRequiredMixin, View):
         return JsonResponse(serialize_payment_method(pm), status=201)
 
 
-class PaymentMethodDetailView(LoginRequiredMixin, View):
-    def _get(self, request, pk):
-        return get_object_or_404(PaymentMethod, pk=pk, user=request.user)
+class PaymentMethodDetailView(BudgetMemberMixin, View):
+    def _get(self, pk):
+        return get_object_or_404(PaymentMethod, pk=pk, budget=self.budget)
 
-    def patch(self, request, pk):
-        pm = self._get(request, pk)
+    def patch(self, request, budget_pk, pk):
+        pm = self._get(pk)
         data = _parse_json_body(request)
         for field in ("name", "payment_type", "last_four", "is_active"):
             if field in data:
@@ -135,28 +136,31 @@ class PaymentMethodDetailView(LoginRequiredMixin, View):
         pm.save()
         return JsonResponse(serialize_payment_method(pm))
 
-    def delete(self, request, pk):
-        self._get(request, pk).delete()
+    def delete(self, request, budget_pk, pk):
+        self._get(pk).delete()
         return JsonResponse({}, status=204)
 
 
 class BudgetHistoryView(LoginRequiredMixin, View):
     def get(self, request):
-        budget = Budget.objects.filter(members=request.user).first()
-        months = []
-        if budget:
-            from django.db.models.functions import TruncMonth
-            months = list(
+        from django.db.models.functions import TruncMonth
+
+        budgets = Budget.objects.filter(members=request.user).order_by("-created_at")
+        result = []
+        for budget in budgets:
+            month_qs = list(
                 Transaction.objects.filter(budget=budget)
                 .annotate(month=TruncMonth("due_date"))
                 .values("month")
                 .distinct()
                 .order_by("-month")
             )
-        return inertia_render(request, "BudgetHistory", {
-            "budget": {"id": budget.pk} if budget else None,
-            "months": [{"month": m["month"].strftime("%Y-%m")} for m in months],
-        })
+            result.append({
+                "id": budget.pk,
+                "name": budget.name or f"Budget #{budget.pk}",
+                "months": [m["month"].strftime("%Y-%m") for m in month_qs],
+            })
+        return inertia_render(request, "BudgetHistory", {"budgets": result})
 
 
 class BudgetHomeView(LoginRequiredMixin, View):
@@ -172,17 +176,31 @@ class BudgetHomeView(LoginRequiredMixin, View):
 
 class BudgetListView(LoginRequiredMixin, View):
     def get(self, request):
-        budgets = Budget.objects.filter(members=request.user)
+        budgets = list(Budget.objects.filter(members=request.user))
+        membership_map = {
+            m.budget_id: m.role
+            for m in BudgetMembership.objects.filter(budget__in=budgets, user=request.user)
+        }
         return inertia_render(request, "BudgetList", {
-            "budgets": [{"id": b.pk, "created_at": b.created_at.isoformat()} for b in budgets],
+            "budgets": [
+                {
+                    "id": b.pk,
+                    "name": b.name,
+                    "created_at": b.created_at.isoformat(),
+                    "is_owner": membership_map.get(b.pk) == BudgetMembership.ROLE_OWNER,
+                }
+                for b in budgets
+            ],
         })
 
 
 class BudgetCreateView(LoginRequiredMixin, View):
     def post(self, request):
-        budget = Budget.objects.create(created_by=request.user)
+        data = _parse_json_body(request)
+        name = data.get("name", "").strip()
+        budget = Budget.objects.create(created_by=request.user, name=name)
         BudgetMembership.objects.create(budget=budget, user=request.user, role=BudgetMembership.ROLE_OWNER)
-        return redirect(reverse("budget:detail", kwargs={"budget_pk": budget.pk}))
+        return JsonResponse({"id": budget.pk}, status=201)
 
     def get(self, request):
         return redirect(reverse("budget:list"))
@@ -202,17 +220,24 @@ class BudgetDetailView(BudgetMemberMixin, View):
             ],
             "payment_methods": lambda: [
                 serialize_payment_method(pm)
-                for pm in PaymentMethod.objects.filter(user=request.user, is_active=True)
+                for pm in PaymentMethod.objects.filter(budget=self.budget, is_active=True)
             ],
             "upcoming_transactions": lambda: get_upcoming_transactions(budget),
         })
 
 
-class BudgetDeleteView(BudgetOwnerMixin, generic.DeleteView):
-    model = Budget
-    template_name = "budget/budget_confirm_delete.html"
-    pk_url_kwarg = "budget_pk"
-    success_url = reverse_lazy("budget:list")
+class BudgetUpdateView(BudgetOwnerMixin, View):
+    def patch(self, request, budget_pk):
+        data = _parse_json_body(request)
+        self.budget.name = data.get("name", "").strip()
+        self.budget.save(update_fields=["name", "updated_at"])
+        return JsonResponse({"id": self.budget.pk, "name": self.budget.name})
+
+
+class BudgetDeleteView(BudgetOwnerMixin, View):
+    def delete(self, request, budget_pk):
+        self.budget.delete()
+        return JsonResponse({}, status=204)
 
 
 # ---------------------------------------------------------------------------
@@ -404,7 +429,7 @@ class TransactionListView(BudgetMemberMixin, View):
             ],
             "payment_methods": lambda: [
                 serialize_payment_method(pm)
-                for pm in PaymentMethod.objects.filter(user=request.user, is_active=True)
+                for pm in PaymentMethod.objects.filter(budget=self.budget, is_active=True)
             ],
         })
 
@@ -446,7 +471,7 @@ class TransactionCreateView(BudgetMemberMixin, View):
 
         payment_method = None
         if payment_method_id:
-            payment_method = PaymentMethod.objects.filter(pk=payment_method_id, user=request.user).first()
+            payment_method = PaymentMethod.objects.filter(pk=payment_method_id, budget=self.budget).first()
 
         with db_transaction.atomic():
             txn = Transaction.objects.create(
@@ -502,7 +527,7 @@ class TransactionUpdateView(BudgetMemberMixin, View):
             txn.notes = data["notes"]
         if "payment_method" in data:
             pm_id = data["payment_method"]
-            txn.payment_method = PaymentMethod.objects.filter(pk=pm_id, user=request.user).first() if pm_id else None
+            txn.payment_method = PaymentMethod.objects.filter(pk=pm_id, budget=self.budget).first() if pm_id else None
 
         lines_data = data.get("lines")
         with db_transaction.atomic():
@@ -567,7 +592,7 @@ class RecurringListView(BudgetMemberMixin, View):
 class RecurringCreateView(BudgetMemberMixin, View):
     def get(self, request, budget_pk):
         categories = Category.objects.filter(budget=self.budget).order_by("category_type", "name")
-        payment_methods = PaymentMethod.objects.filter(user=request.user, is_active=True)
+        payment_methods = PaymentMethod.objects.filter(budget=self.budget, is_active=True)
         return inertia_render(request, "RecurringForm", {
             "budget_pk": self.budget.pk,
             "recurring": None,
@@ -581,7 +606,7 @@ class RecurringCreateView(BudgetMemberMixin, View):
         errors = self._validate(data)
         if errors:
             categories = Category.objects.filter(budget=self.budget).order_by("category_type", "name")
-            payment_methods = PaymentMethod.objects.filter(user=request.user, is_active=True)
+            payment_methods = PaymentMethod.objects.filter(budget=self.budget, is_active=True)
             return inertia_render(request, "RecurringForm", {
                 "budget_pk": self.budget.pk,
                 "recurring": None,
@@ -618,7 +643,7 @@ class RecurringCreateView(BudgetMemberMixin, View):
 
     def _create(self, request, data):
         pm_id = data.get("payment_method")
-        payment_method = PaymentMethod.objects.filter(pk=pm_id, user=request.user).first() if pm_id else None
+        payment_method = PaymentMethod.objects.filter(pk=pm_id, budget=self.budget).first() if pm_id else None
         category = get_object_or_404(Category, pk=data["category"], budget=self.budget)
         end_date = None
         if data.get("end_date"):
@@ -659,7 +684,7 @@ class RecurringDetailView(BudgetMemberMixin, View):
             .order_by("due_date")
         )
         categories = Category.objects.filter(budget=self.budget).order_by("category_type", "name")
-        payment_methods = PaymentMethod.objects.filter(user=request.user, is_active=True)
+        payment_methods = PaymentMethod.objects.filter(budget=self.budget, is_active=True)
         return inertia_render(request, "RecurringDetail", {
             "budget_pk": self.budget.pk,
             "recurring": serialize_recurring(rt),
@@ -686,7 +711,7 @@ class RecurringDetailView(BudgetMemberMixin, View):
             rt.category = get_object_or_404(Category, pk=data["category"], budget=self.budget)
         if "payment_method" in data:
             pm_id = data["payment_method"]
-            rt.payment_method = PaymentMethod.objects.filter(pk=pm_id, user=request.user).first() if pm_id else None
+            rt.payment_method = PaymentMethod.objects.filter(pk=pm_id, budget=self.budget).first() if pm_id else None
         rt.save()
 
         if data.get("delete_future_unpaid"):
@@ -743,7 +768,7 @@ class RecurringUpdateView(BudgetMemberMixin, View):
     def get(self, request, budget_pk, pk):
         rt = get_object_or_404(RecurringTransaction, pk=pk, budget=self.budget)
         categories = Category.objects.filter(budget=self.budget).order_by("category_type", "name")
-        payment_methods = PaymentMethod.objects.filter(user=request.user, is_active=True)
+        payment_methods = PaymentMethod.objects.filter(budget=self.budget, is_active=True)
         return inertia_render(request, "RecurringForm", {
             "budget_pk": self.budget.pk,
             "recurring": serialize_recurring(rt),
@@ -760,7 +785,7 @@ class RecurringUpdateView(BudgetMemberMixin, View):
         errors = creator._validate(data)
         if errors:
             categories = Category.objects.filter(budget=self.budget).order_by("category_type", "name")
-            payment_methods = PaymentMethod.objects.filter(user=request.user, is_active=True)
+            payment_methods = PaymentMethod.objects.filter(budget=self.budget, is_active=True)
             return inertia_render(request, "RecurringForm", {
                 "budget_pk": self.budget.pk,
                 "recurring": serialize_recurring(rt),
@@ -772,7 +797,7 @@ class RecurringUpdateView(BudgetMemberMixin, View):
             }, status=422)
 
         pm_id = data.get("payment_method")
-        rt.payment_method = PaymentMethod.objects.filter(pk=pm_id, user=request.user).first() if pm_id else None
+        rt.payment_method = PaymentMethod.objects.filter(pk=pm_id, budget=self.budget).first() if pm_id else None
         rt.category = get_object_or_404(Category, pk=data["category"], budget=self.budget)
         rt.name = data["name"].strip()
         rt.description = data.get("description", "")

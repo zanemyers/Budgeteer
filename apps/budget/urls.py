@@ -7,8 +7,12 @@ app_name = "budget"
 urlpatterns = [
     # Budget
     path("", views.BudgetListView.as_view(), name="list"),
+    # Payment Methods
+    path("<int:budget_pk>/payment-methods/", views.PaymentMethodsView.as_view(), name="payment-methods"),
+    path("<int:budget_pk>/payment-methods/<int:pk>/", views.PaymentMethodDetailView.as_view(), name="payment-method-detail"),
     path("create/", views.BudgetCreateView.as_view(), name="create"),
     path("<int:budget_pk>/", views.BudgetDetailView.as_view(), name="detail"),
+    path("<int:budget_pk>/edit/", views.BudgetUpdateView.as_view(), name="edit"),
     path("<int:budget_pk>/delete/", views.BudgetDeleteView.as_view(), name="delete"),
     # Members
     path("<int:budget_pk>/members/", views.MemberListView.as_view(), name="member-list"),
