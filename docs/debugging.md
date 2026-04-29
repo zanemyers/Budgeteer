@@ -10,7 +10,6 @@ This project supports remote debugging of Django running inside Docker container
 - [LazyVim/Neovim Setup](#lazyvimneovim-setup)
 - [How It Works](#how-it-works)
 - [Port Configuration](#port-configuration)
-- [Debugging Best Practices](#debugging-best-practices)
 - [Other DAP-Compatible Editors](#other-dap-compatible-editors)
 - [Additional Resources](#additional-resources)
 
@@ -84,7 +83,7 @@ PyCharm Professional supports debugging Django applications running in Docker Co
 
 ## VS Code Setup
 
-The project includes pre-configured launch configurations in [.vscode/launch.json](.vscode/launch.json).
+The project includes pre-configured launch configurations in `/.vscode/launch.json`.
 
 ### Quick Start Workflow
 
@@ -220,16 +219,8 @@ When you run `just start_with_debugpy`:
 
 - **Django**: http://localhost:8000
 - **Debugpy**: localhost:5678
-- **Vite (frontend)**: http://localhost:3000
-- **MkDocs (docs)**: http://localhost:4000
-
-## Debugging Best Practices
-
-1. **Use conditional breakpoints** to avoid stopping on every iteration in loops
-2. **Inspect the call stack** to understand the execution flow
-3. **Watch variables** to track state changes
-4. **Use the debug console** to evaluate expressions
-5. **Remember to disable debugging** when not needed to enable auto-reload
+- **Vite (frontend dev server)**: http://localhost:3000
+- **Mailpit (email)**: http://localhost:8025
 
 ## Other DAP-Compatible Editors
 
