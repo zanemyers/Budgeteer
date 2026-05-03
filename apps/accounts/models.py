@@ -2,10 +2,18 @@ import hashlib
 import urllib.parse
 
 from django.contrib.auth.models import AbstractUser
+from django.db import models
 from django.utils.safestring import mark_safe
 
 
 class User(AbstractUser):
+    default_budget = models.ForeignKey(
+        "budget.Budget",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
     def _get_gravatar_url(self, size: int = 40):
         # See the documentation for the default parameter: https://docs.gravatar.com/api/avatars/images/
         default = "mp"

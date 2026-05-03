@@ -24,9 +24,10 @@ reset := `tput -Txterm sgr0`
 # Build Docker images
 @build:
     just _start_msg "Building docker project"
-    docker volume rm {{ project_slug }}_node_modules
+    docker compose down -t 0 || true
+    docker volume rm {{ project_slug }}_node_modules || true
     docker compose build
-    just collectstatic
+    docker compose run --no-deps --rm web ./manage.py collectstatic --no-input --no-default-ignore --clear
 
 # Build frontend assets
 @build_frontend:

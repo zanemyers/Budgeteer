@@ -6,6 +6,7 @@ interface Budget {
   name: string;
   created_at: string;
   is_owner: boolean;
+  is_default: boolean;
 }
 
 interface Props {
@@ -29,19 +30,39 @@ export default function BudgetList({ budgets: initial }: Props) {
   const [budgets, setBudgets] = useState(initial);
   const [editingName, setEditingName] = useState<Record<number, string>>({});
   const [savingId, setSavingId] = useState<number | null>(null);
+  const [settingDefaultId, setSettingDefaultId] = useState<number | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [newName, setNewName] = useState<string | null>(null);
+  const [copyFrom, setCopyFrom] = useState<string>("");
+  const [copyCategories, setCopyCategories] = useState(true);
+  const [copyPaymentMethods, setCopyPaymentMethods] = useState(true);
+  const [copyMembers, setCopyMembers] = useState(true);
   const [creating, setCreating] = useState(false);
+
+  function resetForm() {
+    setNewName(null);
+    setCopyFrom("");
+    setCopyCategories(true);
+    setCopyPaymentMethods(true);
+    setCopyMembers(true);
+  }
 
   async function createBudget() {
     if (newName === null) return;
     setCreating(true);
     try {
+      const body: { name: string; copy_from?: number; copy_categories?: boolean; copy_payment_methods?: boolean; copy_members?: boolean } = { name: newName.trim() };
+      if (copyFrom) {
+        body.copy_from = parseInt(copyFrom, 10);
+        body.copy_categories = copyCategories;
+        body.copy_payment_methods = copyPaymentMethods;
+        body.copy_members = copyMembers;
+      }
       const res = await fetch("/budgets/create/", {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() },
-        body: JSON.stringify({ name: newName.trim() }),
+        body: JSON.stringify(body),
       });
       if (res.ok) {
         const { id } = await res.json() as { id: number };
@@ -72,6 +93,19 @@ export default function BudgetList({ budgets: initial }: Props) {
     }
   }
 
+  async function setDefault(id: number) {
+    setSettingDefaultId(id);
+    try {
+      await fetch(`/budgets/${id}/set-default/`, {
+        method: "POST",
+        headers: { "X-CSRFToken": getCsrfToken() },
+      });
+      setBudgets((prev) => prev.map((b) => ({ ...b, is_default: b.id === id })));
+    } finally {
+      setSettingDefaultId(null);
+    }
+  }
+
   async function deleteBudget(id: number) {
     setDeletingId(id);
     try {
@@ -99,9 +133,9 @@ export default function BudgetList({ budgets: initial }: Props) {
 
       {newName !== null && (
         <div className="card mb-3">
-          <div className="card-body">
-            <label className="form-label fw-semibold">Budget name</label>
-            <div className="d-flex gap-2">
+          <div className="card-body d-flex flex-column gap-3">
+            <div>
+              <label className="form-label fw-semibold">Budget name</label>
               <input
                 type="text"
                 className="form-control"
@@ -111,13 +145,50 @@ export default function BudgetList({ budgets: initial }: Props) {
                 onChange={(e) => setNewName(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") void createBudget();
-                  if (e.key === "Escape") setNewName(null);
+                  if (e.key === "Escape") { resetForm(); }
                 }}
               />
+            </div>
+            {budgets.length > 0 && (
+              <div>
+                <label className="form-label fw-semibold">Copy from existing budget <span className="text-muted fw-normal">(optional)</span></label>
+                <select
+                  className="form-select"
+                  value={copyFrom}
+                  onChange={(e) => setCopyFrom(e.target.value)}
+                >
+                  <option value="">— Start fresh —</option>
+                  {budgets.map((b) => (
+                    <option key={b.id} value={b.id}>{displayName(b)}</option>
+                  ))}
+                </select>
+                {copyFrom && (
+                  <div className="d-flex flex-column gap-1 mt-2">
+                    {([
+                      { key: "categories", label: "Category names (no amounts)", value: copyCategories, set: setCopyCategories },
+                      { key: "payment_methods", label: "Payment methods", value: copyPaymentMethods, set: setCopyPaymentMethods },
+                      { key: "members", label: "Members", value: copyMembers, set: setCopyMembers },
+                    ] as const).map(({ key, label, value, set }) => (
+                      <div key={key} className="form-check">
+                        <input
+                          type="checkbox"
+                          className="form-check-input"
+                          id={`copy-${key}`}
+                          checked={value}
+                          onChange={(e) => set(e.target.checked)}
+                        />
+                        <label className="form-check-label small" htmlFor={`copy-${key}`}>{label}</label>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            <div className="d-flex gap-2">
               <button className="btn btn-primary" disabled={creating} onClick={() => void createBudget()}>
                 {creating ? "Creating…" : "Create"}
               </button>
-              <button className="btn btn-outline-secondary" onClick={() => setNewName(null)}>
+              <button className="btn btn-outline-secondary" onClick={resetForm}>
                 Cancel
               </button>
             </div>
@@ -139,6 +210,7 @@ export default function BudgetList({ budgets: initial }: Props) {
             const isConfirming = confirmDeleteId === budget.id;
             const isDeleting = deletingId === budget.id;
             const isSaving = savingId === budget.id;
+            const isSettingDefault = settingDefaultId === budget.id;
 
             return (
               <div key={budget.id} className="list-group-item d-flex align-items-center gap-3">
@@ -165,16 +237,21 @@ export default function BudgetList({ budgets: initial }: Props) {
                     />
                   ) : (
                     <>
-                      <a
-                        href={`/budgets/${budget.id}/`}
-                        className="fw-semibold text-decoration-none text-body d-block"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          router.visit(`/budgets/${budget.id}/`);
-                        }}
-                      >
-                        {displayName(budget)}
-                      </a>
+                      <div className="d-flex align-items-center gap-2">
+                        <a
+                          href={`/budgets/${budget.id}/`}
+                          className="fw-semibold text-decoration-none text-body"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            router.visit(`/budgets/${budget.id}/`);
+                          }}
+                        >
+                          {displayName(budget)}
+                        </a>
+                        {budget.is_default && (
+                          <span className="badge bg-success" style={{ fontSize: "0.7rem" }}>Default</span>
+                        )}
+                      </div>
                       <span className="text-muted small">Created {fmtDate(budget.created_at)}</span>
                     </>
                   )}
@@ -202,6 +279,15 @@ export default function BudgetList({ budgets: initial }: Props) {
                       </>
                     ) : (
                       <>
+                        {!budget.is_default && (
+                          <button
+                            className="btn btn-outline-secondary btn-sm"
+                            disabled={isSettingDefault}
+                            onClick={() => void setDefault(budget.id)}
+                          >
+                            {isSettingDefault ? "…" : "Set Default"}
+                          </button>
+                        )}
                         <button
                           className="btn btn-outline-secondary btn-sm"
                           disabled={isSaving || isEditing}

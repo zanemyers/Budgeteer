@@ -129,6 +129,7 @@ export default function Dashboard({ budget_pk, month, overview, categories, paym
   }
 
   function renderCategoryRow(cat: BudgetOverviewCategory) {
+
     const isEditingAssigned = cat.id in editingAssigned;
     const isEditingBudgeted = cat.id in editingBudgeted;
     const available = parseFloat(cat.available);
@@ -195,9 +196,11 @@ export default function Dashboard({ budget_pk, month, overview, categories, paym
   }
 
   const income = overview.categories.filter((c) => c.category_type === "income");
-  const expense = overview.categories.filter((c) => c.category_type === "expense");
-  const totalSpent = expense.reduce((sum, c) => sum + parseFloat(c.activity), 0);
-  const netAmount = parseFloat(overview.income_total) - totalSpent;
+  const expense = overview.categories.filter((c) => c.category_type === "expense" && !c.is_sinking_fund);
+  const sfMonthlySpending = parseFloat(overview.sf_monthly_spending);
+  const totalSpent = expense.reduce((sum, c) => sum + parseFloat(c.activity), 0) + sfMonthlySpending;
+  const sfSaved = parseFloat(overview.transfers_total);
+  const netAmount = parseFloat(overview.income_total) - totalSpent - sfSaved;
   const netPositive = netAmount >= 0;
   const rta = parseFloat(overview.ready_to_assign);
 
@@ -215,45 +218,13 @@ export default function Dashboard({ budget_pk, month, overview, categories, paym
         <div className={`alert ${rta >= 0 ? "alert-success" : "alert-danger"} d-flex justify-content-between align-items-center mb-4`}>
           <div>
             <strong>Ready to Assign</strong>
-            <div className="small text-muted">Income {fmt(overview.income_total)} &minus; Assigned {fmt(overview.expense_assigned)}</div>
+            <div className="small text-muted">
+              Income {fmt(overview.income_total)}
+              {" "}&minus; Assigned {fmt(overview.expense_assigned)}
+              {parseFloat(overview.transfers_total) > 0 && <> &minus; Saved {fmt(overview.transfers_total)}</>}
+            </div>
           </div>
           <span className="fs-4 fw-bold">{fmt(overview.ready_to_assign)}</span>
-        </div>
-      )}
-
-      {/* Upcoming Recurring */}
-      {isCurrentMonth && upcoming_transactions.length > 0 && (
-        <div className="card mb-4">
-          <div className="card-header small fw-semibold text-muted py-2">Upcoming Recurring</div>
-          <ul className="list-group list-group-flush">
-            {upcoming_transactions.map((txn) => {
-              const category = txn.lines[0]?.category_name ?? "";
-              const isMarking = markingPaid.has(txn.id);
-              const due = new Date(txn.due_date + "T00:00:00");
-              const today = new Date(); today.setHours(0, 0, 0, 0);
-              const isOverdue = due < today;
-              const dueFmt = due.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-              return (
-                <li key={txn.id} className="list-group-item d-flex justify-content-between align-items-center py-2">
-                  <div>
-                    <div className="fw-medium">{txn.description}</div>
-                    <div className="small text-muted">
-                      {category && <span className="me-2">{category}</span>}
-                      <span className={isOverdue ? "text-danger fw-semibold" : ""}>{dueFmt}</span>
-                    </div>
-                  </div>
-                  <div className="d-flex align-items-center gap-3">
-                    <span className={`fw-semibold ${txn.transaction_type === "income" ? "text-success" : "text-danger"}`}>
-                      ${parseFloat(txn.total_amount).toFixed(2)}
-                    </span>
-                    <button className="btn btn-success btn-sm px-3" disabled={isMarking} onClick={() => void markPaid(txn.id)}>
-                      {isMarking ? "…" : "✓"}
-                    </button>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
         </div>
       )}
 
@@ -295,6 +266,10 @@ export default function Dashboard({ budget_pk, month, overview, categories, paym
                     <span className="small text-muted">Spent</span>
                     <span className="fw-semibold text-danger">${totalSpent.toFixed(2)}</span>
                   </div>
+                  <div className="d-flex justify-content-between align-items-center py-1">
+                    <span className="small text-muted">Saved to funds</span>
+                    <span className="fw-semibold text-warning">${sfSaved.toFixed(2)}</span>
+                  </div>
                   <hr className="my-1" />
                   <div className="d-flex justify-content-between align-items-center py-1">
                     <span className="small fw-semibold">Net</span>
@@ -302,11 +277,45 @@ export default function Dashboard({ budget_pk, month, overview, categories, paym
                   </div>
                 </div>
               </div>
+              {isCurrentMonth && upcoming_transactions.length > 0 && (
+                <div className="card">
+                  <div className="card-header small fw-semibold text-muted py-2">Upcoming Recurring</div>
+                  <ul className="list-group list-group-flush">
+                    {upcoming_transactions.map((txn) => {
+                      const category = txn.lines[0]?.category_name ?? "";
+                      const isMarking = markingPaid.has(txn.id);
+                      const due = new Date(txn.due_date + "T00:00:00");
+                      const today = new Date(); today.setHours(0, 0, 0, 0);
+                      const isOverdue = due < today;
+                      const dueFmt = due.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+                      return (
+                        <li key={txn.id} className="list-group-item d-flex justify-content-between align-items-center py-2">
+                          <div>
+                            <div className="fw-medium">{txn.description}</div>
+                            <div className="small text-muted">
+                              {category && <span className="me-2">{category}</span>}
+                              <span className={isOverdue ? "text-danger fw-semibold" : ""}>{dueFmt}</span>
+                            </div>
+                          </div>
+                          <div className="d-flex align-items-center gap-3">
+                            <span className={`fw-semibold ${txn.transaction_type === "income" ? "text-success" : "text-danger"}`}>
+                              ${parseFloat(txn.total_amount).toFixed(2)}
+                            </span>
+                            <button className="btn btn-success btn-sm px-3" disabled={isMarking} onClick={() => void markPaid(txn.id)}>
+                              {isMarking ? "…" : "✓"}
+                            </button>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
             </div>
           )}
           {expense.length > 0 && (
-            <div className="col-md-8">
-              <div className="card h-100">
+            <div className="col-md-8 d-flex flex-column gap-3">
+              <div className="card">
                 <div className="card-header bg-danger bg-opacity-10 d-flex justify-content-between align-items-center">
                   <span className="text-danger small fw-bold">Expenses</span>
                   <button className="btn btn-outline-danger btn-sm py-0 px-2" style={{ fontSize: "0.75rem" }} onClick={() => setAddTransactionType("expense")}>+ Add</button>

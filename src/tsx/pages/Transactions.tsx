@@ -58,8 +58,74 @@ function fmtDate(iso: string | null): string {
   return new Date(iso + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
+type SortKey = "description" | "paid_date" | "category" | "amount" | "payment_method";
+type SortDir = "asc" | "desc";
+type SortEntry = { key: SortKey; dir: SortDir };
+
+function getValue(txn: Transaction, key: SortKey): string | number {
+  if (key === "description") return txn.description.toLowerCase();
+  if (key === "paid_date") return txn.paid_date ?? "9999";
+  if (key === "category") return (txn.lines[0]?.category_name ?? "").toLowerCase();
+  if (key === "amount") return parseFloat(txn.total_amount);
+  if (key === "payment_method") return (txn.payment_method_name ?? "").toLowerCase();
+  return "";
+}
+
+function sortTransactions(txns: Transaction[], order: SortEntry[]): Transaction[] {
+  if (order.length === 0) return txns;
+  return [...txns].sort((a, b) => {
+    for (const { key, dir } of order) {
+      const av = getValue(a, key);
+      const bv = getValue(b, key);
+      if (av < bv) return dir === "asc" ? -1 : 1;
+      if (av > bv) return dir === "asc" ? 1 : -1;
+    }
+    return 0;
+  });
+}
+
 export default function Transactions({ budget_pk, month, category_filter, transactions: initialTxns, categories, payment_methods }: Props) {
   const [transactions, setTransactions] = useState(initialTxns);
+  const [sortOrder, setSortOrder] = useState<SortEntry[]>([{ key: "paid_date", dir: "asc" }]);
+
+  function handleSort(key: SortKey, shiftKey: boolean) {
+    setSortOrder((prev) => {
+      const idx = prev.findIndex((s) => s.key === key);
+      if (shiftKey) {
+        // Shift+click: add/toggle secondary sort
+        if (idx >= 0) {
+          const updated = [...prev];
+          updated[idx] = { key, dir: prev[idx].dir === "asc" ? "desc" : "asc" };
+          return updated;
+        }
+        return [...prev, { key, dir: "asc" }];
+      } else {
+        // Regular click: replace stack or toggle primary
+        if (idx === 0 && prev.length === 1) return [{ key, dir: prev[0].dir === "asc" ? "desc" : "asc" }];
+        return [{ key, dir: idx === 0 ? (prev[0].dir === "asc" ? "desc" : "asc") : "asc" }];
+      }
+    });
+  }
+
+  function SortHeader({ label, sortKey: key, className }: { label: string; sortKey: SortKey; className?: string }) {
+    const idx = sortOrder.findIndex((s) => s.key === key);
+    const active = idx >= 0;
+    const dir = active ? sortOrder[idx].dir : "asc";
+    const rank = sortOrder.length > 1 && active ? idx + 1 : null;
+    return (
+      <th
+        className={className}
+        style={{ cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" }}
+        onClick={(e) => handleSort(key, e.shiftKey)}
+        title="Click to sort · Shift+click to add secondary sort"
+      >
+        {label}{" "}
+        <span style={{ opacity: active ? 1 : 0.25, fontSize: "0.7em" }}>
+          {dir === "desc" ? "▼" : "▲"}{rank ? rank : ""}
+        </span>
+      </th>
+    );
+  }
   const [editDesc, setEditDesc] = useState<Record<number, string>>({});
   const [editDate, setEditDate] = useState<Record<number, string>>({});
   const [editPM, setEditPM] = useState<number | null>(null);
@@ -221,7 +287,7 @@ export default function Transactions({ budget_pk, month, category_filter, transa
         </td>
 
         {/* Amount */}
-        <td className={`text-end fw-semibold ${txn.transaction_type === "income" ? "text-success" : "text-danger"}`}>
+        <td className={`text-end fw-semibold ${txn.transaction_type === "income" ? "text-success" : txn.transaction_type === "transfer" ? "text-warning" : "text-danger"}`}>
           ${parseFloat(txn.total_amount).toFixed(2)}
         </td>
 
@@ -250,7 +316,9 @@ export default function Transactions({ budget_pk, month, category_filter, transa
 
         {/* Status + Actions */}
         <td className="text-end" style={{ whiteSpace: "nowrap" }}>
-          {txn.transaction_type === "income" ? (
+          {txn.transaction_type === "transfer" ? (
+            <span className="badge bg-warning text-dark me-2">Transfer</span>
+          ) : txn.transaction_type === "income" ? (
             <span className={`badge ${txn.is_paid ? "bg-success" : "bg-secondary"} me-2`}>{txn.is_paid ? "Received" : "Pending"}</span>
           ) : (
             <span className={`badge ${txn.is_paid ? "bg-success" : "bg-warning text-dark"} me-2`}>{txn.is_paid ? "Paid" : "Unpaid"}</span>
@@ -263,12 +331,12 @@ export default function Transactions({ budget_pk, month, category_filter, transa
           ) : (
             <>
               <button
-                className={`btn btn-sm py-0 px-2 me-1 ${txn.transaction_type === "income" ? "btn-outline-success" : "btn-outline-primary"}`}
+                className={`btn btn-sm py-0 px-2 me-1 ${txn.transaction_type === "income" ? "btn-outline-success" : txn.transaction_type === "transfer" ? "btn-outline-warning" : "btn-outline-primary"}`}
                 style={{ fontSize: "0.7rem" }}
                 disabled={isMarking}
                 onClick={() => void markPaid(txn)}
               >
-                {isMarking ? "…" : txn.is_paid ? "↩" : (txn.transaction_type === "income" ? "Receive" : "✓ Pay")}
+                {isMarking ? "…" : txn.is_paid ? "↩" : (txn.transaction_type === "income" ? "Receive" : txn.transaction_type === "transfer" ? "✓" : "✓ Pay")}
               </button>
               <button
                 className="btn btn-outline-secondary btn-sm py-0 px-2 me-1"
@@ -290,7 +358,7 @@ export default function Transactions({ budget_pk, month, category_filter, transa
       </tr>,
       // Expanded split lines
       isExpanded && (
-        <tr key={`${txn.id}-split`} className="table-light">
+        <tr key={`${txn.id}-split`} className="table-active">
           <td colSpan={6} className="px-4 py-2">
             <table className="table table-sm mb-0">
               <thead>
@@ -321,14 +389,8 @@ export default function Transactions({ budget_pk, month, category_filter, transa
           <h4 className="mb-0">{formatMonth(month)}</h4>
           <button className="btn btn-outline-secondary btn-sm" disabled={isCurrentMonth} onClick={() => navigate({ month: nextMonth(month), ...(category_filter ? { category: category_filter } : {}) })}>&raquo;</button>
         </div>
-        <div className="d-flex gap-2">
-          <div className="dropdown">
-            <button className="btn btn-primary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">+ Transaction</button>
-            <ul className="dropdown-menu dropdown-menu-end">
-              <li><button className="dropdown-item" onClick={() => setAddType("expense")}>Expense</button></li>
-              <li><button className="dropdown-item" onClick={() => setAddType("income")}>Income</button></li>
-            </ul>
-          </div>
+        <div className="d-flex align-items-center gap-2">
+          <button className="btn btn-primary btn-sm" onClick={() => setAddType("expense")}>+ Add Transaction</button>
           <a href={`/budgets/${budget_pk}/`} className="btn btn-outline-secondary btn-sm" onClick={(e) => { e.preventDefault(); router.visit(`/budgets/${budget_pk}/`); }}>← Back</a>
         </div>
       </div>
@@ -378,16 +440,16 @@ export default function Transactions({ budget_pk, month, category_filter, transa
             <table className="table table-hover mb-0 align-middle">
               <thead>
                 <tr>
-                  <th>Description</th>
-                  <th>Paid Date</th>
-                  <th>Category</th>
-                  <th className="text-end">Amount</th>
-                  <th>Payment Method</th>
+                  <SortHeader label="Description" sortKey="description" />
+                  <SortHeader label="Paid Date" sortKey="paid_date" />
+                  <SortHeader label="Category" sortKey="category" />
+                  <SortHeader label="Amount" sortKey="amount" className="text-end" />
+                  <SortHeader label="Payment Method" sortKey="payment_method" />
                   <th></th>
                 </tr>
               </thead>
               <tbody>
-                {transactions.map((txn) => renderRow(txn))}
+                {sortTransactions(transactions, sortOrder).map((txn) => renderRow(txn))}
               </tbody>
             </table>
           </div>

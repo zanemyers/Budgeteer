@@ -40,14 +40,14 @@
 }
 
 [data-bs-theme="dark"] {
-  --bs-body-bg: #141414;
+  --bs-body-bg: #1e1e1e;
   --bs-body-color: #f0f0f0;
   --bs-secondary-color: #a0a0a0;
   --bs-border-color: rgb(255 255 255 / 0.1);
   --bs-border-color-translucent: rgb(255 255 255 / 0.07);
-  --bs-card-bg: #1f1f1f;
+  --bs-card-bg: #272727;
   --bs-card-border-color: rgb(255 255 255 / 0.1);
-  --bs-card-cap-bg: #1f1f1f;
+  --bs-card-cap-bg: #272727;
   --bs-table-hover-bg: rgb(255 255 255 / 0.03);
   --bs-table-border-color: rgb(255 255 255 / 0.08);
 
@@ -120,6 +120,16 @@ body {
     text-transform: uppercase;
     color: var(--bs-secondary-color);
     white-space: nowrap;
+  }
+
+  [data-bs-theme="dark"] & th {
+    color: rgb(255 255 255 / 0.3);
+    background-color: #171717;
+  }
+
+  [data-bs-theme="dark"] & .table-secondary {
+    --bs-table-bg: #1a1a1a;
+    --bs-table-color: rgb(255 255 255 / 0.35);
   }
 
   td {

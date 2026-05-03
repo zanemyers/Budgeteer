@@ -73,8 +73,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       >
         {/* Mobile header */}
         <div className="offcanvas-header sidebar-offcanvas-header d-lg-none">
-          <span className="sidebar-brand" id="sidebarNavLabel">
+          <span className="sidebar-brand d-flex align-items-center gap-2" id="sidebarNavLabel">
             Budgeteer
+            <img src="/public/static/favicon.ico" alt="" width="16" height="16" />
           </span>
           <div className="d-flex align-items-center gap-2">
             <ThemeToggle />
@@ -91,7 +92,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <div className="offcanvas-body sidebar-body d-flex flex-column p-0">
           {/* Desktop brand */}
           <div className="sidebar-brand-wrap d-none d-lg-flex align-items-center justify-content-between">
-            <a href="/" className="sidebar-brand">
+            <a href="/" className="sidebar-brand d-flex align-items-center gap-2">
+              <img src="/public/static/favicon.ico" alt="" width="32" height="32" />
               Budgeteer
             </a>
             <ThemeToggle />
@@ -131,6 +133,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                       active={isAt(`/budgets/${budgetPk}/categories`)}
                     >
                       Categories
+                    </NavLink>
+                    <NavLink
+                      href={`/budgets/${budgetPk}/sinking-funds/`}
+                      active={isAt(`/budgets/${budgetPk}/sinking-funds`)}
+                    >
+                      Sinking Funds
                     </NavLink>
                     <NavLink
                       href={`/budgets/${budgetPk}/recurring/`}

@@ -139,7 +139,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = "en-us"
 
-TIME_ZONE = "UTC"
+TIME_ZONE = "America/Chicago"
 
 USE_I18N = True
 
@@ -340,10 +340,3 @@ DJANGO_VITE = {
         "dev_server_port": env.int("DJANGO_VITE_DEV_SERVER_PORT", default=5173),
     }
 }
-
-# Where ViteJS assets are built.
-DJANGO_VITE_ASSETS_PATH = BASE_DIR / "src" / "dist"
-
-# Include DJANGO_VITE_ASSETS_PATH into STATICFILES_DIRS to be copied inside
-# when run command python manage.py collectstatic
-STATICFILES_DIRS = [DJANGO_VITE_ASSETS_PATH]

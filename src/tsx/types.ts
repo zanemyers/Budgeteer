@@ -3,6 +3,11 @@ export interface Category {
   name: string;
   category_type: "income" | "expense";
   monthly_budget: string;
+  is_sinking_fund: boolean;
+  sinking_fund_target: string | null;
+  sinking_fund_due_date: string | null;
+  sinking_fund_ongoing: boolean;
+  sinking_fund_monthly_goal: string | null;
 }
 
 export interface TransactionLine {
@@ -35,7 +40,7 @@ export interface Transaction {
   payment_method_name: string | null;
   lines: TransactionLine[];
   total_amount: string;
-  transaction_type: "income" | "expense" | "";
+  transaction_type: "income" | "expense" | "transfer" | "";
   created_at: string;
 }
 
@@ -103,12 +108,23 @@ export interface BudgetOverviewCategory {
   assigned: string;
   activity: string;
   available: string;
+  is_sinking_fund: boolean;
+  sinking_fund_target: string | null;
+  sinking_fund_due_date: string | null;
+  sinking_fund_ongoing: boolean;
+  sinking_fund_monthly: string | null;
+  sinking_fund_monthly_goal: string | null;
+  sinking_fund_months_remaining: number | null;
+  sinking_fund_total_saved: string | null;
+  sinking_fund_total_credited: string | null;
 }
 
 export interface BudgetOverview {
   ready_to_assign: string;
   income_total: string;
   expense_assigned: string;
+  transfers_total: string;
+  sf_monthly_spending: string;
   categories: BudgetOverviewCategory[];
 }
 

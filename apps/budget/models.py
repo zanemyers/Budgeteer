@@ -71,6 +71,11 @@ class Category(models.Model):
     name = models.CharField(max_length=100)
     category_type = models.CharField(max_length=10, choices=TYPE_CHOICES)
     monthly_budget = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
+    is_sinking_fund = models.BooleanField(default=False)
+    sinking_fund_target = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    sinking_fund_due_date = models.DateField(null=True, blank=True)
+    sinking_fund_ongoing = models.BooleanField(default=False)
+    sinking_fund_monthly_goal = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -217,6 +222,7 @@ class Transaction(models.Model):
     paid_date = models.DateField(null=True, blank=True)
     is_paid = models.BooleanField(default=False)
     notes = models.TextField(blank=True)
+    transaction_type = models.CharField(max_length=10, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -236,12 +242,12 @@ class Transaction(models.Model):
             return self.recurring.amount  # type: ignore[union-attr]
         return Decimal("0.00")
 
-    @property
-    def transaction_type(self) -> str:
+    def derive_transaction_type(self) -> str:
+        if self.transaction_type:
+            return self.transaction_type
         first_line = self.lines.select_related("category").first()
         if first_line:
             return first_line.category.category_type
-        # Recurring instances inherit type from the template
         if self.recurring_id:
             return self.recurring.category.category_type  # type: ignore[union-attr]
         return ""

@@ -1,6 +1,8 @@
 import { Component, createRef } from "react";
 import type { Category, PaymentMethod, Transaction, TransactionLine } from "../types";
 
+type CategoryWithSF = Category & { is_sinking_fund?: boolean };
+
 interface Props {
   categories: Category[];
   paymentMethods: PaymentMethod[];
@@ -27,6 +29,7 @@ interface State {
   lines: LineState[];
   saving: boolean;
   errors: Record<string, string[]>;
+  categoryType: "income" | "expense";
 }
 
 class TransactionModal extends Component<Props, State> {
@@ -53,12 +56,12 @@ class TransactionModal extends Component<Props, State> {
         })),
         saving: false,
         errors: {},
+        categoryType: transaction.transaction_type === "income" ? "income" : "expense",
       };
     }
     const { defaultCategoryType, categories } = this.props;
-    const defaultCategory = defaultCategoryType
-      ? String(categories.find((c) => c.category_type === defaultCategoryType)?.id ?? "")
-      : "";
+    const resolvedType: "income" | "expense" = defaultCategoryType ?? "expense";
+    const defaultCategory = String(categories.find((c) => c.category_type === resolvedType)?.id ?? "");
     return {
       description: "",
       due_date: new Date().toISOString().split("T")[0],
@@ -69,6 +72,7 @@ class TransactionModal extends Component<Props, State> {
       lines: [{ category: defaultCategory, amount: "", description: "" }],
       saving: false,
       errors: {},
+      categoryType: resolvedType,
     };
   }
 
@@ -98,7 +102,7 @@ class TransactionModal extends Component<Props, State> {
 
   async handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const { description, due_date, paid_date, is_paid, notes, payment_method, lines } = this.state;
+    const { description, due_date, paid_date, is_paid, notes, payment_method, lines, categoryType } = this.state;
 
     const payload: Partial<Transaction> = {
       description,
@@ -106,6 +110,7 @@ class TransactionModal extends Component<Props, State> {
       paid_date: paid_date || null,
       is_paid,
       notes,
+      transaction_type: categoryType,
       payment_method: payment_method ? parseInt(payment_method, 10) : null,
       lines: lines.map((l) => ({
         category: parseInt(l.category, 10),
@@ -125,13 +130,18 @@ class TransactionModal extends Component<Props, State> {
   }
 
   render() {
-    const { categories, paymentMethods, transaction, onClose, defaultCategoryType } = this.props;
-    const visibleCategories = defaultCategoryType
-      ? categories.filter((c) => c.category_type === defaultCategoryType)
-      : categories;
-    const { description, due_date, paid_date, is_paid, payment_method, lines, saving, errors } = this.state;
+    const { categories, paymentMethods, transaction, onClose } = this.props;
+    const { description, due_date, paid_date, is_paid, payment_method, lines, saving, errors, categoryType } = this.state;
     const isEdit = Boolean(transaction);
     const isRecurring = Boolean(transaction?.recurring);
+    // Sinking fund categories appear in both income and expense dropdowns
+    const visibleCategories = (categories as CategoryWithSF[]).filter(
+      (c) => c.category_type === categoryType || c.is_sinking_fund
+    );
+    const allLinesSF = lines.length > 0 && lines.every((l) => {
+      const cat = (categories as CategoryWithSF[]).find((c) => String(c.id) === l.category);
+      return cat?.is_sinking_fund === true;
+    });
 
     return (
       <div
@@ -145,12 +155,41 @@ class TransactionModal extends Component<Props, State> {
           <div className="modal-content">
             <form onSubmit={(e) => { void this.handleSubmit(e); }}>
               <div className="modal-header">
-                <h5 className="modal-title">{isEdit ? "Edit Transaction" : "Add Transaction"}</h5>
+                <h5 className="modal-title">{isEdit ? "Edit Transaction" : categoryType === "income" ? (allLinesSF ? "Deposit to Fund" : "Add Income") : "Add Expense"}</h5>
                 <button type="button" className="btn-close" onClick={onClose} aria-label="Close" />
               </div>
               <div className="modal-body">
                 {errors.non_field_errors && (
                   <div className="alert alert-danger">{errors.non_field_errors.join(" ")}</div>
+                )}
+
+                {!isEdit && (
+                  <div className="mb-3">
+                    <div className="btn-group w-100" role="group">
+                      {(["expense", "income"] as const).map((t) => (
+                        <label
+                          key={t}
+                          className={`btn ${categoryType === t ? (t === "expense" ? "btn-danger" : allLinesSF ? "btn-warning" : "btn-success") : "btn-outline-secondary"}`}
+                          style={{ textTransform: "capitalize" }}
+                        >
+                          <input
+                            type="radio"
+                            name="categoryType"
+                            value={t}
+                            checked={categoryType === t}
+                            onChange={() => {
+                              this.setState({
+                                categoryType: t,
+                                lines: [{ category: "", amount: "", description: "" }],
+                              });
+                            }}
+                            style={{ display: "none" }}
+                          />
+                          {t === "income" && allLinesSF ? "Deposit" : t}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
                 )}
 
                 <div className="mb-3">
@@ -180,7 +219,7 @@ class TransactionModal extends Component<Props, State> {
                     </div>
                   )}
                   <div className="col-md-6 mb-3">
-                    <label className="form-label">{defaultCategoryType === "income" ? "Received Date" : "Paid Date"}</label>
+                    <label className="form-label">{categoryType === "income" ? "Received Date" : "Paid Date"}</label>
                     <input
                       type="date"
                       className="form-control"
@@ -190,7 +229,7 @@ class TransactionModal extends Component<Props, State> {
                   </div>
                 </div>
 
-                {isRecurring && defaultCategoryType !== "income" && (
+                {isRecurring && categoryType !== "income" && (
                   <div className="mb-3 form-check">
                     <input
                       type="checkbox"
@@ -203,25 +242,23 @@ class TransactionModal extends Component<Props, State> {
                   </div>
                 )}
 
-                {defaultCategoryType !== "income" && (
-                  <div className="row">
-                    <div className="col-md-6 mb-3">
-                      <label className="form-label">Payment Method</label>
-                      <select
-                        className="form-select"
-                        value={payment_method}
-                        onChange={(e) => { this.setState({ payment_method: e.target.value }); }}
-                      >
-                        <option value="">— None —</option>
-                        {paymentMethods.filter((m) => m.is_active).map((m) => (
-                          <option key={m.id} value={m.id}>
-                            {m.name}{m.last_four ? ` ···${m.last_four}` : ""}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                <div className="row">
+                  <div className="col-md-6 mb-3">
+                    <label className="form-label">Payment Method</label>
+                    <select
+                      className="form-select"
+                      value={payment_method}
+                      onChange={(e) => { this.setState({ payment_method: e.target.value }); }}
+                    >
+                      <option value="">— None —</option>
+                      {paymentMethods.filter((m) => m.is_active).map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.name}{m.last_four ? ` ···${m.last_four}` : ""}
+                        </option>
+                      ))}
+                    </select>
                   </div>
-                )}
+                </div>
 
 
 
@@ -241,28 +278,9 @@ class TransactionModal extends Component<Props, State> {
                         required
                       >
                         <option value="">-- Select --</option>
-                        {defaultCategoryType ? (
-                          visibleCategories.map((c) => (
-                            <option key={c.id} value={c.id}>{c.name}</option>
-                          ))
-                        ) : (
-                          <>
-                            <optgroup label="Income">
-                              {visibleCategories
-                                .filter((c) => c.category_type === "income")
-                                .map((c) => (
-                                  <option key={c.id} value={c.id}>{c.name}</option>
-                                ))}
-                            </optgroup>
-                            <optgroup label="Expense">
-                              {visibleCategories
-                                .filter((c) => c.category_type === "expense")
-                                .map((c) => (
-                                  <option key={c.id} value={c.id}>{c.name}</option>
-                                ))}
-                            </optgroup>
-                          </>
-                        )}
+                        {visibleCategories.map((c) => (
+                          <option key={c.id} value={c.id}>{(c as CategoryWithSF).is_sinking_fund ? `◎ ${c.name}` : c.name}</option>
+                        ))}
                       </select>
                     </div>
                     <div className="col-md-3">
