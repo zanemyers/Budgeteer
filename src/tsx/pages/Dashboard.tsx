@@ -2,6 +2,7 @@ import { router } from "@inertiajs/react";
 import { useState } from "react";
 import TransactionModal from "../components/TransactionModal";
 import type { BudgetOverview, BudgetOverviewCategory, Category, PaymentMethod, Transaction } from "../types";
+import { fmt, useCurrencySymbol } from "../utils/currency";
 
 interface Props {
   budget_pk: number;
@@ -34,16 +35,13 @@ function formatMonth(month: string): string {
   return new Date(year, mon - 1, 1).toLocaleString("default", { month: "long", year: "numeric" });
 }
 
-function fmt(val: string): string {
-  return `$${parseFloat(val).toFixed(2)}`;
-}
-
 function getCsrfToken(): string {
   const match = document.cookie.match(/csrftoken=([^;]+)/);
   return match ? match[1] : "";
 }
 
 export default function Dashboard({ budget_pk, month, overview, categories, payment_methods, upcoming_transactions }: Props) {
+  const symbol = useCurrencySymbol();
   const [editingAssigned, setEditingAssigned] = useState<Record<number, string>>({});
   const [editingBudgeted, setEditingBudgeted] = useState<Record<number, string>>({});
   const [savingAssigned, setSavingAssigned] = useState<Record<number, boolean>>({});
@@ -154,7 +152,7 @@ export default function Dashboard({ budget_pk, month, overview, categories, paym
         <td className="text-end">
           {isEditingBudgeted ? (
             <div className="input-group input-group-sm justify-content-end" style={{ maxWidth: 130 }}>
-              <span className="input-group-text">$</span>
+              <span className="input-group-text">{symbol}</span>
               <input
                 type="number" className="form-control" min="0" step="0.01" autoFocus
                 value={editingBudgeted[cat.id]}
@@ -166,14 +164,14 @@ export default function Dashboard({ budget_pk, month, overview, categories, paym
             </div>
           ) : (
             <span style={{ cursor: "pointer" }} title="Click to set monthly target" onClick={() => setEditingBudgeted((prev) => ({ ...prev, [cat.id]: "" }))}>
-              {budgeted > 0 ? <span className={budgetedClass}>{fmt(cat.budgeted)}</span> : <span className="text-muted fst-italic">—</span>}
+              {budgeted > 0 ? <span className={budgetedClass}>{fmt(cat.budgeted, symbol)}</span> : <span className="text-muted fst-italic">—</span>}
             </span>
           )}
         </td>
         <td className="text-end">
           {isEditingAssigned ? (
             <div className="input-group input-group-sm justify-content-end" style={{ maxWidth: 130 }}>
-              <span className="input-group-text">$</span>
+              <span className="input-group-text">{symbol}</span>
               <input
                 type="number" className="form-control" min="0" step="0.01" autoFocus
                 value={editingAssigned[cat.id]}
@@ -185,12 +183,12 @@ export default function Dashboard({ budget_pk, month, overview, categories, paym
             </div>
           ) : (
             <span style={{ cursor: "pointer" }} title="Click to set assigned amount" onClick={() => setEditingAssigned((prev) => ({ ...prev, [cat.id]: "" }))}>
-              {assigned > 0 ? <span className={assignedClass}>{fmt(cat.assigned)}</span> : <span className="text-muted fst-italic">—</span>}
+              {assigned > 0 ? <span className={assignedClass}>{fmt(cat.assigned, symbol)}</span> : <span className="text-muted fst-italic">—</span>}
             </span>
           )}
         </td>
-        <td className="text-end">{fmt(cat.activity)}</td>
-        <td className={`text-end ${availableClass}`}>{fmt(cat.available)}</td>
+        <td className="text-end">{fmt(cat.activity, symbol)}</td>
+        <td className={`text-end ${availableClass}`}>{fmt(cat.available, symbol)}</td>
       </tr>
     );
   }
@@ -219,12 +217,12 @@ export default function Dashboard({ budget_pk, month, overview, categories, paym
           <div>
             <strong>Ready to Assign</strong>
             <div className="small text-muted">
-              Income {fmt(overview.income_total)}
-              {" "}&minus; Assigned {fmt(overview.expense_assigned)}
-              {parseFloat(overview.transfers_total) > 0 && <> &minus; Saved {fmt(overview.transfers_total)}</>}
+              Income {fmt(overview.income_total, symbol)}
+              {" "}&minus; Assigned {fmt(overview.expense_assigned, symbol)}
+              {parseFloat(overview.transfers_total) > 0 && <> &minus; Saved {fmt(overview.transfers_total, symbol)}</>}
             </div>
           </div>
-          <span className="fs-4 fw-bold">{fmt(overview.ready_to_assign)}</span>
+          <span className="fs-4 fw-bold">{fmt(overview.ready_to_assign, symbol)}</span>
         </div>
       )}
 
@@ -249,7 +247,7 @@ export default function Dashboard({ budget_pk, month, overview, categories, paym
                       {income.map((cat) => (
                         <tr key={cat.id}>
                           <td><a href={`/budgets/${budget_pk}/transactions/?month=${month}&category=${cat.id}`} className="text-decoration-none text-body">{cat.name}</a></td>
-                          <td className="text-end text-success">{fmt(cat.activity)}</td>
+                          <td className="text-end text-success">{fmt(cat.activity, symbol)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -260,20 +258,20 @@ export default function Dashboard({ budget_pk, month, overview, categories, paym
                 <div className="card-body py-2">
                   <div className="d-flex justify-content-between align-items-center py-1">
                     <span className="small text-muted">Income</span>
-                    <span className="fw-semibold text-success">{fmt(overview.income_total)}</span>
+                    <span className="fw-semibold text-success">{fmt(overview.income_total, symbol)}</span>
                   </div>
                   <div className="d-flex justify-content-between align-items-center py-1">
                     <span className="small text-muted">Spent</span>
-                    <span className="fw-semibold text-danger">${totalSpent.toFixed(2)}</span>
+                    <span className="fw-semibold text-danger">{fmt(totalSpent, symbol)}</span>
                   </div>
                   <div className="d-flex justify-content-between align-items-center py-1">
                     <span className="small text-muted">Saved to funds</span>
-                    <span className="fw-semibold text-warning">${sfSaved.toFixed(2)}</span>
+                    <span className="fw-semibold text-warning">{fmt(sfSaved, symbol)}</span>
                   </div>
                   <hr className="my-1" />
                   <div className="d-flex justify-content-between align-items-center py-1">
                     <span className="small fw-semibold">Net</span>
-                    <span className={`fw-bold ${netPositive ? "text-success" : "text-danger"}`}>{`${netPositive ? "" : "-"}$${Math.abs(netAmount).toFixed(2)}`}</span>
+                    <span className={`fw-bold ${netPositive ? "text-success" : "text-danger"}`}>{`${netPositive ? "" : "-"}${fmt(Math.abs(netAmount), symbol)}`}</span>
                   </div>
                 </div>
               </div>
@@ -299,7 +297,7 @@ export default function Dashboard({ budget_pk, month, overview, categories, paym
                           </div>
                           <div className="d-flex align-items-center gap-3">
                             <span className={`fw-semibold ${txn.transaction_type === "income" ? "text-success" : "text-danger"}`}>
-                              ${parseFloat(txn.total_amount).toFixed(2)}
+                              {fmt(txn.total_amount, symbol)}
                             </span>
                             <button className="btn btn-success btn-sm px-3" disabled={isMarking} onClick={() => void markPaid(txn.id)}>
                               {isMarking ? "…" : "✓"}

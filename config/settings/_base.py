@@ -219,6 +219,8 @@ if "s3boto3" in DEFAULT_FILE_STORAGE_BACKEND.lower():
     STATICFILES_DIRS = [str(BASE_DIR.joinpath("public", "static"))]
     STATIC_URL = "/public/static/"
 
+EXCHANGERATE_API_KEY = env("EXCHANGERATE_API_KEY", default="")
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

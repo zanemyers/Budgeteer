@@ -113,6 +113,8 @@ class AccountSettingsView(LoginRequiredMixin, View):
         email_addresses = list(
             EmailAddress.objects.filter(user=user).values("id", "email", "primary", "verified")
         )
+        from apps.base.models import Currency
+        currencies = list(Currency.objects.values("code", "name", "symbol").order_by("code"))
         return inertia_render(request, "AccountSettings", {
             "first_name": user.first_name,
             "last_name": user.last_name,
@@ -120,6 +122,8 @@ class AccountSettingsView(LoginRequiredMixin, View):
             "email_addresses": email_addresses,
             "timezone": user.timezone,
             "avatar_url": user.avatar_url,
+            "currency": user.currency,
+            "currencies": currencies,
         })
 
     def patch(self, request):
@@ -169,6 +173,16 @@ class AccountSettingsView(LoginRequiredMixin, View):
             user.timezone = tz
             user.save(update_fields=["timezone"])
             return JsonResponse({"timezone": user.timezone})
+
+        if action == "update_currency":
+            from apps.base.models import Currency
+            code = data.get("currency", "").strip().upper()
+            if not Currency.objects.filter(code=code).exists():
+                return JsonResponse({"error": "Invalid currency code."}, status=400)
+            user.currency = code
+            user.save(update_fields=["currency"])
+            currency = Currency.objects.get(code=code)
+            return JsonResponse({"currency": code, "currency_symbol": currency.symbol})
 
         # Default: update name
         user.first_name = data.get("first_name", user.first_name).strip()

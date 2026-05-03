@@ -2,6 +2,7 @@ import { useState } from "react";
 import { router } from "@inertiajs/react";
 import TransactionModal from "../components/TransactionModal";
 import type { Category, PaymentMethod, Transaction } from "../types";
+import { fmt, useCurrencySymbol } from "../utils/currency";
 
 interface Props {
   budget_pk: number;
@@ -85,6 +86,7 @@ function sortTransactions(txns: Transaction[], order: SortEntry[]): Transaction[
 }
 
 export default function Transactions({ budget_pk, month, category_filter, transactions: initialTxns, categories, payment_methods }: Props) {
+  const symbol = useCurrencySymbol();
   const [transactions, setTransactions] = useState(initialTxns);
   const [sortOrder, setSortOrder] = useState<SortEntry[]>([{ key: "paid_date", dir: "asc" }]);
 
@@ -288,7 +290,7 @@ export default function Transactions({ budget_pk, month, category_filter, transa
 
         {/* Amount */}
         <td className={`text-end fw-semibold ${txn.transaction_type === "income" ? "text-success" : txn.transaction_type === "transfer" ? "text-warning" : "text-danger"}`}>
-          ${parseFloat(txn.total_amount).toFixed(2)}
+          {fmt(txn.total_amount, symbol)}
         </td>
 
         {/* Payment Method */}
@@ -368,7 +370,7 @@ export default function Transactions({ budget_pk, month, category_filter, transa
                 {txn.lines.map((line) => (
                   <tr key={line.id}>
                     <td>{line.category_name}</td>
-                    <td className="text-end">${parseFloat(line.amount).toFixed(2)}</td>
+                    <td className="text-end">{fmt(line.amount, symbol)}</td>
                     <td className="text-muted">{line.description}</td>
                   </tr>
                 ))}

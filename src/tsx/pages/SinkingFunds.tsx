@@ -2,6 +2,7 @@ import { router } from "@inertiajs/react";
 import { useState } from "react";
 import TransactionModal from "../components/TransactionModal";
 import type { BudgetOverview, BudgetOverviewCategory, Category, PaymentMethod, Transaction } from "../types";
+import { fmt, useCurrencySymbol } from "../utils/currency";
 
 interface Props {
   budget_pk: number;
@@ -33,16 +34,13 @@ function formatMonth(month: string): string {
   return new Date(year, mon - 1, 1).toLocaleString("default", { month: "long", year: "numeric" });
 }
 
-function fmt(val: string): string {
-  return `$${parseFloat(val).toFixed(2)}`;
-}
-
 function getCsrfToken(): string {
   const match = document.cookie.match(/csrftoken=([^;]+)/);
   return match ? match[1] : "";
 }
 
 export default function SinkingFunds({ budget_pk, month, overview, categories, payment_methods }: Props) {
+  const symbol = useCurrencySymbol();
   const [addTransactionType, setAddTransactionType] = useState<"income" | "expense" | null>(null);
 
   const isCurrentMonth = month === getDefaultMonth();
@@ -97,15 +95,15 @@ export default function SinkingFunds({ budget_pk, month, overview, categories, p
             </div>
           </div>
           <div className="text-end flex-shrink-0" style={{ width: 160 }}>
-            <div className="small fw-medium">{fmt(String(saved))} <span className="text-muted fw-normal">/ {fmt(String(target))}</span></div>
+            <div className="small fw-medium">{fmt(String(saved), symbol)} <span className="text-muted fw-normal">/ {fmt(String(target), symbol)}</span></div>
             {showMonthly && (
               <div className="small" style={{ color: "var(--bs-warning-text-emphasis, #997404)" }}>
-                {fmt(String(monthly))}/mo
+                {fmt(String(monthly), symbol)}/mo
               </div>
             )}
             {activity !== 0 && (
               <div className="text-muted" style={{ fontSize: "0.7rem" }}>
-                {fmt(String(activity))} spent total
+                {fmt(String(activity), symbol)} spent total
               </div>
             )}
             {dueMeta && <div className="text-muted" style={{ fontSize: "0.7rem" }}>{dueMeta}</div>}
@@ -159,16 +157,16 @@ export default function SinkingFunds({ budget_pk, month, overview, categories, p
               <div className="card-body py-2">
                 <div className="d-flex justify-content-between align-items-center py-1">
                   <span className="small text-muted">Total saved</span>
-                  <span className="fw-semibold text-success">${totalSaved.toFixed(2)}</span>
+                  <span className="fw-semibold text-success">{fmt(totalSaved, symbol)}</span>
                 </div>
                 <div className="d-flex justify-content-between align-items-center py-1">
                   <span className="small text-muted">Total target</span>
-                  <span className="fw-semibold">${totalTarget.toFixed(2)}</span>
+                  <span className="fw-semibold">{fmt(totalTarget, symbol)}</span>
                 </div>
                 <hr className="my-1" />
                 <div className="d-flex justify-content-between align-items-center py-1">
                   <span className="small text-muted">Saved to funds {formatMonth(month)}</span>
-                  <span className="fw-semibold text-warning">{fmt(overview.transfers_total)}</span>
+                  <span className="fw-semibold text-warning">{fmt(overview.transfers_total, symbol)}</span>
                 </div>
               </div>
             </div>

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { router } from "@inertiajs/react";
+import { fmt, useCurrencySymbol } from "../utils/currency";
 
 interface RecurringTransaction {
   id: number;
@@ -53,10 +54,6 @@ function fmtDate(iso: string): string {
   return new Date(iso + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-function fmtAmount(amount: string): string {
-  return "$" + parseFloat(amount).toFixed(2);
-}
-
 // Group by category, sorted income first then expense, then by category name
 function groupByCategory(rts: RecurringTransaction[]) {
   const groups = new Map<string, { category_name: string; category_type: string; items: RecurringTransaction[] }>();
@@ -78,6 +75,7 @@ function groupByCategory(rts: RecurringTransaction[]) {
 }
 
 export default function RecurringList({ budget_pk, recurring_transactions: initialRts }: Props) {
+  const symbol = useCurrencySymbol();
   const [rts, setRts] = useState(initialRts);
   const [deactivatingId, setDeactivatingId] = useState<number | null>(null);
 
@@ -152,7 +150,7 @@ export default function RecurringList({ budget_pk, recurring_transactions: initi
                         </td>
                         <td className="small">{freqLabel(rt)}</td>
                         <td className={`text-end small ${rt.category_type === "income" ? "text-success" : "text-danger"}`}>
-                          {fmtAmount(rt.amount)}
+                          {fmt(rt.amount, symbol)}
                         </td>
                         <td className="small">{fmtDate(rt.start_date)}</td>
                         <td>

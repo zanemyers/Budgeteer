@@ -7,12 +7,20 @@ interface EmailAddress {
   verified: boolean;
 }
 
+interface CurrencyOption {
+  code: string;
+  name: string;
+  symbol: string;
+}
+
 interface Props {
   first_name: string;
   last_name: string;
   email_addresses: EmailAddress[];
   timezone: string;
   avatar_url: string;
+  currency: string;
+  currencies: CurrencyOption[];
 }
 
 function getCsrfToken(): string {
@@ -30,7 +38,11 @@ const COMMON_TIMEZONES = [
   "Asia/Tokyo", "Australia/Sydney", "Pacific/Auckland", "UTC",
 ];
 
-function ProfileTab({ timezone: initialTz, avatarUrl: initialAvatar }: { timezone: string; avatarUrl: string }) {
+function ProfileTab({ timezone: initialTz, avatarUrl: initialAvatar, currency: initialCurrency, currencies }: { timezone: string; avatarUrl: string; currency: string; currencies: CurrencyOption[] }) {
+  const [currency, setCurrency] = useState(initialCurrency);
+  const [currencySaving, setCurrencySaving] = useState(false);
+  const [currencySuccess, setCurrencySuccess] = useState(false);
+  const [currencyError, setCurrencyError] = useState<string | null>(null);
   const [tz, setTz] = useState(initialTz);
   const [tzSaving, setTzSaving] = useState(false);
   const [tzSuccess, setTzSuccess] = useState(false);
@@ -39,6 +51,27 @@ function ProfileTab({ timezone: initialTz, avatarUrl: initialAvatar }: { timezon
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
+
+  async function saveCurrency(e: React.FormEvent) {
+    e.preventDefault();
+    setCurrencySaving(true);
+    setCurrencySuccess(false);
+    setCurrencyError(null);
+    try {
+      const res = await fetch("/accounts/settings/", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() },
+        body: JSON.stringify({ action: "update_currency", currency }),
+      });
+      if (res.ok) setCurrencySuccess(true);
+      else {
+        const data = await res.json() as { error?: string };
+        setCurrencyError(data.error ?? "Something went wrong.");
+      }
+    } finally {
+      setCurrencySaving(false);
+    }
+  }
 
   async function saveTz(e: React.FormEvent) {
     e.preventDefault();
@@ -129,6 +162,26 @@ function ProfileTab({ timezone: initialTz, avatarUrl: initialAvatar }: { timezon
             </select>
             <button className="btn btn-primary flex-shrink-0" disabled={tzSaving}>{tzSaving ? "Saving…" : "Save"}</button>
           </div>
+        </form>
+      </div>
+
+      <div>
+        <h6 className="fw-semibold mb-3">Currency</h6>
+        <form onSubmit={(e) => void saveCurrency(e)}>
+          {currencySuccess && <div className="alert alert-success py-2">Currency updated.</div>}
+          {currencyError && <div className="alert alert-danger py-2">{currencyError}</div>}
+          {currencies.length === 0 ? (
+            <p className="text-muted small">No currencies loaded yet. An API key is required.</p>
+          ) : (
+            <div className="d-flex gap-2 align-items-start">
+              <select className="form-select" value={currency} onChange={(e) => setCurrency(e.target.value)}>
+                {currencies.map((c) => (
+                  <option key={c.code} value={c.code}>{c.symbol} {c.code} — {c.name}</option>
+                ))}
+              </select>
+              <button className="btn btn-primary flex-shrink-0" disabled={currencySaving}>{currencySaving ? "Saving…" : "Save"}</button>
+            </div>
+          )}
         </form>
       </div>
     </div>
@@ -367,7 +420,7 @@ function EmailTab({ addresses, setAddresses }: { addresses: EmailAddress[]; setA
 
 const TAB_LABELS: Record<Tab, string> = { profile: "Profile", name: "Name", password: "Password", email: "Email" };
 
-export default function AccountSettings({ first_name, last_name, email_addresses, timezone, avatar_url }: Props) {
+export default function AccountSettings({ first_name, last_name, email_addresses, timezone, avatar_url, currency, currencies }: Props) {
   const [tab, setTab] = useState<Tab>("profile");
   const [firstName, setFirstName] = useState(first_name);
   const [lastName, setLastName] = useState(last_name);
@@ -391,7 +444,7 @@ export default function AccountSettings({ first_name, last_name, email_addresses
         ))}
       </ul>
 
-      {tab === "profile" && <ProfileTab timezone={timezone} avatarUrl={avatar_url} />}
+      {tab === "profile" && <ProfileTab timezone={timezone} avatarUrl={avatar_url} currency={currency} currencies={currencies} />}
       {tab === "name" && (
         <NameTab
           firstName={firstName}

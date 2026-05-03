@@ -169,6 +169,9 @@ MEDIA_S3_BUCKET_NAME = { type = "str", default = "", initial = "media", help_tex
 MINIO_ROOT_USER = { type = "str", default = "minioadmin", help_text = "MinIO root username (local dev only)" }
 MINIO_ROOT_PASSWORD = { type = "str", default = "minioadmin", help_text = "MinIO root password (local dev only)" }
 
+# Exchange Rate API
+EXCHANGERATE_API_KEY = { type = "str", default = "", help_text = "API key for exchangerate-api.com (used to fetch daily currency rates)" }
+
 # AWS Settings (optional, for legacy S3 storage or Django SES email backend)
 AWS_ACCESS_KEY_ID = { type = "str", help_text = "AWS access key ID" }
 AWS_SECRET_ACCESS_KEY = { type = "str", help_text = "AWS secret access key" }

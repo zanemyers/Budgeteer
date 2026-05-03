@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import URLPattern, URLResolver, include, path
 
@@ -47,3 +48,5 @@ if settings.DEBUG is True:
         path("__debug__/", include(debug_toolbar.urls)),
         path("admin/doc/", include("django.contrib.admindocs.urls")),
     ]
+
+urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

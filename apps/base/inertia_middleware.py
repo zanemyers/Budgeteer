@@ -2,6 +2,8 @@ from django.contrib.messages import get_messages
 
 from inertia import share
 
+from apps.base.models import Currency
+
 
 class InertiaShareMiddleware:
     """Share auth and flash data with every Inertia response."""
@@ -11,15 +13,25 @@ class InertiaShareMiddleware:
 
     def __call__(self, request):
         if request.user.is_authenticated:
+            user = request.user
+            currency_code = user.currency or "USD"
+            try:
+                currency = Currency.objects.get(code=currency_code)
+                currency_symbol = currency.symbol
+            except Currency.DoesNotExist:
+                currency_symbol = "$"
+
             share(
                 request,
                 auth={
                     "user": {
-                        "id": request.user.pk,
-                        "email": request.user.email,
-                        "name": request.user.get_full_name() or request.user.email,
-                        "gravatar": request.user.avatar_url,
-                        "is_staff": request.user.is_staff,
+                        "id": user.pk,
+                        "email": user.email,
+                        "name": user.get_full_name() or user.email,
+                        "gravatar": user.avatar_url,
+                        "is_staff": user.is_staff,
+                        "currency_code": currency_code,
+                        "currency_symbol": currency_symbol,
                     }
                 },
             )

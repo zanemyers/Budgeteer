@@ -29,6 +29,7 @@ class User(AbstractUser):
         related_name="+",
     )
     timezone = models.CharField(max_length=63, default="America/Chicago", choices=TIMEZONE_CHOICES)
+    currency = models.CharField(max_length=3, default="USD")
     avatar_original = models.ImageField(upload_to=avatar_original_path, blank=True)
     avatar_thumbnail = models.ImageField(upload_to=avatar_thumbnail_path, blank=True)
     avatar_crop_data = models.JSONField(blank=True, null=True)

@@ -7,6 +7,8 @@ interface AuthUser {
   name: string;
   gravatar: string;
   is_staff: boolean;
+  currency_code: string;
+  currency_symbol: string;
 }
 
 interface PageProps {

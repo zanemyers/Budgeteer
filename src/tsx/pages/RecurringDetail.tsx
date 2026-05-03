@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { router } from "@inertiajs/react";
+import { fmt, useCurrencySymbol } from "../utils/currency";
 
 interface Category {
   id: number;
@@ -137,6 +138,7 @@ function InlineTextField({ value, type = "text", onSave, format, placeholder }: 
 }
 
 export default function RecurringDetail({ budget_pk, recurring: initialRt, instances: initialInstances, categories, payment_methods, freq_choices }: Props) {
+  const symbol = useCurrencySymbol();
   const [rt, setRt] = useState(initialRt);
   const [instances, setInstances] = useState(initialInstances);
   const [showAddInstance, setShowAddInstance] = useState(false);
@@ -214,7 +216,7 @@ export default function RecurringDetail({ budget_pk, recurring: initialRt, insta
       <div className="d-flex justify-content-between align-items-start mb-4">
         <div>
           <h1 className="h3 mb-0">{rt.name}</h1>
-          <p className="text-muted small mb-0">{freqDisplay()} — ${parseFloat(rt.amount).toFixed(2)}</p>
+          <p className="text-muted small mb-0">{freqDisplay()} — {fmt(rt.amount, symbol)}</p>
         </div>
         <div className="d-flex gap-2">
           <a
@@ -271,7 +273,7 @@ export default function RecurringDetail({ budget_pk, recurring: initialRt, insta
                   <InlineTextField
                     value={rt.amount}
                     type="number"
-                    format={(v) => v ? `$${parseFloat(v).toFixed(2)}` : "—"}
+                    format={(v) => v ? fmt(v, symbol) : "—"}
                     onSave={async (v) => { await patchRt({ amount: v }); }}
                   />
                 </dd>
