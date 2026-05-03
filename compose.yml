@@ -76,22 +76,7 @@ services:
       dockerfile: config/docker/Dockerfile.web
       target: dev
 
-    command: >
-      sh -c "
-        ./manage.py migrate --noinput &&
-        ./manage.py ensure_s3_bucket &&
-        ./manage.py update_exchange_rates --if-stale &&
-        if [ \"$$USE_DEBUGPY\" = \"true\" ]; then
-          echo '=========================================' &&
-          echo 'Starting Django with debugger enabled' &&
-          echo 'Debugger listening on 0.0.0.0:5678' &&
-          echo 'Attach from VS Code, LazyVim, or any DAP client' &&
-          echo '=========================================' &&
-          python -m debugpy --listen 0.0.0.0:5678 ./manage.py runserver 0.0.0.0:8000 --nothreading --noreload
-        else
-          ./manage.py runserver 0.0.0.0:8000
-        fi
-      "
+    command: sh config/docker/start.sh
 
     volumes:
       - .:/srv/app:cached
