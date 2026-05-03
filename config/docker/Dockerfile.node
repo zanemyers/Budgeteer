@@ -1,8 +1,7 @@
-FROM node:25.9
+FROM oven/bun:1
 
 WORKDIR /srv/app
 
-COPY package.json package-lock.json ./
+COPY package.json bun.lock ./
 
-# Install Node packages
-RUN npm install -g npm@latest && npm ci
+RUN bun install --frozen-lockfile

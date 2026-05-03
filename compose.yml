@@ -148,7 +148,7 @@ services:
     init: true
     working_dir: /srv/app
 
-    command: sh -c "npm run dev"
+    command: sh -c "bun run dev"
 
     volumes:
       - .:/srv/app
@@ -161,7 +161,7 @@ services:
       NODE_ENV: development
 
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      test: ["CMD", "bun", "--eval", "await fetch('http://localhost:3000').catch(() => process.exit(1))"]
       interval: 10s
       timeout: 5s
       retries: 3

@@ -2,13 +2,13 @@
   "name": "budgeteer",
   "description": "Budgeteer",
   "scripts": {
-    "dev": "npx vite --config src/config/vite.config.mjs",
-    "build": "npx vite build --config src/config/vite.config.mjs",
-    "preview": "npx vite preview --config src/config/vite.config.mjs",
-    "lint-sass": "npx stylelint --config src/config/stylelint.config.js ./src/scss/",
-    "format-sass": "npx stylelint --config src/config/stylelint.config.js --fix 'src/**/*.{css,scss}'",
-    "lint-js": "npx eslint --config src/config/eslint.config.js ./src/",
-    "format-js": "npx eslint --config src/config/eslint.config.js --fix ./src/"
+    "dev": "bunx vite --config src/config/vite.config.mjs",
+    "build": "bunx vite build --config src/config/vite.config.mjs",
+    "preview": "bunx vite preview --config src/config/vite.config.mjs",
+    "lint-sass": "bunx stylelint --config src/config/stylelint.config.js ./src/scss/",
+    "format-sass": "bunx stylelint --config src/config/stylelint.config.js --fix 'src/**/*.{css,scss}'",
+    "lint-js": "bunx eslint --config src/config/eslint.config.js ./src/",
+    "format-js": "bunx eslint --config src/config/eslint.config.js --fix ./src/"
   },
   "dependencies": {
     "@inertiajs/react": "^3.0.3",
