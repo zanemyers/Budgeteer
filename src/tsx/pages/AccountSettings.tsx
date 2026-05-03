@@ -182,6 +182,9 @@ function ProfileTab({ timezone: initialTz, avatarUrl: initialAvatar, currency: i
               <button className="btn btn-primary flex-shrink-0" disabled={currencySaving}>{currencySaving ? "Saving…" : "Save"}</button>
             </div>
           )}
+          <p className="text-muted small mt-2 mb-0">
+            All transaction amounts are displayed in your preferred currency. When a transaction is recorded in a different currency, it is automatically converted using the exchange rate at the time of entry. Exchange rates are updated daily.
+          </p>
         </form>
       </div>
     </div>
