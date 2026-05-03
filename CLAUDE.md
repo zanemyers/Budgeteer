@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Budgeteer is a Django 5 + Inertia.js + React SPA. The backend serves data via `inertia_render()`; the frontend is a persistent React app with no full-page reloads. Authentication is handled by Django Allauth with all views overridden to return Inertia responses.
+Budgeteer is a Django 6 + Inertia.js + React SPA, styled with Tailwind CSS v4. The backend serves data via `inertia_render()`; the frontend is a persistent React app with no full-page reloads. Authentication is handled by Django Allauth with all views overridden to return Inertia responses.
 
 ## Development Commands
 
@@ -17,7 +17,7 @@ All commands run inside Docker containers by default. Override with `PYTHON_CMD_
 - `just clean` - Remove build artifacts, caches, coverage data
 
 **Code Quality:**
-- `just format` - Format all code (Python with Ruff, JS with ESLint, SASS with Stylelint, HTML with djLint)
+- `just format` - Format all code (Python with Ruff, JS/TS with ESLint, HTML with djLint). Note: `format_sass` / `lint_sass` targets in `config/base.just` are vestigial — there is no SCSS in the project anymore.
 - `just lint` - Lint everything (includes type checking with ty)
 - `just pre_commit` - Run format, lint, and test pipeline
 
@@ -94,13 +94,15 @@ src/tsx/
   layouts/              # AppLayout, AuthLayout
   pages/                # One file per Inertia component (name must match Django view arg)
   components/           # Shared components: ThemeToggle, TransactionModal, LoadingSpinner
-src/scss/
-  main.scss             # Design tokens (CSS vars), Bootstrap import, global styles
-  _main_nav.scss        # Sidebar styles
-  _color_mode_picker.scss # Theme toggle styles + spin animation
+src/css/
+  main.css              # Tailwind v4 entry + hand-rolled utility classes
+src/config/
+  vite.config.mjs       # Vite config; entries are css/main.css and tsx/main.tsx
 ```
 
-Bootstrap 5 CSS variables are overridden in `src/scss/main.scss`. Dark mode tokens are in `[data-bs-theme="dark"]`. The `data-bs-theme` attribute is set on `<html>` by an inline script in `app.html` (reads from `localStorage`) before CSS loads to prevent FOUC.
+Styling uses Tailwind CSS v4 via `@tailwindcss/vite`. `src/css/main.css` starts with `@import "tailwindcss"` and a `@custom-variant dark (&:where(.dark, .dark *))` declaration, then defines a set of Bootstrap-shaped utility classes (`.btn`, `.btn-primary`, `.card`, `.form-control`, `.table`, `.modal`, `.sidebar`, etc.) that the JSX consumes. When adding new UI, prefer Tailwind utilities directly; only extend `main.css` if you need a class that's reused across many components.
+
+Dark mode is class-based: an inline script in `apps/base/templates/layouts/base.html` reads `localStorage.getItem("theme")` and toggles a `dark` class on `<html>` before CSS loads (prevents FOUC). `ThemeToggle.tsx` cycles auto → light → dark and persists to `localStorage`.
 
 ### Apps Structure
 
@@ -122,7 +124,7 @@ Settings are split in `config/settings/` (base, local, production, test_runner).
 
 ## Code Standards
 
-- **Python**: Ruff (format + lint), type-checked with ty
-- **JavaScript/TypeScript**: ESLint with Airbnb base config
-- **SASS/CSS**: Stylelint with standard SCSS + recess property order
+- **Python**: Ruff (format + lint), type-checked with ty; 120-char line length
+- **JavaScript/TypeScript**: ESLint (config in `src/config/eslint.config.js`); npm scripts call `bunx` (project switched from npm to bun)
+- **CSS**: Tailwind v4; no Stylelint, no SCSS
 - **HTML**: djLint; 120-char line length, 2-space indent
