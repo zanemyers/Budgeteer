@@ -28,7 +28,6 @@ def serialize_category(cat, total_saved: "Decimal | None" = None) -> dict:
 
 def get_sf_total_saved(budget, category_id: int) -> "Decimal":
     """Compute all-time net saved for a sinking fund category (transfers + income - expenses)."""
-    from django.db.models import Sum
     credits = (
         TransactionLine.objects.filter(
             transaction__budget=budget,

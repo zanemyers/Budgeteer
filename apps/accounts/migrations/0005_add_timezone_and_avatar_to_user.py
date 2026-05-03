@@ -4,6 +4,12 @@ import apps.accounts.models
 from django.db import migrations, models
 
 
+def _avatar_original_path(instance, filename):
+    from uuid import uuid4
+    ext = filename.rsplit(".", 1)[-1].lower()
+    return f"avatars/originals/{instance.pk}/{uuid4().hex}.{ext}"
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -19,7 +25,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='user',
             name='avatar_original',
-            field=models.ImageField(blank=True, upload_to=apps.accounts.models.avatar_original_path),
+            field=models.ImageField(blank=True, upload_to=_avatar_original_path),
         ),
         migrations.AddField(
             model_name='user',

@@ -11,11 +11,6 @@ from django.utils.safestring import mark_safe
 TIMEZONE_CHOICES = sorted([(tz, tz) for tz in available_timezones()])
 
 
-def avatar_original_path(instance, filename):
-    ext = filename.rsplit(".", 1)[-1].lower()
-    return f"avatars/originals/{instance.pk}/{uuid4().hex}.{ext}"
-
-
 def avatar_thumbnail_path(instance, filename):
     return f"avatars/thumbnails/{instance.pk}/{uuid4().hex}.jpg"
 
@@ -30,9 +25,7 @@ class User(AbstractUser):
     )
     timezone = models.CharField(max_length=63, default="America/Chicago", choices=TIMEZONE_CHOICES)
     currency = models.CharField(max_length=3, default="USD")
-    avatar_original = models.ImageField(upload_to=avatar_original_path, blank=True)
     avatar_thumbnail = models.ImageField(upload_to=avatar_thumbnail_path, blank=True)
-    avatar_crop_data = models.JSONField(blank=True, null=True)
 
     def clean(self):
         super().clean()

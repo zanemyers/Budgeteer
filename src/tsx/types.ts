@@ -60,21 +60,6 @@ export interface Budget {
   created_at: string;
 }
 
-export interface CategoryBreakdown {
-  category__name: string;
-  total: string;
-}
-
-export interface DashboardData {
-  income_total: string;
-  expense_total: string;
-  net_balance: string;
-  income_by_category: CategoryBreakdown[];
-  expense_by_category: CategoryBreakdown[];
-  transactions: Transaction[];
-  upcoming_transactions: Transaction[];
-}
-
 export interface RecurringTransaction {
   id: number;
   name: string;
