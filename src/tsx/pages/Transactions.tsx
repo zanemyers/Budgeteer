@@ -296,7 +296,9 @@ export default function Transactions({ budget_pk, month, category_filter, transa
         <td className={`text-end fw-semibold ${txn.transaction_type === "income" ? "text-success" : txn.transaction_type === "transfer" ? "text-warning" : "text-danger"}`}>
           {fmtConverted(txn.total_amount, txn.exchange_rate_to_usd, userRate, symbol)}
           {txn.currency !== userCurrencyCode && (
-            <span className="badge bg-secondary ms-1" style={{ fontSize: "0.6rem" }} title={`${fmt(txn.total_amount)} ${txn.currency}`}>{txn.currency}</span>
+            <div className="text-muted fw-normal" style={{ fontSize: "0.7rem" }}>
+              {fmt(txn.total_amount)} {txn.currency}
+            </div>
           )}
         </td>
 
