@@ -11,6 +11,8 @@ interface Props {
   first_name: string;
   last_name: string;
   email_addresses: EmailAddress[];
+  timezone: string;
+  avatar_url: string;
 }
 
 function getCsrfToken(): string {
@@ -18,7 +20,120 @@ function getCsrfToken(): string {
   return match ? match[1] : "";
 }
 
-type Tab = "name" | "password" | "email";
+type Tab = "profile" | "name" | "password" | "email";
+
+const COMMON_TIMEZONES = [
+  "America/New_York", "America/Chicago", "America/Denver", "America/Phoenix",
+  "America/Los_Angeles", "America/Anchorage", "America/Adak", "Pacific/Honolulu",
+  "America/Puerto_Rico", "Europe/London", "Europe/Paris", "Europe/Berlin",
+  "Europe/Moscow", "Asia/Dubai", "Asia/Kolkata", "Asia/Bangkok", "Asia/Shanghai",
+  "Asia/Tokyo", "Australia/Sydney", "Pacific/Auckland", "UTC",
+];
+
+function ProfileTab({ timezone: initialTz, avatarUrl: initialAvatar }: { timezone: string; avatarUrl: string }) {
+  const [tz, setTz] = useState(initialTz);
+  const [tzSaving, setTzSaving] = useState(false);
+  const [tzSuccess, setTzSuccess] = useState(false);
+  const [tzError, setTzError] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState(initialAvatar);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
+
+  async function saveTz(e: React.FormEvent) {
+    e.preventDefault();
+    setTzSaving(true);
+    setTzSuccess(false);
+    setTzError(null);
+    try {
+      const res = await fetch("/accounts/settings/", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() },
+        body: JSON.stringify({ action: "update_timezone", timezone: tz }),
+      });
+      if (res.ok) setTzSuccess(true);
+      else {
+        const data = await res.json() as { error?: string };
+        setTzError(data.error ?? "Something went wrong.");
+      }
+    } finally {
+      setTzSaving(false);
+    }
+  }
+
+  function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setAvatarPreview(URL.createObjectURL(file));
+    void uploadAvatar(file);
+  }
+
+  async function uploadAvatar(file: File) {
+    setAvatarUploading(true);
+    setAvatarError(null);
+    try {
+      const fd = new FormData();
+      fd.append("avatar", file);
+      const res = await fetch("/accounts/avatar/", {
+        method: "POST",
+        headers: { "X-CSRFToken": getCsrfToken() },
+        body: fd,
+      });
+      const data = await res.json() as { avatar_url?: string; error?: string };
+      if (res.ok && data.avatar_url) {
+        setAvatarUrl(data.avatar_url);
+        setAvatarPreview(null);
+      } else {
+        setAvatarError(data.error ?? "Upload failed.");
+        setAvatarPreview(null);
+      }
+    } finally {
+      setAvatarUploading(false);
+    }
+  }
+
+  return (
+    <div className="d-flex flex-column gap-4">
+      <div>
+        <h6 className="fw-semibold mb-3">Avatar</h6>
+        <div className="d-flex align-items-center gap-3">
+          <img
+            src={avatarPreview ?? avatarUrl}
+            alt="Avatar"
+            width="72"
+            height="72"
+            className="rounded-circle object-fit-cover"
+            style={{ objectFit: "cover" }}
+          />
+          <div>
+            <label className="btn btn-outline-secondary btn-sm" style={{ cursor: "pointer" }}>
+              {avatarUploading ? "Uploading…" : "Change photo"}
+              <input type="file" accept="image/*" className="d-none" onChange={onFileChange} disabled={avatarUploading} />
+            </label>
+            {avatarError && <div className="text-danger small mt-1">{avatarError}</div>}
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h6 className="fw-semibold mb-3">Timezone</h6>
+        <form onSubmit={(e) => void saveTz(e)}>
+          {tzSuccess && <div className="alert alert-success py-2">Timezone updated.</div>}
+          {tzError && <div className="alert alert-danger py-2">{tzError}</div>}
+          <div className="d-flex gap-2 align-items-start">
+            <select className="form-select" value={tz} onChange={(e) => setTz(e.target.value)}>
+              {COMMON_TIMEZONES.map((t) => (
+                <option key={t} value={t}>{t.replace("_", " ")}</option>
+              ))}
+              {!COMMON_TIMEZONES.includes(tz) && <option value={tz}>{tz}</option>}
+            </select>
+            <button className="btn btn-primary flex-shrink-0" disabled={tzSaving}>{tzSaving ? "Saving…" : "Save"}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
 
 function NameTab({
   firstName, lastName, onSaved,
@@ -250,8 +365,10 @@ function EmailTab({ addresses, setAddresses }: { addresses: EmailAddress[]; setA
   );
 }
 
-export default function AccountSettings({ first_name, last_name, email_addresses }: Props) {
-  const [tab, setTab] = useState<Tab>("name");
+const TAB_LABELS: Record<Tab, string> = { profile: "Profile", name: "Name", password: "Password", email: "Email" };
+
+export default function AccountSettings({ first_name, last_name, email_addresses, timezone, avatar_url }: Props) {
+  const [tab, setTab] = useState<Tab>("profile");
   const [firstName, setFirstName] = useState(first_name);
   const [lastName, setLastName] = useState(last_name);
   const [addresses, setAddresses] = useState(email_addresses);
@@ -261,19 +378,20 @@ export default function AccountSettings({ first_name, last_name, email_addresses
       <h1 className="h3 mb-4">Account Settings</h1>
 
       <ul className="nav nav-tabs mb-4">
-        {(["name", "password", "email"] as Tab[]).map((t) => (
+        {(["profile", "name", "password", "email"] as Tab[]).map((t) => (
           <li className="nav-item" key={t}>
             <button
               type="button"
               className={`nav-link${tab === t ? " active" : ""}`}
               onClick={() => setTab(t)}
             >
-              {t === "name" ? "Name" : t === "password" ? "Password" : "Email"}
+              {TAB_LABELS[t]}
             </button>
           </li>
         ))}
       </ul>
 
+      {tab === "profile" && <ProfileTab timezone={timezone} avatarUrl={avatar_url} />}
       {tab === "name" && (
         <NameTab
           firstName={firstName}

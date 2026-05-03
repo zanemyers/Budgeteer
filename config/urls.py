@@ -4,6 +4,7 @@ from django.urls import URLPattern, URLResolver, include, path
 
 from apps.accounts.views import (
     AccountSettingsView,
+    AvatarUploadView,
     ConfirmEmailView,
     PasswordResetDoneView,
     PasswordResetFromKeyDoneView,
@@ -25,6 +26,7 @@ urlpatterns += [
     path("404/", http_404),
     path("accounts/history/", BudgetHistoryView.as_view(), name="budget_history"),
     path("accounts/settings/", AccountSettingsView.as_view(), name="account_settings"),
+    path("accounts/avatar/", AvatarUploadView.as_view(), name="account_avatar"),
     path("accounts/name/", AccountSettingsView.as_view(), name="account_change_name"),
     # Override allauth URLs with Inertia versions (must come before allauth.urls)
     path("accounts/login/", SignInView.as_view(), name="account_login"),

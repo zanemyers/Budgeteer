@@ -18,7 +18,7 @@ class InertiaShareMiddleware:
                         "id": request.user.pk,
                         "email": request.user.email,
                         "name": request.user.get_full_name() or request.user.email,
-                        "gravatar": request.user._get_gravatar_url(),
+                        "gravatar": request.user.avatar_url,
                         "is_staff": request.user.is_staff,
                     }
                 },

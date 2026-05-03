@@ -118,6 +118,8 @@ class AccountSettingsView(LoginRequiredMixin, View):
             "last_name": user.last_name,
             "email": user.email,
             "email_addresses": email_addresses,
+            "timezone": user.timezone,
+            "avatar_url": user.avatar_url,
         })
 
     def patch(self, request):
@@ -160,6 +162,14 @@ class AccountSettingsView(LoginRequiredMixin, View):
             ea.delete()
             return JsonResponse({"ok": True})
 
+        if action == "update_timezone":
+            tz = data.get("timezone", "").strip()
+            if not tz:
+                return JsonResponse({"error": "Timezone is required."}, status=400)
+            user.timezone = tz
+            user.save(update_fields=["timezone"])
+            return JsonResponse({"timezone": user.timezone})
+
         # Default: update name
         user.first_name = data.get("first_name", user.first_name).strip()
         user.last_name = data.get("last_name", user.last_name).strip()
@@ -200,3 +210,39 @@ class AccountSettingsView(LoginRequiredMixin, View):
             update_session_auth_hash(request, user)
             return JsonResponse({"ok": True})
         return JsonResponse({"error": "Unknown action."}, status=400)
+
+
+class AvatarUploadView(LoginRequiredMixin, View):
+    def post(self, request):
+        from io import BytesIO
+
+        from PIL import Image
+
+        file = request.FILES.get("avatar")
+        if not file:
+            return JsonResponse({"error": "No file provided."}, status=400)
+        if file.size > 5 * 1024 * 1024:
+            return JsonResponse({"error": "File must be under 5 MB."}, status=400)
+        try:
+            img = Image.open(file)
+            img.verify()
+        except Exception:
+            return JsonResponse({"error": "Invalid image file."}, status=400)
+
+        file.seek(0)
+        img = Image.open(file)
+        img = img.convert("RGB")
+        size = min(img.width, img.height)
+        left = (img.width - size) // 2
+        top = (img.height - size) // 2
+        img = img.crop((left, top, left + size, top + size))
+        img.thumbnail((256, 256), Image.LANCZOS)
+
+        buf = BytesIO()
+        img.save(buf, format="JPEG", quality=85)
+        buf.seek(0)
+
+        user = request.user
+        from django.core.files.base import ContentFile
+        user.avatar_thumbnail.save(f"{user.pk}_thumb.jpg", ContentFile(buf.read()), save=True)
+        return JsonResponse({"avatar_url": user.avatar_url})
