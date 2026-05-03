@@ -1,5 +1,4 @@
-import json
-import urllib.request
+import requests
 
 from celery import shared_task
 from django.conf import settings
@@ -15,17 +14,13 @@ def update_exchange_rates():
     if not api_key:
         return "EXCHANGERATE_API_KEY is not set — skipping."
 
-    base_url = f"https://v6.exchangerateapi.com/v6/{api_key}"
+    base_url = f"https://v6.exchangerate-api.com/v6/{api_key}"
 
-    with urllib.request.urlopen(f"{base_url}/codes", timeout=10) as resp:
-        codes_data = json.loads(resp.read())
-
+    codes_data = requests.get(f"{base_url}/codes", timeout=10).json()
     if codes_data.get("result") != "success":
         raise RuntimeError(f"API error fetching codes: {codes_data}")
 
-    with urllib.request.urlopen(f"{base_url}/latest/USD", timeout=10) as resp:
-        rates_data = json.loads(resp.read())
-
+    rates_data = requests.get(f"{base_url}/latest/USD", timeout=10).json()
     if rates_data.get("result") != "success":
         raise RuntimeError(f"API error fetching rates: {rates_data}")
 

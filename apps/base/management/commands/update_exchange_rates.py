@@ -1,6 +1,4 @@
-import urllib.request
-import json
-import datetime
+import requests
 
 from django.conf import settings
 from django.core.management.base import BaseCommand
@@ -64,22 +62,16 @@ class Command(BaseCommand):
                     self.stdout.write(f"Rates are fresh ({int(age.total_seconds() / 3600)}h old) — skipping.")
                     return
 
-        base_url = f"https://v6.exchangerateapi.com/v6/{api_key}"
+        base_url = f"https://v6.exchangerate-api.com/v6/{api_key}"
 
-        # Fetch supported codes + names
         self.stdout.write("Fetching supported currencies…")
-        with urllib.request.urlopen(f"{base_url}/codes", timeout=10) as resp:
-            codes_data = json.loads(resp.read())
-
+        codes_data = requests.get(f"{base_url}/codes", timeout=10).json()
         if codes_data.get("result") != "success":
             self.stderr.write(f"API error: {codes_data}")
             return
 
-        # Fetch latest rates vs USD
         self.stdout.write("Fetching exchange rates…")
-        with urllib.request.urlopen(f"{base_url}/latest/USD", timeout=10) as resp:
-            rates_data = json.loads(resp.read())
-
+        rates_data = requests.get(f"{base_url}/latest/USD", timeout=10).json()
         if rates_data.get("result") != "success":
             self.stderr.write(f"API error: {rates_data}")
             return
