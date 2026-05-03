@@ -122,6 +122,23 @@ services:
     environment:
       DJANGO_SETTINGS_MODULE: config.settings
 
+  beat:
+    container_name: beat
+    image: budgeteer:python
+    init: true
+
+    command: sh -c "celery -A config beat -l info"
+
+    volumes:
+      - .:/srv/app:cached
+
+    depends_on:
+      web:
+        condition: service_started
+
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings
+
   node:
     container_name: node
     image: budgeteer:node

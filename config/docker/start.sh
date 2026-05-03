@@ -3,7 +3,6 @@ set -e
 
 ./manage.py migrate --noinput
 ./manage.py ensure_s3_bucket
-./manage.py update_exchange_rates --if-stale
 
 if [ "$USE_DEBUGPY" = "true" ]; then
   echo '========================================='
