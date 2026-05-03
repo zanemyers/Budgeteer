@@ -155,9 +155,11 @@ STATICFILES_FINDERS = (
     "django.contrib.staticfiles.finders.AppDirectoriesFinder",
 )
 
+DEFAULT_FILE_STORAGE_BACKEND = env("DEFAULT_FILE_STORAGE", default="storages.backends.s3boto3.S3Boto3Storage")
+
 STORAGES = {
     "default": {
-        "BACKEND": env("DEFAULT_FILE_STORAGE", default="django.core.files.storage.FileSystemStorage"),
+        "BACKEND": DEFAULT_FILE_STORAGE_BACKEND,
     },
     "staticfiles": {
         "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
@@ -168,8 +170,29 @@ STORAGES = {
 AWS_ACCESS_KEY_ID = env("AWS_ACCESS_KEY_ID", default="")
 AWS_SECRET_ACCESS_KEY = env("AWS_SECRET_ACCESS_KEY", default="")
 
+# Media S3 storage settings (used for both MinIO local dev and real S3 in prod).
+MEDIA_S3_ACCESS_KEY = env("MEDIA_S3_ACCESS_KEY", default="")
+MEDIA_S3_SECRET_KEY = env("MEDIA_S3_SECRET_KEY", default="")
+MEDIA_S3_ENDPOINT_URL = env("MEDIA_S3_ENDPOINT_URL", default="")
+MEDIA_S3_URL_ENDPOINT_URL = env("MEDIA_S3_URL_ENDPOINT_URL", default="")
+MEDIA_S3_BUCKET_NAME = env("MEDIA_S3_BUCKET_NAME", default="")
 
-if STORAGES["default"]["BACKEND"].endswith("MediaS3Storage") is True:
+if "s3boto3" in DEFAULT_FILE_STORAGE_BACKEND.lower():
+    STORAGES["default"]["OPTIONS"] = {
+        "access_key": MEDIA_S3_ACCESS_KEY,
+        "secret_key": MEDIA_S3_SECRET_KEY,
+        "bucket_name": MEDIA_S3_BUCKET_NAME,
+        "default_acl": "private",
+        "querystring_auth": True,
+        "file_overwrite": False,
+    }
+    if MEDIA_S3_ENDPOINT_URL:
+        STORAGES["default"]["OPTIONS"]["endpoint_url"] = MEDIA_S3_ENDPOINT_URL
+    if MEDIA_S3_URL_ENDPOINT_URL:
+        STORAGES["default"]["BACKEND"] = "apps.base.storage.S3MediaStorage"
+        STORAGES["default"]["OPTIONS"]["url_endpoint_url"] = MEDIA_S3_URL_ENDPOINT_URL
+
+elif DEFAULT_FILE_STORAGE_BACKEND.endswith("MediaS3Storage"):
     STORAGES["staticfiles"]["BACKEND"] = env("STATICFILES_STORAGE")
     AWS_STORAGE_BUCKET_NAME = env("AWS_STORAGE_BUCKET_NAME")
     AWS_DEFAULT_ACL = "public-read"
@@ -181,13 +204,19 @@ if STORAGES["default"]["BACKEND"].endswith("MediaS3Storage") is True:
     STATICFILES_DIRS = [str(BASE_DIR.joinpath("public", "static"))]
 
 else:
-    # Local Storage
+    # Local filesystem storage
     PUBLIC_ROOT = BASE_DIR.joinpath("public")
     STATIC_ROOT = BASE_DIR.joinpath("collected_static")
     MEDIA_ROOT = PUBLIC_ROOT.joinpath("media")
     PUBLIC_STATIC = PUBLIC_ROOT.joinpath("static")
     STATICFILES_DIRS = [str(PUBLIC_STATIC)]
     MEDIA_URL = "/public/media/"
+    STATIC_URL = "/public/static/"
+
+if "s3boto3" in DEFAULT_FILE_STORAGE_BACKEND.lower():
+    PUBLIC_ROOT = BASE_DIR.joinpath("public")
+    STATIC_ROOT = BASE_DIR.joinpath("collected_static")
+    STATICFILES_DIRS = [str(BASE_DIR.joinpath("public", "static"))]
     STATIC_URL = "/public/static/"
 
 # Default primary key field type

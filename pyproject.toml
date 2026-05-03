@@ -157,10 +157,19 @@ READ_DOT_ENV_FILE = { type = "bool", default = true, help_text = "Read .env file
 WSGI_APPLICATION = { type = "str", default = "config.wsgi.application", help_text = "WSGI application path" }
 
 # Storage Settings
-DEFAULT_FILE_STORAGE = { type = "str", default = "django.core.files.storage.FileSystemStorage", help_text = "Default file storage backend" }
+DEFAULT_FILE_STORAGE = { type = "str", default = "storages.backends.s3boto3.S3Boto3Storage", help_text = "Default file storage backend (S3/MinIO by default; set to FileSystemStorage to bypass)" }
 STATICFILES_STORAGE = { type = "str", help_text = "Static files storage backend" }
 
-# AWS Settings (optional, for S3 storage and Django SES email backend)
+# MinIO / S3 media storage settings
+MEDIA_S3_ACCESS_KEY = { type = "str", default = "", initial = "minioadmin", help_text = "S3 access key (MinIO username locally)" }
+MEDIA_S3_SECRET_KEY = { type = "str", default = "", initial = "minioadmin", help_text = "S3 secret key (MinIO password locally)" }
+MEDIA_S3_ENDPOINT_URL = { type = "str", default = "", initial = "http://minio:9000", help_text = "Internal S3 endpoint URL (Docker-internal hostname for MinIO)" }
+MEDIA_S3_URL_ENDPOINT_URL = { type = "str", default = "", initial = "http://localhost:9000", help_text = "Browser-facing S3 endpoint URL used in generated URLs" }
+MEDIA_S3_BUCKET_NAME = { type = "str", default = "", initial = "media", help_text = "S3 bucket name for media uploads" }
+MINIO_ROOT_USER = { type = "str", default = "minioadmin", help_text = "MinIO root username (local dev only)" }
+MINIO_ROOT_PASSWORD = { type = "str", default = "minioadmin", help_text = "MinIO root password (local dev only)" }
+
+# AWS Settings (optional, for legacy S3 storage or Django SES email backend)
 AWS_ACCESS_KEY_ID = { type = "str", help_text = "AWS access key ID" }
 AWS_SECRET_ACCESS_KEY = { type = "str", help_text = "AWS secret access key" }
 AWS_STORAGE_BUCKET_NAME = { type = "str", help_text = "S3 bucket name" }
