@@ -223,6 +223,8 @@ class Transaction(models.Model):
     is_paid = models.BooleanField(default=False)
     notes = models.TextField(blank=True)
     transaction_type = models.CharField(max_length=10, blank=True, default="")
+    currency = models.CharField(max_length=3, default="USD")
+    exchange_rate_to_usd = models.DecimalField(max_digits=20, decimal_places=8, default=Decimal("1"))
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -305,6 +307,7 @@ class TransactionLine(models.Model):
     transaction = models.ForeignKey(Transaction, on_delete=models.CASCADE, related_name="lines")
     category = models.ForeignKey(Category, on_delete=models.PROTECT, related_name="transaction_lines")
     amount = models.DecimalField(max_digits=12, decimal_places=2)
+    amount_usd = models.DecimalField(max_digits=14, decimal_places=6, default=Decimal("0"))
     description = models.CharField(max_length=200, blank=True)
 
     class Meta:

@@ -32,6 +32,7 @@ class InertiaShareMiddleware:
                         "is_staff": user.is_staff,
                         "currency_code": currency_code,
                         "currency_symbol": currency_symbol,
+                        "currency_rate": str(currency.rate_to_usd) if currency else "1",
                     }
                 },
             )

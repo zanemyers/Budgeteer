@@ -26,23 +26,23 @@ def serialize_category(cat, total_saved: "Decimal | None" = None) -> dict:
     return d
 
 
-def get_sf_total_saved(budget, category_id: int) -> "Decimal":
-    """Compute all-time net saved for a sinking fund category (transfers + income - expenses)."""
+def get_sf_total_saved(budget, category_id: int, user_rate: "Decimal" = Decimal("1")) -> "Decimal":
+    """Compute all-time net saved for a sinking fund category, converted to user's currency."""
     credits = (
         TransactionLine.objects.filter(
             transaction__budget=budget,
             category_id=category_id,
             transaction__transaction_type__in=("income", "transfer"),
-        ).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+        ).aggregate(total=Sum("amount_usd"))["total"] or Decimal("0.00")
     )
     expense = (
         TransactionLine.objects.filter(
             transaction__budget=budget,
             category_id=category_id,
             transaction__transaction_type="expense",
-        ).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+        ).aggregate(total=Sum("amount_usd"))["total"] or Decimal("0.00")
     )
-    return credits - expense
+    return (credits - expense) * user_rate
 
 
 def serialize_payment_method(pm) -> dict:
@@ -95,6 +95,8 @@ def serialize_transaction(txn) -> dict:
         "lines": lines,
         "total_amount": str(txn.total_amount),
         "transaction_type": txn.derive_transaction_type(),
+        "currency": txn.currency,
+        "exchange_rate_to_usd": str(txn.exchange_rate_to_usd),
         "created_at": txn.created_at.isoformat(),
     }
 
@@ -134,7 +136,7 @@ def serialize_membership(membership) -> dict:
     }
 
 
-def get_budget_overview(budget, month_str: str | None) -> dict:
+def get_budget_overview(budget, month_str: str | None, user_rate: "Decimal" = Decimal("1")) -> dict:
     """Compute the YNAB-style budget overview for a given month."""
     try:
         selected = (
@@ -150,8 +152,7 @@ def get_budget_overview(budget, month_str: str | None) -> dict:
     period_end = selected.replace(day=last_day)
 
     # Activity for regular (non-SF) categories: all transactions except transfers.
-    # Includes legacy transactions with transaction_type="" via the fallback.
-    # Uses COALESCE(paid_date, due_date) so back-dated entries land in the correct month.
+    # Amounts stored as amount_usd (USD equivalent at transaction time); scaled to user currency below.
     regular_activity_qs = (
         TransactionLine.objects.filter(
             transaction__budget=budget,
@@ -161,12 +162,11 @@ def get_budget_overview(budget, month_str: str | None) -> dict:
         .annotate(effective_date=Coalesce("transaction__paid_date", "transaction__due_date"))
         .filter(effective_date__range=(period_start, period_end))
         .values("category_id")
-        .annotate(total=Sum("amount"))
+        .annotate(total=Sum("amount_usd"))
     )
-    activity_map: dict[int, Decimal] = {row["category_id"]: row["total"] for row in regular_activity_qs}
+    activity_map: dict[int, Decimal] = {row["category_id"]: row["total"] * user_rate for row in regular_activity_qs}
 
     # Activity for sinking fund categories: all-time expense total (no date filter).
-    # Sinking fund spending should always be visible regardless of which month is selected.
     sf_activity_qs = (
         TransactionLine.objects.filter(
             transaction__budget=budget,
@@ -174,13 +174,13 @@ def get_budget_overview(budget, month_str: str | None) -> dict:
             transaction__transaction_type="expense",
         )
         .values("category_id")
-        .annotate(total=Sum("amount"))
+        .annotate(total=Sum("amount_usd"))
     )
     for row in sf_activity_qs:
-        activity_map[row["category_id"]] = row["total"]
+        activity_map[row["category_id"]] = row["total"] * user_rate
 
-    # Activity from paid recurring instances that have no explicit lines
-    # (transactions with lines are already counted in activity_qs above)
+    # Activity from paid recurring instances that have no explicit lines.
+    # Recurring amounts have no exchange rate stored, so treat as user-currency already.
     recurring_activity_qs = (
         Transaction.objects.filter(
             budget=budget,
@@ -209,7 +209,7 @@ def get_budget_overview(budget, month_str: str | None) -> dict:
             transaction__transaction_type__in=("income", "transfer"),
         )
         .values("category_id")
-        .annotate(total=Sum("amount"))
+        .annotate(total=Sum("amount_usd"))
     )
     saved_expense_qs = (
         TransactionLine.objects.filter(
@@ -218,15 +218,15 @@ def get_budget_overview(budget, month_str: str | None) -> dict:
             transaction__transaction_type="expense",
         )
         .values("category_id")
-        .annotate(total=Sum("amount"))
+        .annotate(total=Sum("amount_usd"))
     )
     credits_map: dict[int, Decimal] = {}
     for row in saved_credits_qs:
-        credits_map[row["category_id"]] = credits_map.get(row["category_id"], Decimal("0.00")) + row["total"]
+        credits_map[row["category_id"]] = credits_map.get(row["category_id"], Decimal("0.00")) + row["total"] * user_rate
 
     saved_map: dict[int, Decimal] = dict(credits_map)
     for row in saved_expense_qs:
-        saved_map[row["category_id"]] = saved_map.get(row["category_id"], Decimal("0.00")) - row["total"]
+        saved_map[row["category_id"]] = saved_map.get(row["category_id"], Decimal("0.00")) - row["total"] * user_rate
 
     # Monthly SF spending (expenses only, date-filtered) for dashboard totals
     sf_monthly_expense_qs = (
@@ -237,9 +237,9 @@ def get_budget_overview(budget, month_str: str | None) -> dict:
         )
         .annotate(effective_date=Coalesce("transaction__paid_date", "transaction__due_date"))
         .filter(effective_date__range=(period_start, period_end))
-        .aggregate(total=Sum("amount"))
+        .aggregate(total=Sum("amount_usd"))
     )
-    sf_monthly_spending = sf_monthly_expense_qs["total"] or Decimal("0.00")
+    sf_monthly_spending = (sf_monthly_expense_qs["total"] or Decimal("0.00")) * user_rate
 
     # Transfers to sinking funds this month — subtracted from RTA
     sf_transfers_qs = (
@@ -250,9 +250,9 @@ def get_budget_overview(budget, month_str: str | None) -> dict:
         )
         .annotate(effective_date=Coalesce("transaction__paid_date", "transaction__due_date"))
         .filter(effective_date__range=(period_start, period_end))
-        .aggregate(total=Sum("amount"))
+        .aggregate(total=Sum("amount_usd"))
     )
-    sf_transfers_month = sf_transfers_qs["total"] or Decimal("0.00")
+    sf_transfers_month = (sf_transfers_qs["total"] or Decimal("0.00")) * user_rate
 
     categories = Category.objects.filter(budget=budget).order_by("category_type", "name")
 

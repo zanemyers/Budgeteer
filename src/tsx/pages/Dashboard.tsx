@@ -1,7 +1,7 @@
 import { router } from "@inertiajs/react";
 import { useState } from "react";
 import TransactionModal from "../components/TransactionModal";
-import type { BudgetOverview, BudgetOverviewCategory, Category, PaymentMethod, Transaction } from "../types";
+import type { BudgetOverview, BudgetOverviewCategory, Category, CurrencyOption, PaymentMethod, Transaction } from "../types";
 import { fmt, useCurrencySymbol } from "../utils/currency";
 
 interface Props {
@@ -11,6 +11,8 @@ interface Props {
   categories: Category[];
   payment_methods: PaymentMethod[];
   upcoming_transactions: Transaction[];
+  currencies: CurrencyOption[];
+  user_currency: string;
 }
 
 function getDefaultMonth(): string {
@@ -40,7 +42,7 @@ function getCsrfToken(): string {
   return match ? match[1] : "";
 }
 
-export default function Dashboard({ budget_pk, month, overview, categories, payment_methods, upcoming_transactions }: Props) {
+export default function Dashboard({ budget_pk, month, overview, categories, payment_methods, upcoming_transactions, currencies, user_currency }: Props) {
   const symbol = useCurrencySymbol();
   const [editingAssigned, setEditingAssigned] = useState<Record<number, string>>({});
   const [editingBudgeted, setEditingBudgeted] = useState<Record<number, string>>({});
@@ -339,6 +341,8 @@ export default function Dashboard({ budget_pk, month, overview, categories, paym
           <TransactionModal
             categories={categories}
             paymentMethods={payment_methods}
+            currencies={currencies}
+            userCurrency={user_currency}
             budgetPk={budget_pk}
             transaction={null}
             defaultCategoryType={addTransactionType}

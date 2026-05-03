@@ -1,7 +1,7 @@
 import { router } from "@inertiajs/react";
 import { useState } from "react";
 import TransactionModal from "../components/TransactionModal";
-import type { BudgetOverview, BudgetOverviewCategory, Category, PaymentMethod, Transaction } from "../types";
+import type { BudgetOverview, BudgetOverviewCategory, Category, CurrencyOption, PaymentMethod, Transaction } from "../types";
 import { fmt, useCurrencySymbol } from "../utils/currency";
 
 interface Props {
@@ -10,6 +10,8 @@ interface Props {
   overview: BudgetOverview;
   categories: Category[];
   payment_methods: PaymentMethod[];
+  currencies: CurrencyOption[];
+  user_currency: string;
 }
 
 function getDefaultMonth(): string {
@@ -39,7 +41,7 @@ function getCsrfToken(): string {
   return match ? match[1] : "";
 }
 
-export default function SinkingFunds({ budget_pk, month, overview, categories, payment_methods }: Props) {
+export default function SinkingFunds({ budget_pk, month, overview, categories, payment_methods, currencies, user_currency }: Props) {
   const symbol = useCurrencySymbol();
   const [addTransactionType, setAddTransactionType] = useState<"income" | "expense" | null>(null);
 
@@ -180,6 +182,8 @@ export default function SinkingFunds({ budget_pk, month, overview, categories, p
           <TransactionModal
             categories={categories}
             paymentMethods={payment_methods}
+            currencies={currencies}
+            userCurrency={user_currency}
             budgetPk={budget_pk}
             transaction={null}
             defaultCategoryType={addTransactionType}

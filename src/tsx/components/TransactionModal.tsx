@@ -1,11 +1,13 @@
 import { Component, createRef } from "react";
-import type { Category, PaymentMethod, Transaction, TransactionLine } from "../types";
+import type { Category, CurrencyOption, PaymentMethod, Transaction, TransactionLine } from "../types";
 
 type CategoryWithSF = Category & { is_sinking_fund?: boolean };
 
 interface Props {
   categories: Category[];
   paymentMethods: PaymentMethod[];
+  currencies: CurrencyOption[];
+  userCurrency: string;
   budgetPk: number;
   onSave: (data: Partial<Transaction>) => Promise<void>;
   transaction?: Transaction | null;
@@ -26,6 +28,7 @@ interface State {
   is_paid: boolean;
   notes: string;
   payment_method: string;
+  currency: string;
   lines: LineState[];
   saving: boolean;
   errors: Record<string, string[]>;
@@ -49,6 +52,7 @@ class TransactionModal extends Component<Props, State> {
         is_paid: transaction.transaction_type === "income" || !transaction.recurring ? true : transaction.is_paid,
         notes: transaction.notes,
         payment_method: transaction.payment_method ? String(transaction.payment_method) : "",
+        currency: transaction.currency || this.props.userCurrency,
         lines: transaction.lines.map((l) => ({
           category: String(l.category),
           amount: l.amount,
@@ -59,7 +63,7 @@ class TransactionModal extends Component<Props, State> {
         categoryType: transaction.transaction_type === "income" ? "income" : "expense",
       };
     }
-    const { defaultCategoryType, categories } = this.props;
+    const { defaultCategoryType, categories, userCurrency } = this.props;
     const resolvedType: "income" | "expense" = defaultCategoryType ?? "expense";
     const defaultCategory = String(categories.find((c) => c.category_type === resolvedType)?.id ?? "");
     return {
@@ -69,6 +73,7 @@ class TransactionModal extends Component<Props, State> {
       is_paid: true,
       notes: "",
       payment_method: "",
+      currency: userCurrency,
       lines: [{ category: defaultCategory, amount: "", description: "" }],
       saving: false,
       errors: {},
@@ -102,7 +107,7 @@ class TransactionModal extends Component<Props, State> {
 
   async handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const { description, due_date, paid_date, is_paid, notes, payment_method, lines, categoryType } = this.state;
+    const { description, due_date, paid_date, is_paid, notes, payment_method, currency, lines, categoryType } = this.state;
 
     const payload: Partial<Transaction> = {
       description,
@@ -112,6 +117,7 @@ class TransactionModal extends Component<Props, State> {
       notes,
       transaction_type: categoryType,
       payment_method: payment_method ? parseInt(payment_method, 10) : null,
+      currency,
       lines: lines.map((l) => ({
         category: parseInt(l.category, 10),
         amount: l.amount,
@@ -130,8 +136,9 @@ class TransactionModal extends Component<Props, State> {
   }
 
   render() {
-    const { categories, paymentMethods, transaction, onClose } = this.props;
-    const { description, due_date, paid_date, is_paid, payment_method, lines, saving, errors, categoryType } = this.state;
+    const { categories, paymentMethods, currencies, userCurrency, transaction, onClose } = this.props;
+    const { description, due_date, paid_date, is_paid, payment_method, currency, lines, saving, errors, categoryType } = this.state;
+    const isForeignCurrency = currency !== userCurrency;
     const isEdit = Boolean(transaction);
     const isRecurring = Boolean(transaction?.recurring);
     // Sinking fund categories appear in both income and expense dropdowns
@@ -257,6 +264,21 @@ class TransactionModal extends Component<Props, State> {
                         </option>
                       ))}
                     </select>
+                  </div>
+                  <div className="col-md-6 mb-3">
+                    <label className="form-label">Currency</label>
+                    <select
+                      className="form-select"
+                      value={currency}
+                      onChange={(e) => { this.setState({ currency: e.target.value }); }}
+                    >
+                      {currencies.map((c) => (
+                        <option key={c.code} value={c.code}>{c.code} — {c.name}</option>
+                      ))}
+                    </select>
+                    {isForeignCurrency && (
+                      <div className="form-text">Amounts will be converted from {currency} to {userCurrency}</div>
+                    )}
                   </div>
                 </div>
 

@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { router } from "@inertiajs/react";
 import TransactionModal from "../components/TransactionModal";
-import type { Category, PaymentMethod, Transaction } from "../types";
-import { fmt, useCurrencySymbol } from "../utils/currency";
+import type { Category, CurrencyOption, PaymentMethod, Transaction } from "../types";
+import { fmt, fmtConverted, useCurrencyCode, useCurrencyRate, useCurrencySymbol } from "../utils/currency";
 
 interface Props {
   budget_pk: number;
@@ -11,6 +11,8 @@ interface Props {
   transactions: Transaction[];
   categories: Category[];
   payment_methods: PaymentMethod[];
+  currencies: CurrencyOption[];
+  user_currency: string;
 }
 
 function getCsrfToken(): string {
@@ -85,8 +87,10 @@ function sortTransactions(txns: Transaction[], order: SortEntry[]): Transaction[
   });
 }
 
-export default function Transactions({ budget_pk, month, category_filter, transactions: initialTxns, categories, payment_methods }: Props) {
+export default function Transactions({ budget_pk, month, category_filter, transactions: initialTxns, categories, payment_methods, currencies, user_currency }: Props) {
   const symbol = useCurrencySymbol();
+  const userRate = useCurrencyRate();
+  const userCurrencyCode = useCurrencyCode();
   const [transactions, setTransactions] = useState(initialTxns);
   const [sortOrder, setSortOrder] = useState<SortEntry[]>([{ key: "paid_date", dir: "asc" }]);
 
@@ -290,7 +294,10 @@ export default function Transactions({ budget_pk, month, category_filter, transa
 
         {/* Amount */}
         <td className={`text-end fw-semibold ${txn.transaction_type === "income" ? "text-success" : txn.transaction_type === "transfer" ? "text-warning" : "text-danger"}`}>
-          {fmt(txn.total_amount, symbol)}
+          {fmtConverted(txn.total_amount, txn.exchange_rate_to_usd, userRate, symbol)}
+          {txn.currency !== userCurrencyCode && (
+            <span className="badge bg-secondary ms-1" style={{ fontSize: "0.6rem" }} title={`${fmt(txn.total_amount)} ${txn.currency}`}>{txn.currency}</span>
+          )}
         </td>
 
         {/* Payment Method */}
@@ -370,7 +377,7 @@ export default function Transactions({ budget_pk, month, category_filter, transa
                 {txn.lines.map((line) => (
                   <tr key={line.id}>
                     <td>{line.category_name}</td>
-                    <td className="text-end">{fmt(line.amount, symbol)}</td>
+                    <td className="text-end">{fmtConverted(line.amount, txn.exchange_rate_to_usd, userRate, symbol)}</td>
                     <td className="text-muted">{line.description}</td>
                   </tr>
                 ))}
@@ -465,6 +472,8 @@ export default function Transactions({ budget_pk, month, category_filter, transa
           <TransactionModal
             categories={categories}
             paymentMethods={payment_methods}
+            currencies={currencies}
+            userCurrency={user_currency}
             budgetPk={budget_pk}
             transaction={editTxn}
             defaultCategoryType={editTxn ? undefined : addType ?? undefined}

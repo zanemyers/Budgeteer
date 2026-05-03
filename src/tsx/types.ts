@@ -41,7 +41,15 @@ export interface Transaction {
   lines: TransactionLine[];
   total_amount: string;
   transaction_type: "income" | "expense" | "transfer" | "";
+  currency: string;
+  exchange_rate_to_usd: string;
   created_at: string;
+}
+
+export interface CurrencyOption {
+  code: string;
+  name: string;
+  symbol: string;
 }
 
 export interface BudgetMember {

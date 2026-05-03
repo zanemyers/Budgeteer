@@ -37,6 +37,7 @@ from apps.budget.models import (
     TransactionLine,
 )
 from apps.accounts.models import User
+from apps.base.models import Currency as CurrencyModel
 
 
 # ---------------------------------------------------------------------------
@@ -54,6 +55,18 @@ def _parse_json_body(request) -> dict:
         return json.loads(request.body)
     except (json.JSONDecodeError, AttributeError):
         return {}
+
+
+def _get_user_currency_rate(user) -> "Decimal":
+    from decimal import Decimal
+    try:
+        return CurrencyModel.objects.get(code=user.currency or "USD").rate_to_usd
+    except CurrencyModel.DoesNotExist:
+        return Decimal("1")
+
+
+def _serialize_currencies():
+    return list(CurrencyModel.objects.values("code", "name", "symbol"))
 
 
 # ---------------------------------------------------------------------------
@@ -261,10 +274,11 @@ class BudgetDetailView(BudgetMemberMixin, View):
     def get(self, request, budget_pk):
         month_str = request.GET.get("month") or _default_month()
         budget = self.budget
+        user_rate = _get_user_currency_rate(request.user)
         return inertia_render(request, "Dashboard", {
             "budget_pk": budget.pk,
             "month": month_str,
-            "overview": lambda: get_budget_overview(budget, month_str),
+            "overview": lambda: get_budget_overview(budget, month_str, user_rate),
             "categories": lambda: [
                 serialize_category(c)
                 for c in Category.objects.filter(budget=budget).order_by("category_type", "name")
@@ -274,6 +288,8 @@ class BudgetDetailView(BudgetMemberMixin, View):
                 for pm in PaymentMethod.objects.filter(budget=self.budget, is_active=True)
             ],
             "upcoming_transactions": lambda: get_upcoming_transactions(budget),
+            "currencies": _serialize_currencies,
+            "user_currency": request.user.currency or "USD",
         })
 
 
@@ -281,10 +297,11 @@ class SinkingFundsView(BudgetMemberMixin, View):
     def get(self, request, budget_pk):
         month_str = request.GET.get("month") or _default_month()
         budget = self.budget
+        user_rate = _get_user_currency_rate(request.user)
         return inertia_render(request, "SinkingFunds", {
             "budget_pk": budget.pk,
             "month": month_str,
-            "overview": lambda: get_budget_overview(budget, month_str),
+            "overview": lambda: get_budget_overview(budget, month_str, user_rate),
             "categories": lambda: [
                 serialize_category(c)
                 for c in Category.objects.filter(budget=budget).order_by("category_type", "name")
@@ -293,6 +310,8 @@ class SinkingFundsView(BudgetMemberMixin, View):
                 serialize_payment_method(pm)
                 for pm in PaymentMethod.objects.filter(budget=budget, is_active=True)
             ],
+            "currencies": _serialize_currencies,
+            "user_currency": request.user.currency or "USD",
         })
 
 
@@ -590,11 +609,14 @@ class TransactionListView(BudgetMemberMixin, View):
                 serialize_payment_method(pm)
                 for pm in PaymentMethod.objects.filter(budget=self.budget, is_active=True)
             ],
+            "currencies": _serialize_currencies,
+            "user_currency": request.user.currency or "USD",
         })
 
 
 class TransactionCreateView(BudgetMemberMixin, View):
     def post(self, request, budget_pk):
+        from decimal import Decimal
         data = _parse_json_body(request)
         description = data.get("description", "").strip()
         due_date_str = data.get("due_date", "")
@@ -603,6 +625,11 @@ class TransactionCreateView(BudgetMemberMixin, View):
         notes = data.get("notes", "")
         payment_method_id = data.get("payment_method")
         lines_data = data.get("lines", [])
+        currency = data.get("currency") or request.user.currency or "USD"
+        try:
+            exchange_rate = CurrencyModel.objects.get(code=currency).rate_to_usd
+        except CurrencyModel.DoesNotExist:
+            exchange_rate = Decimal("1")
 
         errors: dict[str, list[str]] = {}
         if not description:
@@ -649,13 +676,17 @@ class TransactionCreateView(BudgetMemberMixin, View):
                 notes=notes,
                 transaction_type=explicit_txn_type,
                 payment_method=payment_method,
+                currency=currency,
+                exchange_rate_to_usd=exchange_rate,
             )
             for line in lines_data:
                 cat = get_object_or_404(Category, pk=line["category"], budget=self.budget)
+                amount = Decimal(str(line.get("amount", "0.00")))
                 TransactionLine.objects.create(
                     transaction=txn,
                     category=cat,
-                    amount=line.get("amount", "0.00"),
+                    amount=amount,
+                    amount_usd=amount / exchange_rate if exchange_rate else amount,
                     description=line.get("description", ""),
                 )
 
@@ -678,6 +709,7 @@ class TransactionDetailView(BudgetMemberMixin, View):
 
 class TransactionUpdateView(BudgetMemberMixin, View):
     def patch(self, request, budget_pk, pk):
+        from decimal import Decimal
         txn = get_object_or_404(Transaction, pk=pk, budget=self.budget)
         data = _parse_json_body(request)
 
@@ -696,18 +728,28 @@ class TransactionUpdateView(BudgetMemberMixin, View):
             txn.payment_method = PaymentMethod.objects.filter(pk=pm_id, budget=self.budget).first() if pm_id else None
         if "transaction_type" in data:
             txn.transaction_type = data["transaction_type"]
+        if "currency" in data:
+            currency = data["currency"]
+            try:
+                txn.exchange_rate_to_usd = CurrencyModel.objects.get(code=currency).rate_to_usd
+            except CurrencyModel.DoesNotExist:
+                txn.exchange_rate_to_usd = Decimal("1")
+            txn.currency = currency
 
         lines_data = data.get("lines")
         with db_transaction.atomic():
             txn.save()
             if lines_data is not None:
                 txn.lines.all().delete()
+                exchange_rate = txn.exchange_rate_to_usd or Decimal("1")
                 for line in lines_data:
                     cat = get_object_or_404(Category, pk=line["category"], budget=self.budget)
+                    amount = Decimal(str(line.get("amount", "0.00")))
                     TransactionLine.objects.create(
                         transaction=txn,
                         category=cat,
-                        amount=line.get("amount", "0.00"),
+                        amount=amount,
+                        amount_usd=amount / exchange_rate,
                         description=line.get("description", ""),
                     )
 
