@@ -86,6 +86,17 @@ Frontend auth forms POST with `Content-Type: application/x-www-form-urlencoded` 
 
 Non-page React components (modals, inline forms) communicate with the backend via `fetch`. All mutating requests send `X-CSRFToken` from `document.cookie`. Views return `JsonResponse`. GET requests that return a full page use `inertia_render`; API-only endpoints return `JsonResponse` directly.
 
+### Scheduled Tasks
+
+Scheduled work runs in a `cron` sidecar (`compose.yml`), not Celery Beat. Logic lives in Django management commands (the source of truth); `tasks.py` wrappers exist so the same job can be queued via Celery on demand.
+
+For each scheduled job:
+- **Source of truth**: `apps/<app>/management/commands/<name>.py` — the `Command.handle()` body
+- **Celery wrapper** (optional, for ad-hoc queueing): `apps/<app>/tasks.py` → `@shared_task` that calls `call_command("<name>")`
+- **Schedule**: line in `config/docker/crontab` calling `python manage.py <name>`
+
+Currently scheduled: `update_exchange_rates --if-stale` (04:00 UTC), `generate_recurring_instances` (04:30 UTC). The Celery worker container still runs for ad-hoc `.delay()` calls but no Beat process exists.
+
 ### Frontend Structure
 
 ```
@@ -119,7 +130,7 @@ Settings are split in `config/settings/` (base, local, production, test_runner).
 ## Testing
 
 - pytest + pytest-django; settings module: `config.settings.test_runner`
-- Model Bakery for fixture-free test data; Django Test Plus for extra helpers
+- `model-bakery` and `django-test-plus` are installed (dev deps) but not yet adopted in the suite
 - Coverage config: `config/coverage.ini`
 
 ## Code Standards

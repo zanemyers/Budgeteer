@@ -1,14 +1,29 @@
+# Caches
 **/.venv
-*console.log
+**/__pycache__
+*.pyc
 .coverage
-.env*
-.idea/
-.mypy_cache/**/*
-.pytest_cache/**/*
-.ruff_cache/**/*
-db.sqlite
+.pytest_cache/
+.ruff_cache/
+.ty_cache/
+
+# Build outputs (regenerated in image)
+collected_static/
+public/static/dist/
 docs_site/
-htmlcov
+htmlcov/
+
+# Local-only
+.env*
+.git/
+.github/
+.idea/
+.vscode/
+.claude/
+CLAUDE.local.md
+*console.log
+db.sqlite
 latest.dump
+
+# Frontend deps (rebuilt in js_assets stage)
 node_modules
-public/static/dist

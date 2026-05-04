@@ -4,8 +4,8 @@ A personal budgeting app built with Django, Inertia.js, and React. Track transac
 
 ## Tech Stack
 
-**Backend:** Django 5, PostgreSQL, Celery, Redis, Django Allauth  
-**Frontend:** React, Inertia.js, Bootstrap 5, Vite, TypeScript  
+**Backend:** Django 6, PostgreSQL, Celery, Redis, Django Allauth, Gunicorn  
+**Frontend:** React, Inertia.js, Tailwind CSS v4, Vite, TypeScript  
 **Infrastructure:** Docker, Just
 
 ## Requirements
@@ -16,12 +16,13 @@ A personal budgeting app built with Django, Inertia.js, and React. Track transac
 ## Getting Started
 
 ```bash
-# 1. Copy the example env file and start the stack
-cp .env.example .env   # or: just create_env
+# 1. Generate the .env file from the schema in pyproject.toml
+just create_env
+
+# 2. Start the stack (the web container auto-runs migrations on boot)
 just start
 
-# 2. Run migrations and create a superuser
-docker compose exec web python manage.py migrate
+# 3. Create a superuser
 docker compose exec web python manage.py createsuperuser
 ```
 
@@ -34,7 +35,7 @@ Mailpit (email previews) is at **http://localhost:8025**.
 just start              # Start Docker Compose
 just stop               # Stop all services
 just build              # Rebuild images and collect static files
-just format             # Format Python, JS, SCSS, and HTML
+just format             # Format Python, JS/TS, CSS, and HTML
 just lint               # Lint and type-check everything
 just test               # Run the test suite
 just pre_commit         # Format + lint + test
