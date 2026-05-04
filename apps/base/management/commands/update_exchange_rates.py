@@ -1,3 +1,7 @@
+import csv
+from functools import cache
+from pathlib import Path
+
 import requests
 
 from django.conf import settings
@@ -6,36 +10,16 @@ from django.utils import timezone
 
 from apps.base.models import Currency
 
-# Symbol overrides for common currencies — fallback to code for anything not listed.
-CURRENCY_SYMBOLS = {
-    "AED": "د.إ", "AFN": "؋", "ALL": "L", "AMD": "֏", "ANG": "ƒ", "AOA": "Kz",
-    "ARS": "$", "AUD": "A$", "AWG": "ƒ", "AZN": "₼", "BAM": "KM", "BBD": "$",
-    "BDT": "৳", "BGN": "лв", "BHD": ".د.ب", "BIF": "Fr", "BMD": "$", "BND": "$",
-    "BOB": "Bs.", "BRL": "R$", "BSD": "$", "BTN": "Nu", "BWP": "P", "BYN": "Br",
-    "BZD": "$", "CAD": "CA$", "CDF": "Fr", "CHF": "Fr", "CLP": "$", "CNY": "¥",
-    "COP": "$", "CRC": "₡", "CUP": "$", "CVE": "$", "CZK": "Kč", "DJF": "Fr",
-    "DKK": "kr", "DOP": "$", "DZD": "دج", "EGP": "£", "ERN": "Nfk", "ETB": "Br",
-    "EUR": "€", "FJD": "$", "FKP": "£", "FOK": "kr", "GBP": "£", "GEL": "₾",
-    "GGP": "£", "GHS": "₵", "GIP": "£", "GMD": "D", "GNF": "Fr", "GTQ": "Q",
-    "GYD": "$", "HKD": "HK$", "HNL": "L", "HRK": "kn", "HTG": "G", "HUF": "Ft",
-    "IDR": "Rp", "ILS": "₪", "IMP": "£", "INR": "₹", "IQD": "ع.د", "IRR": "﷼",
-    "ISK": "kr", "JEP": "£", "JMD": "$", "JOD": "د.ا", "JPY": "¥", "KES": "KSh",
-    "KGS": "лв", "KHR": "៛", "KID": "$", "KMF": "Fr", "KRW": "₩", "KWD": "د.ك",
-    "KYD": "$", "KZT": "₸", "LAK": "₭", "LBP": "£", "LKR": "₨", "LRD": "$",
-    "LSL": "L", "LYD": "ل.د", "MAD": "MAD", "MDL": "L", "MGA": "Ar", "MKD": "ден",
-    "MMK": "K", "MNT": "₮", "MOP": "P", "MRU": "UM", "MUR": "₨", "MVR": "Rf",
-    "MWK": "MK", "MXN": "$", "MYR": "RM", "MZN": "MT", "NAD": "$", "NGN": "₦",
-    "NIO": "C$", "NOK": "kr", "NPR": "₨", "NZD": "NZ$", "OMR": "﷼", "PAB": "B/.",
-    "PEN": "S/", "PGK": "K", "PHP": "₱", "PKR": "₨", "PLN": "zł", "PYG": "₲",
-    "QAR": "﷼", "RON": "lei", "RSD": "din", "RUB": "₽", "RWF": "Fr", "SAR": "﷼",
-    "SBD": "$", "SCR": "₨", "SDG": "£", "SEK": "kr", "SGD": "S$", "SHP": "£",
-    "SLE": "Le", "SLL": "Le", "SOS": "Sh", "SRD": "$", "STN": "Db", "SYP": "£",
-    "SZL": "L", "THB": "฿", "TJS": "SM", "TMT": "T", "TND": "د.ت", "TOP": "T$",
-    "TRY": "₺", "TTD": "$", "TVD": "$", "TWD": "NT$", "TZS": "Sh", "UAH": "₴",
-    "UGX": "Sh", "USD": "$", "UYU": "$", "UZS": "лв", "VES": "Bs.S", "VND": "₫",
-    "VUV": "Vt", "WST": "T", "XAF": "Fr", "XCD": "$", "XDR": "SDR", "XOF": "Fr",
-    "XPF": "Fr", "YER": "﷼", "ZAR": "R", "ZMW": "ZK", "ZWL": "$",
-}
+CURRENCY_SYMBOLS_CSV = Path(__file__).resolve().parents[2] / "data" / "currency_symbols.csv"
+
+
+@cache
+def load_currency_symbols() -> dict[str, str]:
+    """Load ISO-code → display-symbol mapping from CSV. Codes not listed fall back to the code itself."""
+    with CURRENCY_SYMBOLS_CSV.open(encoding="utf-8") as f:
+        reader = csv.reader(f)
+        next(reader, None)  # skip header
+        return {code: symbol for code, symbol in reader if code}
 
 
 class Command(BaseCommand):
@@ -77,13 +61,14 @@ class Command(BaseCommand):
             return
 
         rates = rates_data["conversion_rates"]
+        symbols = load_currency_symbols()
         now = timezone.now()
 
         currencies = [
             Currency(
                 code=code,
                 name=name,
-                symbol=CURRENCY_SYMBOLS.get(code, code),
+                symbol=symbols.get(code, code),
                 rate_to_usd=rates.get(code, 1),
                 updated_at=now,
             )

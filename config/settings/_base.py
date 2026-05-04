@@ -57,8 +57,6 @@ INSTALLED_APPS = [
     "apps.accounts",
     "apps.budget",
     "inertia",
-    "crispy_forms",
-    "crispy_bootstrap5",
     "maintenance_mode",
     "allauth",
     "allauth.account",
@@ -241,12 +239,6 @@ CACHES = {
 # Celery configuration docs: https://docs.celeryq.dev/en/stable/getting-started/backends-and-brokers/redis.html#configuration
 CELERY_BROKER_URL = REDIS_URL
 CELERY_BROKER_TRANSPORT_OPTIONS = {"global_keyprefix": REDIS_PREFIX}
-CELERY_BEAT_SCHEDULE = {
-    "update-exchange-rates-daily": {
-        "task": "apps.base.tasks.update_exchange_rates",
-        "schedule": 86400,  # 24 hours
-    },
-}
 
 INERTIA_LAYOUT = "app.html"
 

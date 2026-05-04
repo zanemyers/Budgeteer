@@ -36,12 +36,11 @@ RUN --mount=type=cache,target=/root/.cache/uv,id=budgeteer-uv \
 FROM python:3.14-slim-bookworm AS dev
 
 # Set the locale
-# libxml2-dev is needed for uwsgi in the production stage
-# mime-support install (/etc/mime.types) which is needded uWSGI to server static files with the correct mime types
+# mime-support installs /etc/mime.types so static files are served with correct mime types
 RUN --mount=type=cache,target=/var/cache/apt,id=budgeteer-apt \
     --mount=type=cache,target=/var/lib/apt,id=budgeteer-apt \
     apt update \
-    && apt install -yqq --no-install-recommends locales libxml2-dev mime-support build-essential python3-dev \
+    && apt install -yqq --no-install-recommends locales mime-support build-essential python3-dev cron \
     && echo "LC_ALL=en_US.UTF-8" >> /etc/environment \
     && echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen \
     && echo "LANG=en_US.UTF-8" > /etc/locale.conf \
@@ -107,4 +106,4 @@ RUN mkdir -p /srv/app/collected_static && chown -R app:app /srv/app/collected_st
 
 COPY --from=js_assets --chown=app:app /srv/app/public/static/ ./collected_static
 
-CMD ["uwsgi", "--ini", "config/uwsgi.ini", "--http", "0.0.0.0:8080"]
+CMD ["gunicorn", "-c", "config/gunicorn.conf.py", "config.wsgi:application"]

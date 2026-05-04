@@ -1,4 +1,4 @@
-# Reference docs: https://docs.docker.com/compose/compose-file/compose-file-v3/
+# Reference docs: https://docs.docker.com/reference/compose-file/
 
 services:
 
@@ -115,19 +115,23 @@ services:
 
     depends_on:
       web:
-        condition: service_started
-      mailpit:
-        condition: service_healthy
+        condition: service_started  # gate on migrations starting
 
     environment:
       DJANGO_SETTINGS_MODULE: config.settings
 
-  beat:
-    container_name: beat
+  cron:
+    container_name: cron
     image: budgeteer:python
     init: true
+    user: root
 
-    command: sh -c "celery -A config beat -l info"
+    # Cron in /etc/cron.d/ requires mode 0644 and root-owned. We copy the file
+    # in on start so edits to config/docker/crontab pick up on container restart.
+    command: >
+      bash -c "cp config/docker/crontab /etc/cron.d/budgeteer
+      && chmod 0644 /etc/cron.d/budgeteer
+      && cron -f -L 15"
 
     volumes:
       - .:/srv/app:cached

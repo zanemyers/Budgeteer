@@ -1,0 +1,9 @@
+SHELL=/bin/bash
+PATH=/opt/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+DJANGO_SETTINGS_MODULE=config.settings
+
+# Daily at 04:00 UTC: refresh exchange rates if older than 23h.
+0 4 * * * root cd /srv/app && python manage.py update_exchange_rates --if-stale >> /proc/1/fd/1 2>&1
+# Daily at 04:30 UTC: generate Transaction instances for active RecurringTransaction schedules.
+30 4 * * * root cd /srv/app && python manage.py generate_recurring_instances >> /proc/1/fd/1 2>&1
+# Cron requires a trailing newline:
