@@ -3,27 +3,12 @@ import datetime
 from django import forms
 from django.forms import inlineformset_factory
 
-from crispy_bootstrap5.bootstrap5 import FloatingField
-from crispy_forms.bootstrap import FormActions
-from crispy_forms.helper import FormHelper
-from crispy_forms.layout import HTML, Field, Layout, Submit
-
 from apps.budget.models import Budget, BudgetMembership, Category, PaymentMethod, RecurringTransaction, Transaction, TransactionLine
-
 
 
 class MemberInviteForm(forms.Form):
     email = forms.EmailField(label="Email address")
     role = forms.ChoiceField(choices=BudgetMembership.ROLE_CHOICES, initial=BudgetMembership.ROLE_MEMBER)
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.helper = FormHelper()
-        self.helper.layout = Layout(
-            FloatingField("email"),
-            Field("role"),
-            FormActions(Submit("submit", "Invite Member", css_class="btn btn-primary")),
-        )
 
 
 class CategoryForm(forms.ModelForm):
@@ -33,14 +18,6 @@ class CategoryForm(forms.ModelForm):
         widgets = {
             "category_type": forms.RadioSelect,
         }
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.helper = FormHelper()
-        self.helper.form_tag = False
-        self.helper.layout = Layout(
-            FloatingField("name"),
-        )
 
 
 class TransactionForm(forms.ModelForm):
@@ -52,18 +29,6 @@ class TransactionForm(forms.ModelForm):
             "paid_date": forms.DateInput(attrs={"type": "date"}),
         }
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.helper = FormHelper()
-        self.helper.form_tag = False
-        self.helper.layout = Layout(
-            FloatingField("description"),
-            Field("due_date"),
-            Field("is_paid"),
-            Field("paid_date"),
-            Field("notes", rows=3),
-        )
-
 
 class TransactionLineForm(forms.ModelForm):
     class Meta:
@@ -74,13 +39,6 @@ class TransactionLineForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         if budget is not None:
             self.fields["category"].queryset = Category.objects.filter(budget=budget)
-        self.helper = FormHelper()
-        self.helper.form_tag = False
-        self.helper.layout = Layout(
-            Field("category"),
-            FloatingField("amount"),
-            FloatingField("description"),
-        )
 
 
 def make_transaction_line_formset(budget=None, extra=1):
@@ -130,20 +88,6 @@ class RecurringTransactionForm(forms.ModelForm):
         if user is not None:
             self.fields["payment_method"].queryset = PaymentMethod.objects.filter(user=user, is_active=True)
         self.fields["payment_method"].required = False
-        self.helper = FormHelper()
-        self.helper.layout = Layout(
-            FloatingField("name"),
-            Field("description", rows=3),
-            FloatingField("amount"),
-            Field("category"),
-            Field("payment_method"),
-            Field("frequency"),
-            Field("interval", id="id_interval"),
-            Field("start_date"),
-            Field("end_date"),
-            Field("is_active"),
-            FormActions(Submit("submit", "Save", css_class="btn btn-primary")),
-        )
 
     def clean(self):
         cleaned = super().clean()

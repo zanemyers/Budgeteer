@@ -35,12 +35,12 @@ function BudgetCard({ budget }: { budget: BudgetEntry }) {
     <div className="card">
       <button
         type="button"
-        className="card-header d-flex justify-content-between align-items-center border-0 bg-transparent w-100 text-start"
+        className="card-header flex justify-between items-center border-0 bg-transparent w-full text-left"
         style={{ cursor: "pointer" }}
         onClick={() => setOpen((v) => !v)}
       >
-        <span className="fw-semibold">{budget.name}</span>
-        <span className="text-muted small" style={{ transform: open ? "rotate(180deg)" : undefined, transition: "transform 0.2s" }}>
+        <span className="font-semibold">{budget.name}</span>
+        <span className="text-muted text-sm" style={{ transform: open ? "rotate(180deg)" : undefined, transition: "transform 0.2s" }}>
           ▾
         </span>
       </button>
@@ -48,25 +48,25 @@ function BudgetCard({ budget }: { budget: BudgetEntry }) {
       {open && (
         <div className="card-body p-0">
           {budget.months.length === 0 ? (
-            <p className="text-muted small p-3 mb-0">No transactions yet.</p>
+            <p className="text-muted text-sm p-4 mb-0">No transactions yet.</p>
           ) : (
             <div>
               {years.map((year) => (
                 <div key={year} className="border-top">
                   <button
                     type="button"
-                    className="d-flex justify-content-between align-items-center w-100 text-start px-3 py-2 bg-transparent border-0"
+                    className="flex justify-between items-center w-full text-left px-4 py-2 bg-transparent border-0"
                     style={{ cursor: "pointer" }}
                     onClick={() => setExpandedYear(expandedYear === year ? null : year)}
                   >
-                    <span className="fw-semibold">{year}</span>
-                    <span className="text-muted small" style={{ transform: expandedYear === year ? "rotate(180deg)" : undefined, transition: "transform 0.2s" }}>
+                    <span className="font-semibold">{year}</span>
+                    <span className="text-muted text-sm" style={{ transform: expandedYear === year ? "rotate(180deg)" : undefined, transition: "transform 0.2s" }}>
                       ▾
                     </span>
                   </button>
 
                   {expandedYear === year && (
-                    <div className="d-flex flex-wrap gap-2 px-3 pb-3">
+                    <div className="flex flex-wrap gap-2 px-4 pb-4">
                       {byYear[year].map((m) => (
                         <button
                           key={m}
@@ -92,7 +92,7 @@ function BudgetCard({ budget }: { budget: BudgetEntry }) {
 export default function BudgetHistory({ budgets }: Props) {
   return (
     <div style={{ maxWidth: 640 }}>
-      <h1 className="h3 mb-4">Budget History</h1>
+      <h1 className="mb-6">Budget History</h1>
 
       {budgets.length === 0 ? (
         <p className="text-muted">
@@ -103,7 +103,7 @@ export default function BudgetHistory({ budgets }: Props) {
           to get started.
         </p>
       ) : (
-        <div className="d-flex flex-column gap-3">
+        <div className="flex flex-col gap-4">
           {budgets.map((b) => (
             <BudgetCard key={b.id} budget={b} />
           ))}

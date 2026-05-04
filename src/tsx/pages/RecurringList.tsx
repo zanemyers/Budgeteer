@@ -102,9 +102,9 @@ export default function RecurringList({ budget_pk, recurring_transactions: initi
 
   return (
     <div>
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h1 className="h3 mb-0">Recurring Transactions</h1>
-        <div className="d-flex gap-2">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="mb-0">Recurring Transactions</h1>
+        <div className="flex gap-2">
           <a href={`/budgets/${budget_pk}/recurring/create/`} className="btn btn-primary btn-sm" onClick={(e) => { e.preventDefault(); router.visit(`/budgets/${budget_pk}/recurring/create/`); }}>+ Add</a>
           <a href={`/budgets/${budget_pk}/`} className="btn btn-outline-secondary btn-sm" onClick={(e) => { e.preventDefault(); router.visit(`/budgets/${budget_pk}/`); }}>← Back to Budget</a>
         </div>
@@ -122,7 +122,7 @@ export default function RecurringList({ budget_pk, recurring_transactions: initi
                 <tr>
                   <th style={{ width: "26%" }}>Name</th>
                   <th style={{ width: "20%" }}>Frequency</th>
-                  <th style={{ width: "12%" }} className="text-end">Amount</th>
+                  <th style={{ width: "12%" }} className="text-right">Amount</th>
                   <th style={{ width: "14%" }}>Start Date</th>
                   <th style={{ width: "12%" }}>Status</th>
                   <th style={{ width: "16%" }}></th>
@@ -132,9 +132,9 @@ export default function RecurringList({ budget_pk, recurring_transactions: initi
                 {groups.map((group) => (
                   <>
                     <tr key={`header-${group.category_name}`} className="table-secondary">
-                      <td colSpan={6} className="py-1 px-3">
+                      <td colSpan={6} className="py-1 px-4">
                         <strong>{group.category_name}</strong>
-                        <span className="text-muted small ms-1">({group.category_type === "income" ? "Income" : "Expense"})</span>
+                        <span className="text-muted text-sm ml-1">({group.category_type === "income" ? "Income" : "Expense"})</span>
                       </td>
                     </tr>
                     {group.items.map((rt) => (
@@ -142,28 +142,28 @@ export default function RecurringList({ budget_pk, recurring_transactions: initi
                         <td>
                           <a
                             href={`/budgets/${budget_pk}/recurring/${rt.id}/`}
-                            className="text-decoration-none text-body"
+                            className="no-underline text-body"
                             onClick={(e) => { e.preventDefault(); router.visit(`/budgets/${budget_pk}/recurring/${rt.id}/`); }}
                           >
                             {rt.name}
                           </a>
                         </td>
-                        <td className="small">{freqLabel(rt)}</td>
-                        <td className={`text-end small ${rt.category_type === "income" ? "text-success" : "text-danger"}`}>
+                        <td className="text-sm">{freqLabel(rt)}</td>
+                        <td className={`text-right text-sm ${rt.category_type === "income" ? "text-success" : "text-danger"}`}>
                           {fmt(rt.amount, symbol)}
                         </td>
-                        <td className="small">{fmtDate(rt.start_date)}</td>
+                        <td className="text-sm">{fmtDate(rt.start_date)}</td>
                         <td>
                           {rt.is_active
                             ? <span className="badge bg-success">Active</span>
                             : <span className="badge bg-secondary">Inactive</span>}
                         </td>
-                        <td className="text-end" style={{ whiteSpace: "nowrap" }}>
+                        <td className="text-right whitespace-nowrap">
                           {rt.is_active ? (
                             deactivatingId === rt.id ? (
                               <>
                                 <button className="btn btn-danger btn-sm py-0 px-2" style={{ fontSize: "0.75rem" }} onClick={() => void handleDeactivate(rt)}>Confirm</button>
-                                <button className="btn btn-outline-secondary btn-sm py-0 px-2 ms-1" style={{ fontSize: "0.75rem" }} onClick={() => setDeactivatingId(null)}>Cancel</button>
+                                <button className="btn btn-outline-secondary btn-sm py-0 px-2 ml-1" style={{ fontSize: "0.75rem" }} onClick={() => setDeactivatingId(null)}>Cancel</button>
                               </>
                             ) : (
                               <button className="btn btn-outline-danger btn-sm py-0 px-2" style={{ fontSize: "0.75rem" }} onClick={() => void handleDeactivate(rt)}>Deactivate</button>

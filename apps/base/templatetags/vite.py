@@ -66,8 +66,10 @@ def _get_manifest():
 
 def _get_file_data(filename: str) -> dict[str, str | list[str | None] | bool]:
     manifest = _get_manifest()
-    js_filename = filename.replace(".css", ".js") if filename.endswith(".css") else filename
-    file_data = manifest.get(js_filename)
+    # CSS direct entries appear under their own name; JS entries with imported CSS use .js key
+    file_data = manifest.get(filename)
+    if file_data is None and filename.endswith(".css"):
+        file_data = manifest.get(filename.replace(".css", ".js"))
     if file_data is None:
         raise Exception(
             f'The vite asset "{filename}" was not found in the manifest file {vite_settings.VITE_MANIFEST_FILE}.'
@@ -77,9 +79,11 @@ def _get_file_data(filename: str) -> dict[str, str | list[str | None] | bool]:
 
 def _get_css_asset(filename: str):
     if vite_settings.VITE_DEV_MODE is True:
-        return ""
+        base_url = f"http://{vite_settings.VITE_SERVER_HOST}:{vite_settings.VITE_SERVER_PORT}"
+        return mark_safe(f'<link rel="stylesheet" href="{base_url}{settings.STATIC_URL}{filename}">')  # noqa: S308
     file_data = _get_file_data(filename)
-    hashed_filename = file_data.get("css", [None])[0]  # type: ignore
+    # CSS direct entry uses "file" key; CSS imported by JS uses "css" array
+    hashed_filename = file_data.get("file") or (file_data.get("css") or [None])[0]  # type: ignore
     return _get_css_link(hashed_filename)  # type: ignore
 
 

@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 {% load vite %}
 
-<html lang="en" class="h-100">
+<html lang="en" class="h-full">
   <head>
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
@@ -16,17 +16,16 @@
       (function () {
         var t = localStorage.getItem("theme") || "auto";
         var e = t === "auto" ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : t;
-        document.documentElement.setAttribute("data-bs-theme", e);
+        if (e === "dark") document.documentElement.classList.add("dark");
       })();
     </script>
-    {% vite_asset 'js/main.css' %}
+    {% vite_asset 'css/main.css' %}
     {% include "blocks/google-analytics.html" %}
   </head>
-  <body class="h-100">
+  <body class="h-full">
     {% block inertia %}{% endblock %}
     {% vite_react_refresh %}
     {% vite_hmr_client %}
-    {% vite_asset 'js/main.js' %}
     {% vite_asset 'tsx/main.tsx' %}
   </body>
 </html>

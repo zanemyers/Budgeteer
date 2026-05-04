@@ -249,10 +249,10 @@ export default function Transactions({ budget_pk, month, category_filter, transa
               {txn.description}
             </span>
           )}
-          {txn.recurring !== null && <span className="badge bg-secondary ms-1" style={{ fontSize: "0.65rem" }}>recurring</span>}
+          {txn.recurring !== null && <span className="badge bg-secondary ml-1" style={{ fontSize: "0.65rem" }}>recurring</span>}
           {isSplit && (
             <button
-              className="btn btn-link btn-sm p-0 ms-2"
+              className="btn btn-link btn-sm p-0 ml-2"
               style={{ fontSize: "0.75rem" }}
               onClick={() => setExpandedId(isExpanded ? null : txn.id)}
             >
@@ -284,19 +284,19 @@ export default function Transactions({ budget_pk, month, category_filter, transa
         </td>
 
         {/* Category */}
-        <td className="small text-muted">
+        <td className="text-sm text-muted">
           {isSplit ? (
-            <span className="text-muted fst-italic">Split</span>
+            <span className="text-muted italic">Split</span>
           ) : primaryCategory ? (
             primaryCategory.category_name
           ) : "—"}
         </td>
 
         {/* Amount */}
-        <td className={`text-end fw-semibold ${txn.transaction_type === "income" ? "text-success" : txn.transaction_type === "transfer" ? "text-warning" : "text-danger"}`}>
+        <td className={`text-right font-semibold ${txn.transaction_type === "income" ? "text-success" : txn.transaction_type === "transfer" ? "text-warning" : "text-danger"}`}>
           {fmtConverted(txn.total_amount, txn.exchange_rate_to_usd, userRate, symbol)}
           {txn.currency !== userCurrencyCode && (
-            <div className="text-muted fw-normal" style={{ fontSize: "0.7rem" }}>
+            <div className="text-muted font-normal" style={{ fontSize: "0.7rem" }}>
               {fmt(txn.total_amount)} {txn.currency}
             </div>
           )}
@@ -319,30 +319,30 @@ export default function Transactions({ budget_pk, month, category_filter, transa
               ))}
             </select>
           ) : (
-            <span className="small text-muted" style={{ cursor: "pointer" }} onClick={() => setEditPM(txn.id)}>
-              {pmName ?? <span className="fst-italic">—</span>}
+            <span className="text-sm text-muted" style={{ cursor: "pointer" }} onClick={() => setEditPM(txn.id)}>
+              {pmName ?? <span className="italic">—</span>}
             </span>
           )}
         </td>
 
         {/* Status + Actions */}
-        <td className="text-end" style={{ whiteSpace: "nowrap" }}>
+        <td className="text-right whitespace-nowrap">
           {txn.transaction_type === "transfer" ? (
-            <span className="badge bg-warning text-dark me-2">Transfer</span>
+            <span className="badge bg-warning text-dark mr-2">Transfer</span>
           ) : txn.transaction_type === "income" ? (
-            <span className={`badge ${txn.is_paid ? "bg-success" : "bg-secondary"} me-2`}>{txn.is_paid ? "Received" : "Pending"}</span>
+            <span className={`badge ${txn.is_paid ? "bg-success" : "bg-secondary"} mr-2`}>{txn.is_paid ? "Received" : "Pending"}</span>
           ) : (
-            <span className={`badge ${txn.is_paid ? "bg-success" : "bg-warning text-dark"} me-2`}>{txn.is_paid ? "Paid" : "Unpaid"}</span>
+            <span className={`badge ${txn.is_paid ? "bg-success" : "bg-warning text-dark"} mr-2`}>{txn.is_paid ? "Paid" : "Unpaid"}</span>
           )}
           {isDeleting ? (
             <>
-              <button className="btn btn-danger btn-sm py-0 px-2 me-1" style={{ fontSize: "0.7rem" }} onClick={() => { void deleteTxn(txn); setDeletingId(null); }}>✓</button>
-              <button className="btn btn-outline-secondary btn-sm py-0 px-2 me-1" style={{ fontSize: "0.7rem" }} onClick={() => setDeletingId(null)}>✕</button>
+              <button className="btn btn-danger btn-sm py-0 px-2 mr-1" style={{ fontSize: "0.7rem" }} onClick={() => { void deleteTxn(txn); setDeletingId(null); }}>✓</button>
+              <button className="btn btn-outline-secondary btn-sm py-0 px-2 mr-1" style={{ fontSize: "0.7rem" }} onClick={() => setDeletingId(null)}>✕</button>
             </>
           ) : (
             <>
               <button
-                className={`btn btn-sm py-0 px-2 me-1 ${txn.transaction_type === "income" ? "btn-outline-success" : txn.transaction_type === "transfer" ? "btn-outline-warning" : "btn-outline-primary"}`}
+                className={`btn btn-sm py-0 px-2 mr-1 ${txn.transaction_type === "income" ? "btn-outline-success" : txn.transaction_type === "transfer" ? "btn-outline-warning" : "btn-outline-primary"}`}
                 style={{ fontSize: "0.7rem" }}
                 disabled={isMarking}
                 onClick={() => void markPaid(txn)}
@@ -350,7 +350,7 @@ export default function Transactions({ budget_pk, month, category_filter, transa
                 {isMarking ? "…" : txn.is_paid ? "↩" : (txn.transaction_type === "income" ? "Receive" : txn.transaction_type === "transfer" ? "✓" : "✓ Pay")}
               </button>
               <button
-                className="btn btn-outline-secondary btn-sm py-0 px-2 me-1"
+                className="btn btn-outline-secondary btn-sm py-0 px-2 mr-1"
                 style={{ fontSize: "0.7rem" }}
                 onClick={() => setEditTxn(txn)}
               >
@@ -370,16 +370,16 @@ export default function Transactions({ budget_pk, month, category_filter, transa
       // Expanded split lines
       isExpanded && (
         <tr key={`${txn.id}-split`} className="table-active">
-          <td colSpan={6} className="px-4 py-2">
+          <td colSpan={6} className="px-6 py-2">
             <table className="table table-sm mb-0">
               <thead>
-                <tr><th>Category</th><th className="text-end">Amount</th><th>Note</th></tr>
+                <tr><th>Category</th><th className="text-right">Amount</th><th>Note</th></tr>
               </thead>
               <tbody>
                 {txn.lines.map((line) => (
                   <tr key={line.id}>
                     <td>{line.category_name}</td>
-                    <td className="text-end">{fmtConverted(line.amount, txn.exchange_rate_to_usd, userRate, symbol)}</td>
+                    <td className="text-right">{fmtConverted(line.amount, txn.exchange_rate_to_usd, userRate, symbol)}</td>
                     <td className="text-muted">{line.description}</td>
                   </tr>
                 ))}
@@ -394,21 +394,21 @@ export default function Transactions({ budget_pk, month, category_filter, transa
   return (
     <div>
       {/* Header */}
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <div className="d-flex align-items-center gap-3">
+      <div className="flex justify-between items-center mb-6">
+        <div className="flex items-center gap-4">
           <button className="btn btn-outline-secondary btn-sm" onClick={() => navigate({ month: prevMonth(month), ...(category_filter ? { category: category_filter } : {}) })}>&laquo;</button>
           <h4 className="mb-0">{formatMonth(month)}</h4>
           <button className="btn btn-outline-secondary btn-sm" disabled={isCurrentMonth} onClick={() => navigate({ month: nextMonth(month), ...(category_filter ? { category: category_filter } : {}) })}>&raquo;</button>
         </div>
-        <div className="d-flex align-items-center gap-2">
+        <div className="flex items-center gap-2">
           <button className="btn btn-primary btn-sm" onClick={() => setAddType("expense")}>+ Add Transaction</button>
           <a href={`/budgets/${budget_pk}/`} className="btn btn-outline-secondary btn-sm" onClick={(e) => { e.preventDefault(); router.visit(`/budgets/${budget_pk}/`); }}>← Back</a>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="row g-2 mb-4 align-items-center">
-        <div className="col-auto">
+      <div className="flex flex-wrap gap-2 mb-6 items-center">
+        <div className="w-auto">
           <button
             className={`btn btn-sm ${!category_filter ? "btn-secondary" : "btn-outline-secondary"}`}
             onClick={() => navigate({ month })}
@@ -416,7 +416,7 @@ export default function Transactions({ budget_pk, month, category_filter, transa
             All
           </button>
         </div>
-        <div className="col-auto">
+        <div className="w-auto">
           <select
             className="form-select form-select-sm"
             value={category_filter}
@@ -454,7 +454,7 @@ export default function Transactions({ budget_pk, month, category_filter, transa
                   <SortHeader label="Description" sortKey="description" />
                   <SortHeader label="Paid Date" sortKey="paid_date" />
                   <SortHeader label="Category" sortKey="category" />
-                  <SortHeader label="Amount" sortKey="amount" className="text-end" />
+                  <SortHeader label="Amount" sortKey="amount" className="text-right" />
                   <SortHeader label="Payment Method" sortKey="payment_method" />
                   <th></th>
                 </tr>

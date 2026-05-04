@@ -1,35 +1,12 @@
 {% extends "account/base_entrance.html" %}
 
 {% load i18n %}
-{% load crispy_forms_tags %}
 {% load account %}
 
 {% block head_title %}
   {% trans "Sign In" %}
 {% endblock head_title %}
 
-{% block style %}
-  {{ block.super }}
-  <style>
-    #login-form main {
-      max-width: 400px;
-    }
-
-    #id_login {
-      border-bottom-right-radius: 0;
-      border-bottom-left-radius: 0;
-    }
-
-    #id_password {
-      border-top-right-radius: 0;
-      border-top-left-radius: 0;
-    }
-
-    #div_id_login {
-      margin-bottom: -1px !important;
-    }
-  </style>
-{% endblock style %}
 
 {% block base_header %}
 {% endblock base_header %}
@@ -60,7 +37,13 @@ below:{% endblocktrans %}
   {% endif %}
   <form class="login" method="post" action="{% url 'account_login' %}">
     {% csrf_token %}
-    {% crispy form %}
+    {% for field in form %}
+      <div class="mb-3">
+        <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+        {{ field }}
+        {% for error in field.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+      </div>
+    {% endfor %}
     {% if redirect_field_value %}
       <input type="hidden"
              name="{{ redirect_field_name }}"

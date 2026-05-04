@@ -152,7 +152,7 @@ class TransactionModal extends Component<Props, State> {
 
     return (
       <div
-        className="modal fade show d-block"
+        className="modal fade show block"
         tabIndex={-1}
         role="dialog"
         ref={this.modalRef}
@@ -171,8 +171,8 @@ class TransactionModal extends Component<Props, State> {
                 )}
 
                 {!isEdit && (
-                  <div className="mb-3">
-                    <div className="btn-group w-100" role="group">
+                  <div className="mb-4">
+                    <div className="btn-group w-full" role="group">
                       {(["expense", "income"] as const).map((t) => (
                         <label
                           key={t}
@@ -199,7 +199,7 @@ class TransactionModal extends Component<Props, State> {
                   </div>
                 )}
 
-                <div className="mb-3">
+                <div className="mb-4">
                   <label className="form-label">Description</label>
                   <input
                     type="text"
@@ -211,9 +211,9 @@ class TransactionModal extends Component<Props, State> {
                   {errors.description && <div className="invalid-feedback">{errors.description.join(" ")}</div>}
                 </div>
 
-                <div className="row">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {isRecurring && (
-                    <div className="col-md-6 mb-3">
+                    <div className="mb-4">
                       <label className="form-label">Due Date</label>
                       <input
                         type="date"
@@ -225,7 +225,7 @@ class TransactionModal extends Component<Props, State> {
                       {errors.due_date && <div className="invalid-feedback">{errors.due_date.join(" ")}</div>}
                     </div>
                   )}
-                  <div className="col-md-6 mb-3">
+                  <div className="mb-4">
                     <label className="form-label">{categoryType === "income" ? "Received Date" : "Paid Date"}</label>
                     <input
                       type="date"
@@ -237,7 +237,7 @@ class TransactionModal extends Component<Props, State> {
                 </div>
 
                 {isRecurring && categoryType !== "income" && (
-                  <div className="mb-3 form-check">
+                  <div className="mb-4 form-check">
                     <input
                       type="checkbox"
                       className="form-check-input"
@@ -249,8 +249,8 @@ class TransactionModal extends Component<Props, State> {
                   </div>
                 )}
 
-                <div className="row">
-                  <div className="col-md-6 mb-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="mb-4">
                     <label className="form-label">Payment Method</label>
                     <select
                       className="form-select"
@@ -265,7 +265,7 @@ class TransactionModal extends Component<Props, State> {
                       ))}
                     </select>
                   </div>
-                  <div className="col-md-6 mb-3">
+                  <div className="mb-4">
                     <label className="form-label">Currency</label>
                     <select
                       className="form-select"
@@ -290,9 +290,9 @@ class TransactionModal extends Component<Props, State> {
                   <div className="alert alert-danger">{(errors.lines as unknown as string[]).join(" ")}</div>
                 )}
                 {lines.map((line, idx) => (
-                  <div key={idx} className="row g-2 mb-2 align-items-end">
-                    <div className="col-md-5">
-                      <label className="form-label small">Category</label>
+                  <div key={idx} className="grid grid-cols-12 gap-2 mb-2 items-end">
+                    <div className="col-span-12 md:col-span-5">
+                      <label className="form-label text-sm">Category</label>
                       <select
                         className="form-select"
                         value={line.category}
@@ -305,8 +305,8 @@ class TransactionModal extends Component<Props, State> {
                         ))}
                       </select>
                     </div>
-                    <div className="col-md-3">
-                      <label className="form-label small">Amount</label>
+                    <div className="col-span-12 md:col-span-3">
+                      <label className="form-label text-sm">Amount</label>
                       <input
                         type="number"
                         step="0.01"
@@ -317,8 +317,8 @@ class TransactionModal extends Component<Props, State> {
                         required
                       />
                     </div>
-                    <div className="col-md-3">
-                      <label className="form-label small">Note</label>
+                    <div className="col-span-12 md:col-span-3">
+                      <label className="form-label text-sm">Note</label>
                       <input
                         type="text"
                         className="form-control"
@@ -326,7 +326,7 @@ class TransactionModal extends Component<Props, State> {
                         onChange={(e) => { this.handleLineChange(idx, "description", e.target.value); }}
                       />
                     </div>
-                    <div className="col-md-1">
+                    <div className="col-span-12 md:col-span-1">
                       {lines.length > 1 && (
                         <button
                           type="button"

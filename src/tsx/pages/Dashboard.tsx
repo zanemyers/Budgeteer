@@ -141,19 +141,19 @@ export default function Dashboard({ budget_pk, month, overview, categories, paym
     const budgetedClass = budgeted > 0 && activity > budgeted ? "text-danger" : "";
     const assignedClass = budgeted > 0 && assigned === budgeted ? "text-success" : "";
     const availableClass = isExpense
-      ? available < 0 ? "text-danger fw-bold" : available === 0 ? "text-muted" : "text-success"
+      ? available < 0 ? "text-danger font-bold" : available === 0 ? "text-muted" : "text-success"
       : "text-success";
 
     return (
       <tr key={cat.id}>
         <td>
-          <a href={`/budgets/${budget_pk}/transactions/?month=${month}&category=${cat.id}`} className="text-decoration-none text-body">
+          <a href={`/budgets/${budget_pk}/transactions/?month=${month}&category=${cat.id}`} className="no-underline text-body">
             {cat.name}
           </a>
         </td>
-        <td className="text-end">
+        <td className="text-right">
           {isEditingBudgeted ? (
-            <div className="input-group input-group-sm justify-content-end" style={{ maxWidth: 130 }}>
+            <div className="input-group input-group-sm justify-end" style={{ maxWidth: 130 }}>
               <span className="input-group-text">{symbol}</span>
               <input
                 type="number" className="form-control" min="0" step="0.01" autoFocus
@@ -166,13 +166,13 @@ export default function Dashboard({ budget_pk, month, overview, categories, paym
             </div>
           ) : (
             <span style={{ cursor: "pointer" }} title="Click to set monthly target" onClick={() => setEditingBudgeted((prev) => ({ ...prev, [cat.id]: "" }))}>
-              {budgeted > 0 ? <span className={budgetedClass}>{fmt(cat.budgeted, symbol)}</span> : <span className="text-muted fst-italic">—</span>}
+              {budgeted > 0 ? <span className={budgetedClass}>{fmt(cat.budgeted, symbol)}</span> : <span className="text-muted italic">—</span>}
             </span>
           )}
         </td>
-        <td className="text-end">
+        <td className="text-right">
           {isEditingAssigned ? (
-            <div className="input-group input-group-sm justify-content-end" style={{ maxWidth: 130 }}>
+            <div className="input-group input-group-sm justify-end" style={{ maxWidth: 130 }}>
               <span className="input-group-text">{symbol}</span>
               <input
                 type="number" className="form-control" min="0" step="0.01" autoFocus
@@ -185,12 +185,12 @@ export default function Dashboard({ budget_pk, month, overview, categories, paym
             </div>
           ) : (
             <span style={{ cursor: "pointer" }} title="Click to set assigned amount" onClick={() => setEditingAssigned((prev) => ({ ...prev, [cat.id]: "" }))}>
-              {assigned > 0 ? <span className={assignedClass}>{fmt(cat.assigned, symbol)}</span> : <span className="text-muted fst-italic">—</span>}
+              {assigned > 0 ? <span className={assignedClass}>{fmt(cat.assigned, symbol)}</span> : <span className="text-muted italic">—</span>}
             </span>
           )}
         </td>
-        <td className="text-end">{fmt(cat.activity, symbol)}</td>
-        <td className={`text-end ${availableClass}`}>{fmt(cat.available, symbol)}</td>
+        <td className="text-right">{fmt(cat.activity, symbol)}</td>
+        <td className={`text-right ${availableClass}`}>{fmt(cat.available, symbol)}</td>
       </tr>
     );
   }
@@ -207,7 +207,7 @@ export default function Dashboard({ budget_pk, month, overview, categories, paym
   return (
     <div>
       {/* Header */}
-      <div className="d-flex align-items-center gap-3 mb-4">
+      <div className="flex items-center gap-4 mb-6">
         <button className="btn btn-outline-secondary btn-sm" onClick={() => navigateMonth(prevMonth(month))}>&laquo;</button>
         <h4 className="mb-0">{formatMonth(month)}</h4>
         <button className="btn btn-outline-secondary btn-sm" onClick={() => navigateMonth(nextMonth(month))} disabled={isCurrentMonth}>&raquo;</button>
@@ -215,41 +215,41 @@ export default function Dashboard({ budget_pk, month, overview, categories, paym
 
       {/* Ready to Assign */}
       {parseFloat(overview.income_total) > 0 && (
-        <div className={`alert ${rta >= 0 ? "alert-success" : "alert-danger"} d-flex justify-content-between align-items-center mb-4`}>
+        <div className={`alert ${rta >= 0 ? "alert-success" : "alert-danger"} flex justify-between items-center mb-6`}>
           <div>
             <strong>Ready to Assign</strong>
-            <div className="small text-muted">
+            <div className="text-sm text-muted">
               Income {fmt(overview.income_total, symbol)}
               {" "}&minus; Assigned {fmt(overview.expense_assigned, symbol)}
               {parseFloat(overview.transfers_total) > 0 && <> &minus; Saved {fmt(overview.transfers_total, symbol)}</>}
             </div>
           </div>
-          <span className="fs-4 fw-bold">{fmt(overview.ready_to_assign, symbol)}</span>
+          <span className="text-2xl font-bold">{fmt(overview.ready_to_assign, symbol)}</span>
         </div>
       )}
 
       {/* Budget Grid */}
       {overview.categories.length === 0 ? (
-        <div className="text-muted text-center py-5">
+        <div className="text-muted text-center py-12">
           No categories yet. <a href={`/budgets/${budget_pk}/categories/`}>Add some categories</a> to get started.
         </div>
       ) : (
-        <div className="row g-3">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
           {income.length > 0 && (
-            <div className="col-md-4 d-flex flex-column gap-3">
+            <div className="md:col-span-4 flex flex-col gap-4">
               <div className="card">
-                <div className="card-header bg-success bg-opacity-10 d-flex justify-content-between align-items-center">
-                  <span className="text-success small fw-bold">Income</span>
+                <div className="card-header bg-success bg-opacity-10 flex justify-between items-center">
+                  <span className="text-success text-sm font-bold">Income</span>
                   <button className="btn btn-outline-success btn-sm py-0 px-2" style={{ fontSize: "0.75rem" }} onClick={() => setAddTransactionType("income")}>+ Add</button>
                 </div>
                 <div className="table-responsive">
                   <table className="table table-hover mb-0">
-                    <thead className="table-light"><tr><th>Category</th><th className="text-end">Activity</th></tr></thead>
+                    <thead className="table-light"><tr><th>Category</th><th className="text-right">Activity</th></tr></thead>
                     <tbody>
                       {income.map((cat) => (
                         <tr key={cat.id}>
-                          <td><a href={`/budgets/${budget_pk}/transactions/?month=${month}&category=${cat.id}`} className="text-decoration-none text-body">{cat.name}</a></td>
-                          <td className="text-end text-success">{fmt(cat.activity, symbol)}</td>
+                          <td><a href={`/budgets/${budget_pk}/transactions/?month=${month}&category=${cat.id}`} className="no-underline text-body">{cat.name}</a></td>
+                          <td className="text-right text-success">{fmt(cat.activity, symbol)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -258,28 +258,28 @@ export default function Dashboard({ budget_pk, month, overview, categories, paym
               </div>
               <div className="card">
                 <div className="card-body py-2">
-                  <div className="d-flex justify-content-between align-items-center py-1">
-                    <span className="small text-muted">Income</span>
-                    <span className="fw-semibold text-success">{fmt(overview.income_total, symbol)}</span>
+                  <div className="flex justify-between items-center py-1">
+                    <span className="text-sm text-muted">Income</span>
+                    <span className="font-semibold text-success">{fmt(overview.income_total, symbol)}</span>
                   </div>
-                  <div className="d-flex justify-content-between align-items-center py-1">
-                    <span className="small text-muted">Spent</span>
-                    <span className="fw-semibold text-danger">{fmt(totalSpent, symbol)}</span>
+                  <div className="flex justify-between items-center py-1">
+                    <span className="text-sm text-muted">Spent</span>
+                    <span className="font-semibold text-danger">{fmt(totalSpent, symbol)}</span>
                   </div>
-                  <div className="d-flex justify-content-between align-items-center py-1">
-                    <span className="small text-muted">Saved to funds</span>
-                    <span className="fw-semibold text-warning">{fmt(sfSaved, symbol)}</span>
+                  <div className="flex justify-between items-center py-1">
+                    <span className="text-sm text-muted">Saved to funds</span>
+                    <span className="font-semibold text-warning">{fmt(sfSaved, symbol)}</span>
                   </div>
                   <hr className="my-1" />
-                  <div className="d-flex justify-content-between align-items-center py-1">
-                    <span className="small fw-semibold">Net</span>
-                    <span className={`fw-bold ${netPositive ? "text-success" : "text-danger"}`}>{`${netPositive ? "" : "-"}${fmt(Math.abs(netAmount), symbol)}`}</span>
+                  <div className="flex justify-between items-center py-1">
+                    <span className="text-sm font-semibold">Net</span>
+                    <span className={`font-bold ${netPositive ? "text-success" : "text-danger"}`}>{`${netPositive ? "" : "-"}${fmt(Math.abs(netAmount), symbol)}`}</span>
                   </div>
                 </div>
               </div>
               {isCurrentMonth && upcoming_transactions.length > 0 && (
                 <div className="card">
-                  <div className="card-header small fw-semibold text-muted py-2">Upcoming Recurring</div>
+                  <div className="card-header text-sm font-semibold text-muted py-2">Upcoming Recurring</div>
                   <ul className="list-group list-group-flush">
                     {upcoming_transactions.map((txn) => {
                       const category = txn.lines[0]?.category_name ?? "";
@@ -289,19 +289,19 @@ export default function Dashboard({ budget_pk, month, overview, categories, paym
                       const isOverdue = due < today;
                       const dueFmt = due.toLocaleDateString("en-US", { month: "short", day: "numeric" });
                       return (
-                        <li key={txn.id} className="list-group-item d-flex justify-content-between align-items-center py-2">
+                        <li key={txn.id} className="list-group-item flex justify-between items-center py-2">
                           <div>
-                            <div className="fw-medium">{txn.description}</div>
-                            <div className="small text-muted">
-                              {category && <span className="me-2">{category}</span>}
-                              <span className={isOverdue ? "text-danger fw-semibold" : ""}>{dueFmt}</span>
+                            <div className="font-medium">{txn.description}</div>
+                            <div className="text-sm text-muted">
+                              {category && <span className="mr-2">{category}</span>}
+                              <span className={isOverdue ? "text-danger font-semibold" : ""}>{dueFmt}</span>
                             </div>
                           </div>
-                          <div className="d-flex align-items-center gap-3">
-                            <span className={`fw-semibold ${txn.transaction_type === "income" ? "text-success" : "text-danger"}`}>
+                          <div className="flex items-center gap-4">
+                            <span className={`font-semibold ${txn.transaction_type === "income" ? "text-success" : "text-danger"}`}>
                               {fmt(txn.total_amount, symbol)}
                             </span>
-                            <button className="btn btn-success btn-sm px-3" disabled={isMarking} onClick={() => void markPaid(txn.id)}>
+                            <button className="btn btn-success btn-sm px-4" disabled={isMarking} onClick={() => void markPaid(txn.id)}>
                               {isMarking ? "…" : "✓"}
                             </button>
                           </div>
@@ -314,16 +314,16 @@ export default function Dashboard({ budget_pk, month, overview, categories, paym
             </div>
           )}
           {expense.length > 0 && (
-            <div className="col-md-8 d-flex flex-column gap-3">
+            <div className="md:col-span-8 flex flex-col gap-4">
               <div className="card">
-                <div className="card-header bg-danger bg-opacity-10 d-flex justify-content-between align-items-center">
-                  <span className="text-danger small fw-bold">Expenses</span>
+                <div className="card-header bg-danger bg-opacity-10 flex justify-between items-center">
+                  <span className="text-danger text-sm font-bold">Expenses</span>
                   <button className="btn btn-outline-danger btn-sm py-0 px-2" style={{ fontSize: "0.75rem" }} onClick={() => setAddTransactionType("expense")}>+ Add</button>
                 </div>
                 <div className="table-responsive">
                   <table className="table table-hover mb-0">
                     <thead className="table-light">
-                      <tr><th>Category</th><th className="text-end">Budgeted</th><th className="text-end">Assigned</th><th className="text-end">Activity</th><th className="text-end">Available</th></tr>
+                      <tr><th>Category</th><th className="text-right">Budgeted</th><th className="text-right">Assigned</th><th className="text-right">Activity</th><th className="text-right">Available</th></tr>
                     </thead>
                     <tbody>{expense.map(renderCategoryRow)}</tbody>
                   </table>

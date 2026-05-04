@@ -86,20 +86,20 @@ export default function Members({ budget_pk, memberships: initialMemberships, ro
 
   return (
     <div>
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h1 className="h3 mb-0">Members</h1>
-        <div className="d-flex gap-2">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="mb-0">Members</h1>
+        <div className="flex gap-2">
           <button className="btn btn-primary btn-sm" onClick={() => setShowForm(true)}>+ Invite</button>
           <a href={`/budgets/${budget_pk}/`} className="btn btn-outline-secondary btn-sm">← Back to Budget</a>
         </div>
       </div>
 
       {showForm && (
-        <div className="card mb-4">
+        <div className="card mb-6">
           <div className="card-body">
             <form onSubmit={(e) => void handleInvite(e)}>
-              <div className="row g-2 align-items-end">
-                <div className="col">
+              <div className="flex flex-wrap gap-2 items-end">
+                <div className="min-w-0 flex-1">
                   <input
                     className="form-control form-control-sm"
                     placeholder="Email address"
@@ -110,7 +110,7 @@ export default function Members({ budget_pk, memberships: initialMemberships, ro
                     required
                   />
                 </div>
-                <div className="col-auto">
+                <div className="w-auto">
                   <select
                     className="form-select form-select-sm"
                     value={inviteRole}
@@ -121,12 +121,12 @@ export default function Members({ budget_pk, memberships: initialMemberships, ro
                     ))}
                   </select>
                 </div>
-                <div className="col-auto">
+                <div className="w-auto">
                   <button className="btn btn-primary btn-sm" disabled={saving}>Invite</button>
-                  <button type="button" className="btn btn-outline-secondary btn-sm ms-2" onClick={() => { setShowForm(false); setFormError(""); }}>Cancel</button>
+                  <button type="button" className="btn btn-outline-secondary btn-sm ml-2" onClick={() => { setShowForm(false); setFormError(""); }}>Cancel</button>
                 </div>
               </div>
-              {formError && <div className="text-danger small mt-1">{formError}</div>}
+              {formError && <div className="text-danger text-sm mt-1">{formError}</div>}
             </form>
           </div>
         </div>
@@ -135,16 +135,16 @@ export default function Members({ budget_pk, memberships: initialMemberships, ro
       <div className="card">
         <ul className="list-group list-group-flush">
           {memberships.map((m) => (
-            <li key={m.id} className="list-group-item d-flex justify-content-between align-items-center py-3">
-              <div className="d-flex align-items-center gap-3">
-                <img src={m.gravatar_url} alt="" className="rounded-circle" width={36} height={36} />
+            <li key={m.id} className="list-group-item flex justify-between items-center py-4">
+              <div className="flex items-center gap-4">
+                <img src={m.gravatar_url} alt="" className="rounded-full" width={36} height={36} />
                 <div>
-                  <div className="fw-semibold">{m.name}</div>
-                  <div className="text-muted small">{m.email}</div>
+                  <div className="font-semibold">{m.name}</div>
+                  <div className="text-muted text-sm">{m.email}</div>
                 </div>
               </div>
-              <div className="d-flex align-items-center gap-3">
-                <span className="badge bg-secondary text-capitalize">{m.role}</span>
+              <div className="flex items-center gap-4">
+                <span className="badge bg-secondary capitalize">{m.role}</span>
                 {removeError[m.id] && <small className="text-danger">{removeError[m.id]}</small>}
                 {removingId === m.id ? (
                   <>

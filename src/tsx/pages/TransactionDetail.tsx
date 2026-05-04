@@ -14,9 +14,9 @@ function fmtDate(iso: string | null): string {
 export default function TransactionDetail({ budget_pk, transaction: txn }: Props) {
   return (
     <div>
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h1 className="h3 mb-0">{txn.description}</h1>
-        <div className="d-flex gap-2">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="mb-0">{txn.description}</h1>
+        <div className="flex gap-2">
           <a
             href={`/budgets/${budget_pk}/transactions/`}
             className="btn btn-outline-secondary btn-sm"
@@ -27,10 +27,10 @@ export default function TransactionDetail({ budget_pk, transaction: txn }: Props
         </div>
       </div>
 
-      <div className="row g-4">
-        <div className="col-md-5">
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+        <div className="md:col-span-5">
           <div className="card">
-            <div className="card-header small fw-semibold text-muted py-2">Details</div>
+            <div className="card-header text-sm font-semibold text-muted py-2">Details</div>
             <div className="card-body">
               <dl className="mb-0">
                 <dt>Description</dt>
@@ -71,15 +71,15 @@ export default function TransactionDetail({ budget_pk, transaction: txn }: Props
           </div>
         </div>
 
-        <div className="col-md-7">
+        <div className="md:col-span-7">
           <div className="card">
-            <div className="card-header small fw-semibold text-muted py-2">Line Items</div>
+            <div className="card-header text-sm font-semibold text-muted py-2">Line Items</div>
             <div className="table-responsive">
               <table className="table table-sm mb-0 align-middle">
                 <thead>
                   <tr>
                     <th>Category</th>
-                    <th className="text-end">Amount</th>
+                    <th className="text-right">Amount</th>
                     <th>Note</th>
                   </tr>
                 </thead>
@@ -89,21 +89,21 @@ export default function TransactionDetail({ budget_pk, transaction: txn }: Props
                       <td>
                         <a
                           href={`/budgets/${budget_pk}/transactions/?category=${line.category}`}
-                          className="text-decoration-none text-body"
+                          className="no-underline text-body"
                           onClick={(e) => { e.preventDefault(); router.visit(`/budgets/${budget_pk}/transactions/?category=${line.category}`); }}
                         >
                           {line.category_name}
                         </a>
                       </td>
-                      <td className={`text-end fw-semibold ${line.category_type === "income" ? "text-success" : "text-danger"}`}>
+                      <td className={`text-right font-semibold ${line.category_type === "income" ? "text-success" : "text-danger"}`}>
                         ${parseFloat(line.amount).toFixed(2)}
                       </td>
-                      <td className="text-muted small">{line.description}</td>
+                      <td className="text-muted text-sm">{line.description}</td>
                     </tr>
                   ))}
-                  <tr className="table-light fw-semibold">
+                  <tr className="table-light font-semibold">
                     <td>Total</td>
-                    <td className={`text-end ${txn.transaction_type === "income" ? "text-success" : "text-danger"}`}>
+                    <td className={`text-right ${txn.transaction_type === "income" ? "text-success" : "text-danger"}`}>
                       ${parseFloat(txn.total_amount).toFixed(2)}
                     </td>
                     <td></td>

@@ -213,12 +213,12 @@ export default function RecurringDetail({ budget_pk, recurring: initialRt, insta
 
   return (
     <div>
-      <div className="d-flex justify-content-between align-items-start mb-4">
+      <div className="flex justify-between items-start mb-6">
         <div>
-          <h1 className="h3 mb-0">{rt.name}</h1>
-          <p className="text-muted small mb-0">{freqDisplay()} — {fmt(rt.amount, symbol)}</p>
+          <h1 className="mb-0">{rt.name}</h1>
+          <p className="text-muted text-sm mb-0">{freqDisplay()} — {fmt(rt.amount, symbol)}</p>
         </div>
-        <div className="d-flex gap-2">
+        <div className="flex gap-2">
           <a
             href={`/budgets/${budget_pk}/recurring/${rt.id}/edit/`}
             className="btn btn-outline-secondary btn-sm"
@@ -244,12 +244,12 @@ export default function RecurringDetail({ budget_pk, recurring: initialRt, insta
         </div>
       </div>
 
-      <div className="row g-4 mb-4">
-        <div className="col-md-4">
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-6 mb-6">
+        <div className="md:col-span-4">
           <div className="card">
-            <div className="card-header d-flex justify-content-between align-items-center py-2">
-              <span className="small fw-semibold text-muted">Details</span>
-              <span className="small text-muted fst-italic">Click any value to edit</span>
+            <div className="card-header flex justify-between items-center py-2">
+              <span className="text-sm font-semibold text-muted">Details</span>
+              <span className="text-sm text-muted italic">Click any value to edit</span>
             </div>
             <div className="card-body">
               <dl className="mb-0">
@@ -331,14 +331,14 @@ export default function RecurringDetail({ budget_pk, recurring: initialRt, insta
           </div>
         </div>
 
-        <div className="col-md-8">
+        <div className="md:col-span-8">
           <div className="card">
-            <div className="card-header d-flex justify-content-between align-items-center py-2">
+            <div className="card-header flex justify-between items-center py-2">
               <span>Generated Instances</span>
               <button className="btn btn-outline-primary btn-sm py-0" onClick={() => setShowAddInstance(true)}>+ Add Instance</button>
             </div>
             {instances.length === 0 ? (
-              <div className="card-body text-muted small">No instances generated yet.</div>
+              <div className="card-body text-muted text-sm">No instances generated yet.</div>
             ) : (
               <div className="table-responsive">
                 <table className="table table-sm mb-0 align-middle">
@@ -352,13 +352,13 @@ export default function RecurringDetail({ budget_pk, recurring: initialRt, insta
                   <tbody>
                     {instances.map((t) => (
                       <tr key={t.id} className={t.is_paid ? "text-muted" : ""}>
-                        <td className="small">{fmtDate(t.due_date)}</td>
+                        <td className="text-sm">{fmtDate(t.due_date)}</td>
                         <td>
                           {t.is_paid
                             ? <span className="badge bg-success">Paid</span>
                             : <span className="badge bg-warning text-dark">Unpaid</span>}
                         </td>
-                        <td className="text-end" style={{ whiteSpace: "nowrap" }}>
+                        <td className="text-right whitespace-nowrap">
                           <button
                             className="btn btn-outline-secondary btn-sm py-0 px-2"
                             style={{ fontSize: "0.75rem" }}
@@ -380,7 +380,7 @@ export default function RecurringDetail({ budget_pk, recurring: initialRt, insta
       </div>
 
       {showAddInstance && (
-        <div className="modal show d-block" tabIndex={-1} style={{ background: "rgba(0,0,0,0.5)" }}>
+        <div className="modal show block" tabIndex={-1} style={{ background: "rgba(0,0,0,0.5)" }}>
           <div className="modal-dialog">
             <div className="modal-content">
               <form onSubmit={(e) => void handleAddInstance(e)}>
@@ -397,7 +397,7 @@ export default function RecurringDetail({ budget_pk, recurring: initialRt, insta
                     autoFocus
                     onChange={(e) => setAddDueDate(e.target.value)}
                   />
-                  {addError && <div className="text-danger small mt-2">{addError}</div>}
+                  {addError && <div className="text-danger text-sm mt-2">{addError}</div>}
                 </div>
                 <div className="modal-footer">
                   <button type="button" className="btn btn-secondary" onClick={() => setShowAddInstance(false)}>Cancel</button>
@@ -530,7 +530,7 @@ function FrequencySelect({ frequency, interval, freqChoices, onSave }: {
   }
 
   return (
-    <div className="d-flex gap-1 align-items-center">
+    <div className="flex gap-1 items-center">
       <select
         className="form-select form-select-sm"
         style={{ maxWidth: "160px" }}
@@ -563,12 +563,12 @@ function DeleteInstanceButton({ onDelete }: { onDelete: () => void }) {
   if (confirming) {
     return (
       <>
-        <button className="btn btn-danger btn-sm py-0 px-2 ms-1" style={{ fontSize: "0.75rem" }} onClick={() => { setConfirming(false); onDelete(); }}>✕</button>
-        <button className="btn btn-outline-secondary btn-sm py-0 px-2 ms-1" style={{ fontSize: "0.75rem" }} onClick={() => setConfirming(false)}>↩</button>
+        <button className="btn btn-danger btn-sm py-0 px-2 ml-1" style={{ fontSize: "0.75rem" }} onClick={() => { setConfirming(false); onDelete(); }}>✕</button>
+        <button className="btn btn-outline-secondary btn-sm py-0 px-2 ml-1" style={{ fontSize: "0.75rem" }} onClick={() => setConfirming(false)}>↩</button>
       </>
     );
   }
   return (
-    <button className="btn btn-outline-danger btn-sm py-0 px-2 ms-1" style={{ fontSize: "0.75rem" }} title="Delete" onClick={() => setConfirming(true)}>✕</button>
+    <button className="btn btn-outline-danger btn-sm py-0 px-2 ml-1" style={{ fontSize: "0.75rem" }} title="Delete" onClick={() => setConfirming(true)}>✕</button>
   );
 }

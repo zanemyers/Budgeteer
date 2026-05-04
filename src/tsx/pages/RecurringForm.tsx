@@ -94,13 +94,13 @@ export default function RecurringForm({ budget_pk, recurring, categories, paymen
   }
 
   return (
-    <div className="row justify-content-center">
-      <div className="col-md-7">
-        <h1 className="h3 mb-4">{isEdit ? "Edit Recurring Transaction" : "New Recurring Transaction"}</h1>
+    <div className="flex justify-center">
+      <div className="col-span-12 md:col-span-7 w-full" style={{ maxWidth: 560 }}>
+        <h1 className="mb-6">{isEdit ? "Edit Recurring Transaction" : "New Recurring Transaction"}</h1>
 
         <form onSubmit={handleSubmit}>
           {isEdit && (
-            <div className="form-check mb-3">
+            <div className="form-check mb-4">
               <input
                 className="form-check-input"
                 type="checkbox"
@@ -114,7 +114,7 @@ export default function RecurringForm({ budget_pk, recurring, categories, paymen
             </div>
           )}
 
-          <div className="mb-3">
+          <div className="mb-4">
             <label className="form-label" htmlFor="rt-name">Name <span className="text-danger">*</span></label>
             <input
               id="rt-name"
@@ -127,7 +127,7 @@ export default function RecurringForm({ budget_pk, recurring, categories, paymen
             {fieldError("name") && <div className="invalid-feedback">{fieldError("name")}</div>}
           </div>
 
-          <div className="mb-3">
+          <div className="mb-4">
             <label className="form-label" htmlFor="rt-category">Category <span className="text-danger">*</span></label>
             <select
               id="rt-category"
@@ -151,7 +151,7 @@ export default function RecurringForm({ budget_pk, recurring, categories, paymen
             {fieldError("category") && <div className="invalid-feedback">{fieldError("category")}</div>}
           </div>
 
-          <div className="mb-3">
+          <div className="mb-4">
             <label className="form-label" htmlFor="rt-amount">Amount <span className="text-danger">*</span></label>
             <div className="input-group">
               <span className="input-group-text">$</span>
@@ -169,7 +169,7 @@ export default function RecurringForm({ budget_pk, recurring, categories, paymen
             </div>
           </div>
 
-          <div className="mb-3">
+          <div className="mb-4">
             <label className="form-label" htmlFor="rt-frequency">Frequency <span className="text-danger">*</span></label>
             <select
               id="rt-frequency"
@@ -185,7 +185,7 @@ export default function RecurringForm({ budget_pk, recurring, categories, paymen
           </div>
 
           {frequency === "every_n_months" && (
-            <div className="mb-3">
+            <div className="mb-4">
               <label className="form-label" htmlFor="rt-interval">Every (months) <span className="text-danger">*</span></label>
               <input
                 id="rt-interval"
@@ -199,7 +199,7 @@ export default function RecurringForm({ budget_pk, recurring, categories, paymen
             </div>
           )}
 
-          <div className="mb-3">
+          <div className="mb-4">
             <label className="form-label" htmlFor="rt-start-date">Start Date <span className="text-danger">*</span></label>
             <input
               id="rt-start-date"
@@ -212,7 +212,7 @@ export default function RecurringForm({ budget_pk, recurring, categories, paymen
             {fieldError("start_date") && <div className="invalid-feedback">{fieldError("start_date")}</div>}
           </div>
 
-          <div className="mb-3">
+          <div className="mb-4">
             <label className="form-label" htmlFor="rt-end-date">End Date</label>
             <input
               id="rt-end-date"
@@ -223,7 +223,7 @@ export default function RecurringForm({ budget_pk, recurring, categories, paymen
             />
           </div>
 
-          <div className="mb-3">
+          <div className="mb-4">
             <label className="form-label" htmlFor="rt-payment-method">Payment Method</label>
             <select
               id="rt-payment-method"
@@ -240,7 +240,7 @@ export default function RecurringForm({ budget_pk, recurring, categories, paymen
             </select>
           </div>
 
-          <div className="mb-3">
+          <div className="mb-4">
             <label className="form-label" htmlFor="rt-description">Description</label>
             <textarea
               id="rt-description"
@@ -252,7 +252,7 @@ export default function RecurringForm({ budget_pk, recurring, categories, paymen
           </div>
 
           {isEdit && (
-            <div className="mb-3 form-check">
+            <div className="mb-4 form-check">
               <input
                 className="form-check-input"
                 type="checkbox"
@@ -265,12 +265,12 @@ export default function RecurringForm({ budget_pk, recurring, categories, paymen
           )}
 
           {Object.keys(errors).length > 0 && (
-            <div className="alert alert-danger py-2 small">
+            <div className="alert alert-danger py-2 text-sm">
               {Object.values(errors).flat().join(" ")}
             </div>
           )}
 
-          <div className="d-flex gap-2">
+          <div className="flex gap-2">
             <button type="submit" className="btn btn-primary" disabled={submitting}>
               {isEdit ? "Save Changes" : "Create"}
             </button>

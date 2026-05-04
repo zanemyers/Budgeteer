@@ -8,9 +8,9 @@ class LoadingSpinner extends Component<Props> {
   render() {
     const { message = "Loading..." } = this.props;
     return (
-      <div className="d-flex justify-content-center align-items-center py-5">
-        <div className="spinner-border text-primary me-3" role="status">
-          <span className="visually-hidden">{message}</span>
+      <div className="flex justify-center items-center py-12">
+        <div className="spinner-border text-primary mr-4" role="status">
+          <span className="sr-only">{message}</span>
         </div>
         <span className="text-muted">{message}</span>
       </div>

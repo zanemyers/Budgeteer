@@ -16,7 +16,11 @@ function applyTheme(theme: Theme) {
         ? "dark"
         : "light"
       : theme;
-  document.documentElement.setAttribute("data-bs-theme", effective);
+  if (effective === "dark") {
+    document.documentElement.classList.add("dark");
+  } else {
+    document.documentElement.classList.remove("dark");
+  }
 }
 
 export default function ThemeToggle() {

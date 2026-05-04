@@ -102,17 +102,17 @@ export default function PaymentMethods({ budget_pk, payment_methods: initialMeth
 
   return (
     <div>
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h1 className="h3 mb-0">Payment Methods</h1>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="mb-0">Payment Methods</h1>
         <button className="btn btn-primary btn-sm" onClick={() => setShowForm(true)}>+ Add</button>
       </div>
 
       {showForm && (
-        <div className="card mb-4">
+        <div className="card mb-6">
           <div className="card-body">
             <form onSubmit={(e) => void handleCreate(e)}>
-              <div className="row g-2 align-items-end">
-                <div className="col">
+              <div className="flex flex-wrap gap-2 items-end">
+                <div className="min-w-0 flex-1">
                   <input
                     className="form-control form-control-sm"
                     placeholder="Name (e.g. Chase Sapphire)"
@@ -122,7 +122,7 @@ export default function PaymentMethods({ budget_pk, payment_methods: initialMeth
                     required
                   />
                 </div>
-                <div className="col-auto">
+                <div className="w-auto">
                   <select
                     className="form-select form-select-sm"
                     value={newType}
@@ -133,7 +133,7 @@ export default function PaymentMethods({ budget_pk, payment_methods: initialMeth
                     ))}
                   </select>
                 </div>
-                <div className="col-auto" style={{ width: "100px" }}>
+                <div className="w-auto" style={{ width: "100px" }}>
                   <input
                     className="form-control form-control-sm"
                     placeholder="Last 4"
@@ -142,12 +142,12 @@ export default function PaymentMethods({ budget_pk, payment_methods: initialMeth
                     onChange={(e) => setNewLastFour(e.target.value)}
                   />
                 </div>
-                <div className="col-auto">
+                <div className="w-auto">
                   <button className="btn btn-primary btn-sm" disabled={saving}>Save</button>
-                  <button type="button" className="btn btn-outline-secondary btn-sm ms-2" onClick={() => { setShowForm(false); setFormError(""); }}>Cancel</button>
+                  <button type="button" className="btn btn-outline-secondary btn-sm ml-2" onClick={() => { setShowForm(false); setFormError(""); }}>Cancel</button>
                 </div>
               </div>
-              {formError && <div className="text-danger small mt-1">{formError}</div>}
+              {formError && <div className="text-danger text-sm mt-1">{formError}</div>}
             </form>
           </div>
         </div>
@@ -155,14 +155,14 @@ export default function PaymentMethods({ budget_pk, payment_methods: initialMeth
 
       <div className="card">
         {methods.length === 0 ? (
-          <div className="card-body text-muted small">No payment methods yet.</div>
+          <div className="card-body text-muted text-sm">No payment methods yet.</div>
         ) : (
           <ul className="list-group list-group-flush">
             {methods.map((pm) => (
               <li key={pm.id} className="list-group-item py-2">
                 {editingId === pm.id ? (
-                  <div className="row g-2 align-items-center">
-                    <div className="col">
+                  <div className="flex flex-wrap gap-2 items-center">
+                    <div className="min-w-0 flex-1">
                       <input
                         className="form-control form-control-sm"
                         value={editValues.name ?? ""}
@@ -171,7 +171,7 @@ export default function PaymentMethods({ budget_pk, payment_methods: initialMeth
                         onKeyDown={(e) => { if (e.key === "Escape") setEditingId(null); }}
                       />
                     </div>
-                    <div className="col-auto">
+                    <div className="w-auto">
                       <select
                         className="form-select form-select-sm"
                         value={editValues.payment_type ?? ""}
@@ -182,7 +182,7 @@ export default function PaymentMethods({ budget_pk, payment_methods: initialMeth
                         ))}
                       </select>
                     </div>
-                    <div className="col-auto" style={{ width: "100px" }}>
+                    <div className="w-auto" style={{ width: "100px" }}>
                       <input
                         className="form-control form-control-sm"
                         placeholder="Last 4"
@@ -191,7 +191,7 @@ export default function PaymentMethods({ budget_pk, payment_methods: initialMeth
                         onChange={(e) => setEditValues((v) => ({ ...v, last_four: e.target.value }))}
                       />
                     </div>
-                    <div className="col-auto">
+                    <div className="w-auto">
                       <div className="form-check form-check-inline mb-0">
                         <input
                           className="form-check-input"
@@ -200,26 +200,26 @@ export default function PaymentMethods({ budget_pk, payment_methods: initialMeth
                           checked={editValues.is_active ?? true}
                           onChange={(e) => setEditValues((v) => ({ ...v, is_active: e.target.checked }))}
                         />
-                        <label className="form-check-label small" htmlFor={`active-${pm.id}`}>Active</label>
+                        <label className="form-check-label text-sm" htmlFor={`active-${pm.id}`}>Active</label>
                       </div>
                     </div>
-                    <div className="col-auto">
+                    <div className="w-auto">
                       <button className="btn btn-primary btn-sm py-0 px-2" style={{ fontSize: "0.75rem" }} onClick={() => void handleSaveEdit(pm)}>Save</button>
-                      <button className="btn btn-outline-secondary btn-sm py-0 px-2 ms-1" style={{ fontSize: "0.75rem" }} onClick={() => setEditingId(null)}>Cancel</button>
+                      <button className="btn btn-outline-secondary btn-sm py-0 px-2 ml-1" style={{ fontSize: "0.75rem" }} onClick={() => setEditingId(null)}>Cancel</button>
                     </div>
                   </div>
                 ) : (
-                  <div className="d-flex justify-content-between align-items-center">
+                  <div className="flex justify-between items-center">
                     <div
-                      className="d-flex align-items-center gap-2"
+                      className="flex items-center gap-2"
                       style={{ cursor: "text" }}
                       onClick={() => startEdit(pm)}
                     >
-                      <span className="fw-semibold">{pm.name}</span>
-                      <span className="text-muted small">{pm.payment_type_display}{pm.last_four && ` ···· ${pm.last_four}`}</span>
+                      <span className="font-semibold">{pm.name}</span>
+                      <span className="text-muted text-sm">{pm.payment_type_display}{pm.last_four && ` ···· ${pm.last_four}`}</span>
                       {!pm.is_active && <span className="badge bg-secondary">Inactive</span>}
                     </div>
-                    <div className="d-flex align-items-center gap-2">
+                    <div className="flex items-center gap-2">
                       {deleteError[pm.id] && <small className="text-danger">{deleteError[pm.id]}</small>}
                       {deletingId === pm.id ? (
                         <>

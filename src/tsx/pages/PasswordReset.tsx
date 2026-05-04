@@ -47,10 +47,10 @@ export default function PasswordReset({ done: initialDone, errors: initialErrors
   if (done) {
     return (
       <div className="card shadow-sm">
-        <div className="card-body p-4 text-center">
-          <div className="mb-3" style={{ fontSize: "2rem" }}>✉</div>
-          <h1 className="h5 fw-semibold mb-2">Check your email</h1>
-          <p className="text-muted small mb-4">
+        <div className="card-body p-6 text-center">
+          <div className="mb-4" style={{ fontSize: "2rem" }}>✉</div>
+          <h1 className="font-semibold mb-2">Check your email</h1>
+          <p className="text-muted text-sm mb-6">
             If an account exists for that address, we&apos;ve sent password reset instructions.
           </p>
           <a
@@ -67,14 +67,14 @@ export default function PasswordReset({ done: initialDone, errors: initialErrors
 
   return (
     <div className="card shadow-sm">
-      <div className="card-body p-4">
-        <h1 className="h4 mb-1 fw-semibold">Reset password</h1>
-        <p className="text-muted small mb-4">Enter your email and we&apos;ll send reset instructions.</p>
+      <div className="card-body p-6">
+        <h1 className="mb-1 font-semibold">Reset password</h1>
+        <p className="text-muted text-sm mb-6">Enter your email and we&apos;ll send reset instructions.</p>
 
-        {errors.email && <div className="alert alert-danger py-2 small">{errors.email}</div>}
+        {errors.email && <div className="alert alert-danger py-2 text-sm">{errors.email}</div>}
 
         <form onSubmit={(e) => void submit(e)}>
-          <div className="mb-4">
+          <div className="mb-6">
             <label className="form-label">Email</label>
             <input
               type="email"
@@ -84,15 +84,15 @@ export default function PasswordReset({ done: initialDone, errors: initialErrors
               onChange={(e) => setEmail(e.target.value)}
             />
           </div>
-          <button className="btn btn-primary w-100" disabled={loading}>
+          <button className="btn btn-primary w-full" disabled={loading}>
             {loading ? "Sending…" : "Send reset link"}
           </button>
         </form>
 
-        <div className="text-center mt-3">
+        <div className="text-center mt-4">
           <a
             href="/accounts/login/"
-            className="small text-muted"
+            className="text-sm text-muted"
             onClick={(e) => { e.preventDefault(); router.visit("/accounts/login/"); }}
           >
             Back to sign in

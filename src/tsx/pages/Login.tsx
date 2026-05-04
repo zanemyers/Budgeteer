@@ -49,12 +49,12 @@ export default function Login({ errors: initialErrors, next }: Props) {
   return (
     <div className="card shadow-sm">
       <div className="card-body p-4">
-        <h1 className="h4 mb-4 fw-semibold">Sign in</h1>
+        <h1 className="mb-6 font-semibold">Sign in</h1>
 
-        {error && <div className="alert alert-danger py-2 small">{error}</div>}
+        {error && <div className="alert alert-danger py-2 text-sm">{error}</div>}
 
         <form onSubmit={(e) => void submit(e)}>
-          <div className="mb-3">
+          <div className="mb-4">
             <label className="form-label">Email</label>
             <input
               type="email"
@@ -65,10 +65,10 @@ export default function Login({ errors: initialErrors, next }: Props) {
               onChange={(e) => setEmail(e.target.value)}
             />
           </div>
-          <div className="mb-4">
-            <div className="d-flex justify-content-between align-items-center mb-1">
+          <div className="mb-6">
+            <div className="flex justify-between items-center mb-1">
               <label className="form-label mb-0">Password</label>
-              <a href="/accounts/password/reset/" className="small text-muted">
+              <a href="/accounts/password/reset/" className="text-sm text-muted">
                 Forgot password?
               </a>
             </div>
@@ -80,7 +80,7 @@ export default function Login({ errors: initialErrors, next }: Props) {
               onChange={(e) => setPassword(e.target.value)}
             />
           </div>
-          <button className="btn btn-primary w-100" disabled={loading}>
+          <button className="btn btn-primary w-full" disabled={loading}>
             {loading ? "Signing in…" : "Sign in"}
           </button>
         </form>

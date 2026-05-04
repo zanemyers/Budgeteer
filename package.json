@@ -5,8 +5,6 @@
     "dev": "bunx vite --config src/config/vite.config.mjs",
     "build": "bunx vite build --config src/config/vite.config.mjs",
     "preview": "bunx vite preview --config src/config/vite.config.mjs",
-    "lint-sass": "bunx stylelint --config src/config/stylelint.config.js ./src/scss/",
-    "format-sass": "bunx stylelint --config src/config/stylelint.config.js --fix 'src/**/*.{css,scss}'",
     "lint-js": "bunx eslint --config src/config/eslint.config.js ./src/",
     "format-js": "bunx eslint --config src/config/eslint.config.js --fix ./src/"
   },
@@ -17,18 +15,13 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.0",
-    "@popperjs/core": "^2.11.8",
-    "@types/react": "^18.3.12",
-    "@types/react-dom": "^18.3.1",
+    "@tailwindcss/vite": "^4.0.0",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^4.7.0",
-    "bootstrap": "^5.3.8",
     "eslint": "^10.2.1",
     "globals": "^17.5.0",
-    "sass": "~1.99",
-    "stylelint": "^17.9.0",
-    "stylelint-config-recess-order": "^7.7.0",
-    "stylelint-config-standard-scss": "^17.0.0",
-    "stylelint-scss": "^7.0.0",
+    "tailwindcss": "^4.0.0",
     "typescript": "^5.7.2",
     "vite": "^6.3.5"
   },
@@ -41,8 +34,5 @@
   "bugs": {
     "url": "https://github.com/epicserve/django-base-site/issues"
   },
-  "homepage": "https://github.com/epicserve/django-base-site#readme",
-  "overrides": {
-    "stylelint-order": "^7.0.1"
-  }
+  "homepage": "https://github.com/epicserve/django-base-site#readme"
 }

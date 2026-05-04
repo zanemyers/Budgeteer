@@ -167,11 +167,11 @@ export default function Categories({ budget_pk, categories: initialCategories }:
     }
   }
 
-  function renderSection(sectionCategories: CategoryType[], label: string, colorClass: string, wrapperClass = "col-md-6") {
+  function renderSection(sectionCategories: CategoryType[], label: string, colorClass: string, wrapperClass = "col-span-12 md:col-span-6") {
     const card = (
       <div className="card">
-        <div className={`card-header d-flex justify-content-between align-items-center bg-${colorClass} bg-opacity-10`}>
-          <span className={`small fw-bold text-${colorClass}`}>{label}</span>
+        <div className={`card-header flex justify-between items-center bg-${colorClass} bg-opacity-10`}>
+          <span className={`text-sm font-bold text-${colorClass}`}>{label}</span>
           <button
             className={`btn btn-outline-${colorClass} btn-sm py-0 px-2`}
             style={{ fontSize: "0.75rem" }}
@@ -181,14 +181,14 @@ export default function Categories({ budget_pk, categories: initialCategories }:
           </button>
         </div>
         {sectionCategories.length === 0 ? (
-          <div className="card-body text-muted small">No {label.toLowerCase()} categories yet.</div>
+          <div className="card-body text-muted text-sm">No {label.toLowerCase()} categories yet.</div>
         ) : (
           <ul className="list-group list-group-flush">
             {sectionCategories.map((cat) => (
-              <li key={cat.id} className="list-group-item d-flex justify-content-between align-items-center py-2">
+              <li key={cat.id} className="list-group-item flex justify-between items-center py-2">
                 {editingId === cat.id ? (
                   <input
-                    className="form-control form-control-sm me-2"
+                    className="form-control form-control-sm mr-2"
                     value={editName}
                     autoFocus
                     onChange={(e) => setEditName(e.target.value)}
@@ -203,7 +203,7 @@ export default function Categories({ budget_pk, categories: initialCategories }:
                     {cat.name}
                   </span>
                 )}
-                <div className="d-flex align-items-center gap-2">
+                <div className="flex items-center gap-2">
                   {deleteError[cat.id] && <small className="text-danger">{deleteError[cat.id]}</small>}
                   {deletingId === cat.id ? (
                     <>
@@ -220,28 +220,28 @@ export default function Categories({ budget_pk, categories: initialCategories }:
         )}
       </div>
     );
-    return wrapperClass ? <div className={wrapperClass}>{card}</div> : card;
+    return wrapperClass ? <div className={wrapperClass}>{card}</div> : <>{card}</>;
   }
 
   return (
     <div>
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h1 className="h3 mb-0">Categories</h1>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="mb-0">Categories</h1>
         <a href={`/budgets/${budget_pk}/`} className="btn btn-outline-secondary btn-sm">← Back to Budget</a>
       </div>
 
       {showForm && (
-        <div className="card mb-4">
+        <div className="card mb-6">
           <div className="card-body">
             <form onSubmit={(e) => void handleCreate(e)}>
-              <div className="row g-2 align-items-end">
-                <div className="col-auto">
+              <div className="flex flex-wrap gap-2 items-end">
+                <div className="w-auto">
                   <select className="form-select form-select-sm" value={newType} onChange={(e) => setNewType(e.target.value as "income" | "expense")}>
                     <option value="expense">Expense</option>
                     <option value="income">Income</option>
                   </select>
                 </div>
-                <div className="col">
+                <div className="min-w-0 flex-1">
                   <input
                     className="form-control form-control-sm"
                     placeholder="Category name"
@@ -251,26 +251,26 @@ export default function Categories({ budget_pk, categories: initialCategories }:
                     required
                   />
                 </div>
-                <div className="col-auto">
+                <div className="w-auto">
                   <button className="btn btn-primary btn-sm" disabled={saving}>Save</button>
-                  <button type="button" className="btn btn-outline-secondary btn-sm ms-2" onClick={() => setShowForm(false)}>Cancel</button>
+                  <button type="button" className="btn btn-outline-secondary btn-sm ml-2" onClick={() => setShowForm(false)}>Cancel</button>
                 </div>
               </div>
-              {formError && <div className="text-danger small mt-1">{formError}</div>}
+              {formError && <div className="text-danger text-sm mt-1">{formError}</div>}
             </form>
           </div>
         </div>
       )}
 
-      <div className="row g-4">
+      <div className="grid grid-cols-12 gap-6">
         {renderSection(expense, "Expense", "danger")}
-        <div className="col-md-6 d-flex flex-column gap-4">
+        <div className="col-span-12 md:col-span-6 flex flex-col gap-6">
           {renderSection(income, "Income", "success", "")}
 
           {/* Sinking Funds */}
           <div className="card">
-          <div className="card-header d-flex justify-content-between align-items-center bg-warning bg-opacity-10">
-            <span className="small fw-bold text-warning-emphasis">Sinking Funds</span>
+          <div className="card-header flex justify-between items-center bg-warning bg-opacity-10">
+            <span className="text-sm font-bold text-warning-emphasis">Sinking Funds</span>
             <button
               className="btn btn-outline-warning btn-sm py-0 px-2"
               style={{ fontSize: "0.75rem" }}
@@ -283,9 +283,9 @@ export default function Categories({ budget_pk, categories: initialCategories }:
           {showSinkingFundForm && (
             <div className="card-body border-bottom">
               <form onSubmit={(e) => void handleCreateSinkingFund(e)}>
-                <div className="row g-2 align-items-end">
-                  <div className="col-md-4">
-                    <label className="form-label small mb-1">Name</label>
+                <div className="grid grid-cols-12 gap-2 items-end">
+                  <div className="col-span-12 md:col-span-4">
+                    <label className="form-label text-sm mb-1">Name</label>
                     <input
                       className="form-control form-control-sm"
                       placeholder="e.g. Vacation, New Car"
@@ -295,8 +295,8 @@ export default function Categories({ budget_pk, categories: initialCategories }:
                       required
                     />
                   </div>
-                  <div className="col-md-3">
-                    <label className="form-label small mb-1">Target amount</label>
+                  <div className="col-span-12 md:col-span-3">
+                    <label className="form-label text-sm mb-1">Target amount</label>
                     <div className="input-group input-group-sm">
                       <span className="input-group-text">$</span>
                       <input
@@ -308,7 +308,7 @@ export default function Categories({ budget_pk, categories: initialCategories }:
                       />
                     </div>
                   </div>
-                  <div className="col-md-2 d-flex align-items-end pb-1">
+                  <div className="col-span-12 md:col-span-2 flex items-end pb-1">
                     <div className="form-check form-switch mb-0">
                       <input
                         className="form-check-input" type="checkbox" role="switch"
@@ -316,12 +316,12 @@ export default function Categories({ budget_pk, categories: initialCategories }:
                         checked={newSFOngoing}
                         onChange={(e) => setNewSFOngoing(e.target.checked)}
                       />
-                      <label className="form-check-label small" htmlFor="new-sf-ongoing">Ongoing</label>
+                      <label className="form-check-label text-sm" htmlFor="new-sf-ongoing">Ongoing</label>
                     </div>
                   </div>
                   {!newSFOngoing ? (
-                    <div className="col-md-2">
-                      <label className="form-label small mb-1">Due date</label>
+                    <div className="col-span-12 md:col-span-2">
+                      <label className="form-label text-sm mb-1">Due date</label>
                       <input
                         type="date" className="form-control form-control-sm"
                         value={newSFDueDate}
@@ -330,8 +330,8 @@ export default function Categories({ budget_pk, categories: initialCategories }:
                       />
                     </div>
                   ) : (
-                    <div className="col-md-2">
-                      <label className="form-label small mb-1">Monthly goal</label>
+                    <div className="col-span-12 md:col-span-2">
+                      <label className="form-label text-sm mb-1">Monthly goal</label>
                       <div className="input-group input-group-sm">
                         <span className="input-group-text">$</span>
                         <input
@@ -344,8 +344,8 @@ export default function Categories({ budget_pk, categories: initialCategories }:
                       </div>
                     </div>
                   )}
-                  <div className="col-md-2">
-                    <label className="form-label small mb-1">Already saved <span className="text-muted fw-normal">(optional)</span></label>
+                  <div className="col-span-12 md:col-span-2">
+                    <label className="form-label text-sm mb-1">Already saved <span className="text-muted font-normal">(optional)</span></label>
                     <div className="input-group input-group-sm">
                       <span className="input-group-text">$</span>
                       <input
@@ -356,18 +356,18 @@ export default function Categories({ budget_pk, categories: initialCategories }:
                       />
                     </div>
                   </div>
-                  <div className="col-md-2 d-flex gap-1 align-items-end">
+                  <div className="col-span-12 md:col-span-2 flex gap-1 items-end">
                     <button className="btn btn-primary btn-sm" disabled={saving}>Save</button>
                     <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => setShowSinkingFundForm(false)}>Cancel</button>
                   </div>
                 </div>
-                {sfFormError && <div className="text-danger small mt-1">{sfFormError}</div>}
+                {sfFormError && <div className="text-danger text-sm mt-1">{sfFormError}</div>}
               </form>
             </div>
           )}
 
           {sinkingFunds.length === 0 && !showSinkingFundForm ? (
-            <div className="card-body text-muted small">No sinking funds yet. Add one to save toward a goal.</div>
+            <div className="card-body text-muted text-sm">No sinking funds yet. Add one to save toward a goal.</div>
           ) : (
             <ul className="list-group list-group-flush">
               {sinkingFunds.map((cat) => {
@@ -376,22 +376,22 @@ export default function Categories({ budget_pk, categories: initialCategories }:
                 const pct = target > 0 ? Math.min((saved / target) * 100, 100) : 0;
                 const isEditing = editingSFId === cat.id;
                 return (
-                  <li key={cat.id} className="list-group-item py-2 px-3">
+                  <li key={cat.id} className="list-group-item py-2 px-4">
                     {isEditing ? (
                       <form onSubmit={(e) => void handleSFEdit(e)}>
-                        <div className="row g-2 align-items-end">
-                          <div className="col-md-4">
-                            <label className="form-label small mb-1">Name</label>
+                        <div className="grid grid-cols-12 gap-2 items-end">
+                          <div className="col-span-12 md:col-span-4">
+                            <label className="form-label text-sm mb-1">Name</label>
                             <input className="form-control form-control-sm" value={editSFName} onChange={(e) => setEditSFName(e.target.value)} required />
                           </div>
-                          <div className="col-md-3">
-                            <label className="form-label small mb-1">Target</label>
+                          <div className="col-span-12 md:col-span-3">
+                            <label className="form-label text-sm mb-1">Target</label>
                             <div className="input-group input-group-sm">
                               <span className="input-group-text">$</span>
                               <input type="number" className="form-control" min="0.01" step="0.01" value={editSFTarget} onChange={(e) => setEditSFTarget(e.target.value)} required />
                             </div>
                           </div>
-                          <div className="col-auto d-flex align-items-end pb-1">
+                          <div className="w-auto flex items-end pb-1">
                             <div className="form-check form-switch mb-0">
                               <input
                                 className="form-check-input" type="checkbox" role="switch"
@@ -399,54 +399,54 @@ export default function Categories({ budget_pk, categories: initialCategories }:
                                 checked={editSFOngoing}
                                 onChange={(e) => setEditSFOngoing(e.target.checked)}
                               />
-                              <label className="form-check-label small" htmlFor={`edit-sf-ongoing-${cat.id}`}>Ongoing</label>
+                              <label className="form-check-label text-sm" htmlFor={`edit-sf-ongoing-${cat.id}`}>Ongoing</label>
                             </div>
                           </div>
                           {!editSFOngoing ? (
-                            <div className="col-md-3">
-                              <label className="form-label small mb-1">Due date</label>
+                            <div className="col-span-12 md:col-span-3">
+                              <label className="form-label text-sm mb-1">Due date</label>
                               <input type="date" className="form-control form-control-sm" value={editSFDueDate} onChange={(e) => setEditSFDueDate(e.target.value)} required={!editSFOngoing} />
                             </div>
                           ) : (
-                            <div className="col-md-3">
-                              <label className="form-label small mb-1">Monthly goal</label>
+                            <div className="col-span-12 md:col-span-3">
+                              <label className="form-label text-sm mb-1">Monthly goal</label>
                               <div className="input-group input-group-sm">
                                 <span className="input-group-text">$</span>
                                 <input type="number" className="form-control" min="0" step="0.01" placeholder="100" value={editSFMonthlyGoal} onChange={(e) => setEditSFMonthlyGoal(e.target.value)} required={editSFOngoing} />
                               </div>
                             </div>
                           )}
-                          <div className="col-12 mt-1">
-                            <div className="row g-2 align-items-end">
-                              <div className="col-md-3">
-                                <label className="form-label small mb-1">Add to balance <span className="text-muted fw-normal">(optional)</span></label>
+                          <div className="col-span-12 mt-1">
+                            <div className="grid grid-cols-12 gap-2 items-end">
+                              <div className="col-span-12 md:col-span-3">
+                                <label className="form-label text-sm mb-1">Add to balance <span className="text-muted font-normal">(optional)</span></label>
                                 <div className="input-group input-group-sm">
                                   <span className="input-group-text">$</span>
                                   <input type="number" className="form-control" min="0.01" step="0.01" placeholder="0.00" value={editSFAddAmount} onChange={(e) => setEditSFAddAmount(e.target.value)} />
                                 </div>
                               </div>
                               {editSFAddAmount && parseFloat(editSFAddAmount) > 0 && (
-                                <div className="col-md-5">
-                                  <label className="form-label small mb-1">Description</label>
+                                <div className="col-span-12 md:col-span-5">
+                                  <label className="form-label text-sm mb-1">Description</label>
                                   <input className="form-control form-control-sm" placeholder="e.g. Initial deposit" value={editSFAddDesc} onChange={(e) => setEditSFAddDesc(e.target.value)} />
                                 </div>
                               )}
                             </div>
                           </div>
-                          <div className="col-12 d-flex gap-1 mt-1">
+                          <div className="col-span-12 flex gap-1 mt-1">
                             <button className="btn btn-primary btn-sm" disabled={editSFSaving}>Save</button>
                             <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => setEditingSFId(null)}>Cancel</button>
                           </div>
                         </div>
                       </form>
                     ) : (
-                      <div className="d-flex justify-content-between align-items-start">
-                        <div className="flex-grow-1 me-3">
-                          <div className="fw-medium">
+                      <div className="flex justify-between items-start">
+                        <div className="grow mr-4">
+                          <div className="font-medium">
                             {cat.name}
-                            {cat.sinking_fund_ongoing && <span className="badge bg-secondary ms-2" style={{ fontSize: "0.65rem" }}>ongoing</span>}
+                            {cat.sinking_fund_ongoing && <span className="badge bg-secondary ml-2" style={{ fontSize: "0.65rem" }}>ongoing</span>}
                           </div>
-                          <div className="text-muted small">
+                          <div className="text-muted text-sm">
                             ${saved.toFixed(2)} saved of ${target.toFixed(2)}
                             {cat.sinking_fund_ongoing && cat.sinking_fund_monthly_goal && parseFloat(cat.sinking_fund_monthly_goal) > 0
                               ? <> · ${parseFloat(cat.sinking_fund_monthly_goal).toFixed(2)}/mo goal</>
@@ -459,7 +459,7 @@ export default function Categories({ budget_pk, categories: initialCategories }:
                             <div className={`progress-bar ${pct >= 100 ? "bg-success" : "bg-warning"}`} style={{ width: `${pct}%` }} />
                           </div>
                         </div>
-                        <div className="d-flex align-items-center gap-2 flex-shrink-0">
+                        <div className="flex items-center gap-2 shrink-0">
                           {deleteError[cat.id] && <small className="text-danger">{deleteError[cat.id]}</small>}
                           {deletingId === cat.id ? (
                             <>

@@ -83,11 +83,11 @@ export default function SinkingFunds({ budget_pk, month, overview, categories, p
     const barColor = isComplete ? "bg-success" : isOngoing ? "bg-info" : "bg-warning";
 
     return (
-      <div key={cat.id} className="px-3 py-2">
-        <div className="d-flex justify-content-between align-items-start gap-3">
-          <div className="flex-grow-1" style={{ minWidth: 0 }}>
-            <div className="d-flex align-items-center gap-1 mb-1">
-              <a href={`/budgets/${budget_pk}/transactions/?month=${month}&category=${cat.id}`} className="text-decoration-none text-body fw-medium small">
+      <div key={cat.id} className="px-4 py-2">
+        <div className="flex justify-between items-start gap-4">
+          <div className="grow" style={{ minWidth: 0 }}>
+            <div className="flex items-center gap-1 mb-1">
+              <a href={`/budgets/${budget_pk}/transactions/?month=${month}&category=${cat.id}`} className="no-underline text-body font-medium text-sm">
                 {cat.name}
               </a>
               {isComplete && <span className="text-success" style={{ fontSize: "0.75rem" }}>✔</span>}
@@ -96,10 +96,10 @@ export default function SinkingFunds({ budget_pk, month, overview, categories, p
               <div className={`progress-bar ${barColor}`} style={{ width: `${pct}%`, borderRadius: 3 }} />
             </div>
           </div>
-          <div className="text-end flex-shrink-0" style={{ width: 160 }}>
-            <div className="small fw-medium">{fmt(String(saved), symbol)} <span className="text-muted fw-normal">/ {fmt(String(target), symbol)}</span></div>
+          <div className="text-right shrink-0" style={{ width: 160 }}>
+            <div className="text-sm font-medium">{fmt(String(saved), symbol)} <span className="text-muted font-normal">/ {fmt(String(target), symbol)}</span></div>
             {showMonthly && (
-              <div className="small" style={{ color: "var(--bs-warning-text-emphasis, #997404)" }}>
+              <div className="text-sm" style={{ color: "var(--bs-warning-text-emphasis, #997404)" }}>
                 {fmt(String(monthly), symbol)}/mo
               </div>
             )}
@@ -121,31 +121,31 @@ export default function SinkingFunds({ budget_pk, month, overview, categories, p
 
   return (
     <div>
-      <div className="d-flex align-items-center justify-content-between mb-4">
+      <div className="flex items-center justify-between mb-6">
         <h4 className="mb-0">Sinking Funds</h4>
-        <div className="d-flex align-items-center gap-2">
+        <div className="flex items-center gap-2">
           <button className="btn btn-outline-secondary btn-sm" onClick={() => navigateMonth(prevMonth(month))}>&laquo;</button>
-          <span className="small text-muted">{formatMonth(month)}</span>
+          <span className="text-sm text-muted">{formatMonth(month)}</span>
           <button className="btn btn-outline-secondary btn-sm" onClick={() => navigateMonth(nextMonth(month))} disabled={isCurrentMonth}>&raquo;</button>
         </div>
       </div>
 
       {sinkingFunds.length === 0 ? (
-        <div className="text-muted text-center py-5">
+        <div className="text-muted text-center py-12">
           No sinking funds yet. <a href={`/budgets/${budget_pk}/categories/`}>Add one in Categories.</a>
         </div>
       ) : (
-        <div className="row g-3">
-          <div className="col-md-8">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+          <div className="md:col-span-8">
             <div className="card">
-              <div className="card-header bg-warning bg-opacity-10 d-flex justify-content-between align-items-center">
-                <span className="text-warning-emphasis small fw-bold">All Funds</span>
-                <div className="d-flex gap-2">
+              <div className="card-header bg-warning bg-opacity-10 flex justify-between items-center">
+                <span className="text-warning-emphasis text-sm font-bold">All Funds</span>
+                <div className="flex gap-2">
                   <button className="btn btn-outline-success btn-sm py-0 px-2" style={{ fontSize: "0.75rem" }} onClick={() => setAddTransactionType("income")}>+ Deposit</button>
                   <button className="btn btn-outline-danger btn-sm py-0 px-2" style={{ fontSize: "0.75rem" }} onClick={() => setAddTransactionType("expense")}>− Spend</button>
                 </div>
               </div>
-              <div className="d-flex flex-column" style={{ gap: "1px", background: "var(--bs-border-color)" }}>
+              <div className="flex flex-col" style={{ gap: "1px", background: "var(--bs-border-color)" }}>
                 {sinkingFunds.map((cat) => (
                   <div key={cat.id} style={{ background: "var(--bs-card-bg, var(--bs-body-bg))" }}>
                     {renderSinkingFundCard(cat)}
@@ -154,21 +154,21 @@ export default function SinkingFunds({ budget_pk, month, overview, categories, p
               </div>
             </div>
           </div>
-          <div className="col-md-4">
+          <div className="md:col-span-4">
             <div className="card">
               <div className="card-body py-2">
-                <div className="d-flex justify-content-between align-items-center py-1">
-                  <span className="small text-muted">Total saved</span>
-                  <span className="fw-semibold text-success">{fmt(totalSaved, symbol)}</span>
+                <div className="flex justify-between items-center py-1">
+                  <span className="text-sm text-muted">Total saved</span>
+                  <span className="font-semibold text-success">{fmt(totalSaved, symbol)}</span>
                 </div>
-                <div className="d-flex justify-content-between align-items-center py-1">
-                  <span className="small text-muted">Total target</span>
-                  <span className="fw-semibold">{fmt(totalTarget, symbol)}</span>
+                <div className="flex justify-between items-center py-1">
+                  <span className="text-sm text-muted">Total target</span>
+                  <span className="font-semibold">{fmt(totalTarget, symbol)}</span>
                 </div>
                 <hr className="my-1" />
-                <div className="d-flex justify-content-between align-items-center py-1">
-                  <span className="small text-muted">Saved to funds {formatMonth(month)}</span>
-                  <span className="fw-semibold text-warning">{fmt(overview.transfers_total, symbol)}</span>
+                <div className="flex justify-between items-center py-1">
+                  <span className="text-sm text-muted">Saved to funds {formatMonth(month)}</span>
+                  <span className="font-semibold text-warning">{fmt(overview.transfers_total, symbol)}</span>
                 </div>
               </div>
             </div>

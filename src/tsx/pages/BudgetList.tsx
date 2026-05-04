@@ -122,8 +122,8 @@ export default function BudgetList({ budgets: initial }: Props) {
 
   return (
     <div className="py-2" style={{ maxWidth: 640 }}>
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h1 className="h3 mb-0">My Budgets</h1>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="mb-0">My Budgets</h1>
         {newName === null && (
           <button className="btn btn-primary" onClick={() => setNewName("")}>
             New Budget
@@ -132,10 +132,10 @@ export default function BudgetList({ budgets: initial }: Props) {
       </div>
 
       {newName !== null && (
-        <div className="card mb-3">
-          <div className="card-body d-flex flex-column gap-3">
+        <div className="card mb-4">
+          <div className="card-body flex flex-col gap-4">
             <div>
-              <label className="form-label fw-semibold">Budget name</label>
+              <label className="form-label font-semibold">Budget name</label>
               <input
                 type="text"
                 className="form-control"
@@ -151,7 +151,7 @@ export default function BudgetList({ budgets: initial }: Props) {
             </div>
             {budgets.length > 0 && (
               <div>
-                <label className="form-label fw-semibold">Copy from existing budget <span className="text-muted fw-normal">(optional)</span></label>
+                <label className="form-label font-semibold">Copy from existing budget <span className="text-muted font-normal">(optional)</span></label>
                 <select
                   className="form-select"
                   value={copyFrom}
@@ -163,7 +163,7 @@ export default function BudgetList({ budgets: initial }: Props) {
                   ))}
                 </select>
                 {copyFrom && (
-                  <div className="d-flex flex-column gap-1 mt-2">
+                  <div className="flex flex-col gap-1 mt-2">
                     {([
                       { key: "categories", label: "Category names (no amounts)", value: copyCategories, set: setCopyCategories },
                       { key: "payment_methods", label: "Payment methods", value: copyPaymentMethods, set: setCopyPaymentMethods },
@@ -177,14 +177,14 @@ export default function BudgetList({ budgets: initial }: Props) {
                           checked={value}
                           onChange={(e) => set(e.target.checked)}
                         />
-                        <label className="form-check-label small" htmlFor={`copy-${key}`}>{label}</label>
+                        <label className="form-check-label text-sm" htmlFor={`copy-${key}`}>{label}</label>
                       </div>
                     ))}
                   </div>
                 )}
               </div>
             )}
-            <div className="d-flex gap-2">
+            <div className="flex gap-2">
               <button className="btn btn-primary" disabled={creating} onClick={() => void createBudget()}>
                 {creating ? "Creating…" : "Create"}
               </button>
@@ -197,8 +197,8 @@ export default function BudgetList({ budgets: initial }: Props) {
       )}
 
       {budgets.length === 0 && newName === null ? (
-        <div className="text-center py-5 text-muted">
-          <p className="mb-3">You don&apos;t have any budgets yet.</p>
+        <div className="text-center py-12 text-muted">
+          <p className="mb-4">You don&apos;t have any budgets yet.</p>
           <button className="btn btn-primary" onClick={() => setNewName("")}>
             Create your first budget
           </button>
@@ -213,9 +213,9 @@ export default function BudgetList({ budgets: initial }: Props) {
             const isSettingDefault = settingDefaultId === budget.id;
 
             return (
-              <div key={budget.id} className="list-group-item d-flex align-items-center gap-3">
+              <div key={budget.id} className="list-group-item flex items-center gap-4">
                 {/* Name / editable input */}
-                <div className="flex-grow-1 min-w-0">
+                <div className="grow min-w-0">
                   {isEditing ? (
                     <input
                       className="form-control form-control-sm"
@@ -237,10 +237,10 @@ export default function BudgetList({ budgets: initial }: Props) {
                     />
                   ) : (
                     <>
-                      <div className="d-flex align-items-center gap-2">
+                      <div className="flex items-center gap-2">
                         <a
                           href={`/budgets/${budget.id}/`}
-                          className="fw-semibold text-decoration-none text-body"
+                          className="font-semibold no-underline text-body"
                           onClick={(e) => {
                             e.preventDefault();
                             router.visit(`/budgets/${budget.id}/`);
@@ -252,17 +252,17 @@ export default function BudgetList({ budgets: initial }: Props) {
                           <span className="badge bg-success" style={{ fontSize: "0.7rem" }}>Default</span>
                         )}
                       </div>
-                      <span className="text-muted small">Created {fmtDate(budget.created_at)}</span>
+                      <span className="text-muted text-sm">Created {fmtDate(budget.created_at)}</span>
                     </>
                   )}
                 </div>
 
                 {/* Actions */}
                 {budget.is_owner && (
-                  <div className="d-flex align-items-center gap-2 flex-shrink-0">
+                  <div className="flex items-center gap-2 shrink-0">
                     {isConfirming ? (
                       <>
-                        <span className="small text-muted">Delete?</span>
+                        <span className="text-sm text-muted">Delete?</span>
                         <button
                           className="btn btn-danger btn-sm"
                           disabled={isDeleting}

@@ -48,10 +48,10 @@ export default function PasswordResetConfirm({ done, token_fail, errors: initial
   if (done) {
     return (
       <div className="card shadow-sm">
-        <div className="card-body p-4 text-center">
-          <div className="mb-3" style={{ fontSize: "2rem" }}>✓</div>
-          <h1 className="h5 fw-semibold mb-2">Password changed</h1>
-          <p className="text-muted small mb-4">Your password has been updated. You can now sign in.</p>
+        <div className="card-body p-6 text-center">
+          <div className="mb-4" style={{ fontSize: "2rem" }}>✓</div>
+          <h1 className="font-semibold mb-2">Password changed</h1>
+          <p className="text-muted text-sm mb-6">Your password has been updated. You can now sign in.</p>
           <a
             href="/accounts/login/"
             className="btn btn-primary"
@@ -67,9 +67,9 @@ export default function PasswordResetConfirm({ done, token_fail, errors: initial
   if (token_fail) {
     return (
       <div className="card shadow-sm">
-        <div className="card-body p-4 text-center">
-          <h1 className="h5 fw-semibold mb-2">Link expired</h1>
-          <p className="text-muted small mb-4">
+        <div className="card-body p-6 text-center">
+          <h1 className="font-semibold mb-2">Link expired</h1>
+          <p className="text-muted text-sm mb-6">
             This password reset link is invalid or has already been used.
           </p>
           <a
@@ -88,14 +88,14 @@ export default function PasswordResetConfirm({ done, token_fail, errors: initial
 
   return (
     <div className="card shadow-sm">
-      <div className="card-body p-4">
-        <h1 className="h4 mb-1 fw-semibold">New password</h1>
-        <p className="text-muted small mb-4">Choose a new password for your account.</p>
+      <div className="card-body p-6">
+        <h1 className="mb-1 font-semibold">New password</h1>
+        <p className="text-muted text-sm mb-6">Choose a new password for your account.</p>
 
-        {error && <div className="alert alert-danger py-2 small">{error}</div>}
+        {error && <div className="alert alert-danger py-2 text-sm">{error}</div>}
 
         <form onSubmit={(e) => void submit(e)}>
-          <div className="mb-3">
+          <div className="mb-4">
             <label className="form-label">New password</label>
             <input
               type="password"
@@ -106,7 +106,7 @@ export default function PasswordResetConfirm({ done, token_fail, errors: initial
               onChange={(e) => setPassword1(e.target.value)}
             />
           </div>
-          <div className="mb-4">
+          <div className="mb-6">
             <label className="form-label">Confirm new password</label>
             <input
               type="password"
@@ -116,7 +116,7 @@ export default function PasswordResetConfirm({ done, token_fail, errors: initial
               onChange={(e) => setPassword2(e.target.value)}
             />
           </div>
-          <button className="btn btn-primary w-100" disabled={loading}>
+          <button className="btn btn-primary w-full" disabled={loading}>
             {loading ? "Saving…" : "Set new password"}
           </button>
         </form>

@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 {% load vite %}
 
-<html lang="en" class="h-100">
+<html lang="en" class="h-full">
   <head>
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
@@ -17,8 +17,19 @@
       </title>
     {% endblock title_tag %}
 
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&display=swap" rel="stylesheet">
+    <script>
+      (function () {
+        var t = localStorage.getItem("theme") || "auto";
+        var e = t === "auto" ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : t;
+        if (e === "dark") document.documentElement.classList.add("dark");
+      })();
+    </script>
+
     {% block style %}
-      {% vite_asset 'js/main.css' %}
+      {% vite_asset 'css/main.css' %}
     {% endblock style %}
 
     {% block script %}
@@ -26,33 +37,18 @@
 
     {% include "blocks/google-analytics.html" %}
   </head>
-  <body class="h-100">
-    <div class="d-flex h-100">
+  <body class="h-full">
+    <div class="flex h-full">
       {% block base_header %}
         {% include "blocks/nav.html" %}
       {% endblock base_header %}
 
-      <div class="d-flex flex-column flex-grow-1 overflow-hidden">
-        <header class="d-flex d-lg-none align-items-center border-bottom px-3 py-2 gap-2">
-          <button class="btn btn-sm p-1"
-                  type="button"
-                  data-bs-toggle="offcanvas"
-                  data-bs-target="#sidebarNav"
-                  aria-controls="sidebarNav"
-                  aria-label="Toggle navigation">
-            <span class="navbar-toggler-icon"></span>
-          </button>
-          <a class="navbar-brand mb-0 fw-semibold" href="/">{{ SITE_NAME }}</a>
-        </header>
-
-        <main class="flex-grow-1 p-4 overflow-y-auto {% block content_class %}{% endblock content_class %}">
+      <div class="flex flex-col grow overflow-hidden">
+        <main class="grow p-4 overflow-y-auto {% block content_class %}{% endblock content_class %}">
           {% if messages %}
             <div id="flash-message-container">
               {% for message in messages %}
-                <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-                  {{ message }}
-                  <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                </div>
+                <div class="alert alert-{{ message.tags }}" role="alert">{{ message }}</div>
               {% endfor %}
             </div>
           {% endif %}
@@ -60,15 +56,14 @@
           {% endblock content %}
         </main>
 
-        <footer class="footer container-fluid border-top pt-2 pb-2">
-          <p class="small text-secondary mb-0">© {{ SITE_NAME }} {% now "Y" %}</p>
+        <footer class="footer border-top px-4 py-2">
+          <p class="text-sm text-secondary mb-0">© {{ SITE_NAME }} {% now "Y" %}</p>
         </footer>
       </div>
     </div>
 
     {% block bottom_script %}
       {% vite_hmr_client %}
-      {% vite_asset 'js/main.js' %}
     {% endblock bottom_script %}
   </body>
 </html>
