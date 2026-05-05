@@ -1,7 +1,5 @@
 # CHANGELOG
 
-## (Version #) - (Date)
-
 ## 2026-03-05
 
 ### Added
@@ -40,7 +38,6 @@
 ### Fixed
 
 * Fixed jumbotron button overflow on mobile devices
-* Fixed start_new_project script to work on Linux and enhanced CI verification
 
 
 ## 2025-12-19
@@ -50,10 +47,3 @@
 * Switched from MyPy to Ty for Python type checking. Ty is a fast, modern type checker from Astral that provides significantly better performance than MyPy.
 
 
-## 2025-06-06
-
-### Added
-
-### Changed
-
-### Removed

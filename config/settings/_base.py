@@ -2,10 +2,10 @@
 Django settings for config project.
 
 For more information on this file, see
-https://docs.djangoproject.com/en/4.2/topics/settings/
+https://docs.djangoproject.com/en/6.0/topics/settings/
 
 For the full list of settings and their values, see
-https://docs.djangoproject.com/en/4.2/ref/settings/
+https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 import contextlib
@@ -24,7 +24,7 @@ if READ_DOT_ENV_FILE is True:
     env.read_env(str(BASE_DIR.joinpath(".env")))
 
 # Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
+# See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = env("SECRET_KEY")
@@ -110,11 +110,11 @@ DATABASES = {
 }
 
 # Custom User Model
-# https://docs.djangoproject.com/en/4.2/topics/auth/customizing/#substituting-a-custom-user-model
+# https://docs.djangoproject.com/en/6.0/topics/auth/customizing/#substituting-a-custom-user-model
 AUTH_USER_MODEL = "accounts.User"
 
 # Password validation
-# https://docs.djangoproject.com/en/4.2/ref/settings/#auth-password-validators
+# https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -133,7 +133,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 
 # Internationalization
-# https://docs.djangoproject.com/en/4.2/topics/i18n/
+# https://docs.djangoproject.com/en/6.0/topics/i18n/
 
 LANGUAGE_CODE = "en-us"
 
@@ -146,7 +146,7 @@ USE_TZ = True
 
 
 # Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/4.2/howto/static-files/
+# https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATICFILES_FINDERS = (
     "django.contrib.staticfiles.finders.FileSystemFinder",
@@ -175,7 +175,12 @@ MEDIA_S3_ENDPOINT_URL = env("MEDIA_S3_ENDPOINT_URL", default="")
 MEDIA_S3_URL_ENDPOINT_URL = env("MEDIA_S3_URL_ENDPOINT_URL", default="")
 MEDIA_S3_BUCKET_NAME = env("MEDIA_S3_BUCKET_NAME", default="")
 
+PUBLIC_ROOT = BASE_DIR.joinpath("public")
+STATIC_ROOT = BASE_DIR.joinpath("collected_static")
+STATICFILES_DIRS = [str(PUBLIC_ROOT.joinpath("static"))]
+
 if "s3boto3" in DEFAULT_FILE_STORAGE_BACKEND.lower():
+    # MinIO locally, real S3 in prod. URL generation comes from the storage backend.
     STORAGES["default"]["OPTIONS"] = {
         "access_key": MEDIA_S3_ACCESS_KEY,
         "secret_key": MEDIA_S3_SECRET_KEY,
@@ -189,6 +194,7 @@ if "s3boto3" in DEFAULT_FILE_STORAGE_BACKEND.lower():
     if MEDIA_S3_URL_ENDPOINT_URL:
         STORAGES["default"]["BACKEND"] = "apps.base.storage.S3MediaStorage"
         STORAGES["default"]["OPTIONS"]["url_endpoint_url"] = MEDIA_S3_URL_ENDPOINT_URL
+    STATIC_URL = "/public/static/"
 
 elif DEFAULT_FILE_STORAGE_BACKEND.endswith("MediaS3Storage"):
     STORAGES["staticfiles"]["BACKEND"] = env("STATICFILES_STORAGE")
@@ -199,28 +205,17 @@ elif DEFAULT_FILE_STORAGE_BACKEND.endswith("MediaS3Storage"):
     AWS_S3_OBJECT_PARAMETERS = {"CacheControl": "max-age=86400"}
     STATIC_URL = f"https://{AWS_S3_CUSTOM_DOMAIN}/static/"
     MEDIA_URL = f"https://{AWS_S3_CUSTOM_DOMAIN}/media/"
-    STATICFILES_DIRS = [str(BASE_DIR.joinpath("public", "static"))]
 
 else:
-    # Local filesystem storage
-    PUBLIC_ROOT = BASE_DIR.joinpath("public")
-    STATIC_ROOT = BASE_DIR.joinpath("collected_static")
+    # Local filesystem storage fallback.
     MEDIA_ROOT = PUBLIC_ROOT.joinpath("media")
-    PUBLIC_STATIC = PUBLIC_ROOT.joinpath("static")
-    STATICFILES_DIRS = [str(PUBLIC_STATIC)]
     MEDIA_URL = "/public/media/"
-    STATIC_URL = "/public/static/"
-
-if "s3boto3" in DEFAULT_FILE_STORAGE_BACKEND.lower():
-    PUBLIC_ROOT = BASE_DIR.joinpath("public")
-    STATIC_ROOT = BASE_DIR.joinpath("collected_static")
-    STATICFILES_DIRS = [str(BASE_DIR.joinpath("public", "static"))]
     STATIC_URL = "/public/static/"
 
 EXCHANGERATE_API_KEY = env("EXCHANGERATE_API_KEY", default="")
 
 # Default primary key field type
-# https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
+# https://docs.djangoproject.com/en/6.0/ref/settings/#default-auto-field
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # CACHE SETTINGS
@@ -250,9 +245,6 @@ DJANGO_VITE = {
     }
 }
 
-CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
-CRISPY_TEMPLATE_PACK = "bootstrap5"
-
 SESSION_ENGINE = "django.contrib.sessions.backends.cache"
 
 SITE_ID = 1
@@ -262,7 +254,6 @@ SITE_NAME = "Budgeteer"
 if DEBUG is True:
     INSTALLED_APPS += ["debug_toolbar"]
     MIDDLEWARE += ["debug_toolbar.middleware.DebugToolbarMiddleware"]
-    DEBUG_TOOLBAR_CONFIG = {"INTERCEPT_REDIRECTS": False}
 
 # ALLAUTH SETTINGS (https://django-allauth.readthedocs.io/en/latest/configuration.html)
 AUTHENTICATION_BACKENDS = ["allauth.account.auth_backends.AuthenticationBackend"]
@@ -359,13 +350,3 @@ MAINTENANCE_MODE_STATE_BACKEND = "maintenance_mode.backends.CacheBackend"
 MAINTENANCE_MODE_STATE_BACKEND_FALLBACK_VALUE = True
 
 VITE_DEV_MODE = env.bool("VITE_DEV_MODE", default=DEBUG)
-
-# django-vite settings
-# If using HMR (hot module replacement)
-DJANGO_VITE = {
-    "default": {
-        "dev_mode": DEBUG,
-        "dev_server_host": env.str("DJANGO_VITE_DEV_SERVER_HOST", default="localhost"),
-        "dev_server_port": env.int("DJANGO_VITE_DEV_SERVER_PORT", default=5173),
-    }
-}

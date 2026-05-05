@@ -17,7 +17,7 @@ All commands run inside Docker containers by default. Override with `PYTHON_CMD_
 - `just clean` - Remove build artifacts, caches, coverage data
 
 **Code Quality:**
-- `just format` - Format all code (Python with Ruff, JS/TS with ESLint, HTML with djLint). Note: `format_sass` / `lint_sass` targets in `config/base.just` are vestigial — there is no SCSS in the project anymore.
+- `just format` - Format all code (Python with Ruff, JS/TS with ESLint, CSS with Stylelint, HTML with djLint)
 - `just lint` - Lint everything (includes type checking with ty)
 - `just pre_commit` - Run format, lint, and test pipeline
 
@@ -107,9 +107,9 @@ src/tsx/
   components/           # Shared components: ThemeToggle, TransactionModal, LoadingSpinner
 src/css/
   main.css              # Tailwind v4 entry + hand-rolled utility classes
-src/config/
-  vite.config.mjs       # Vite config; entries are css/main.css and tsx/main.tsx
 ```
+
+Frontend tool configs (`vite.config.mjs`, `tsconfig.json`, `biome.json`, `stylelint.config.js`) all live at the repo root — auto-discovery is the path of least resistance for IDEs and the tools themselves.
 
 Styling uses Tailwind CSS v4 via `@tailwindcss/vite`. `src/css/main.css` starts with `@import "tailwindcss"` and a `@custom-variant dark (&:where(.dark, .dark *))` declaration, then defines a set of Bootstrap-shaped utility classes (`.btn`, `.btn-primary`, `.card`, `.form-control`, `.table`, `.modal`, `.sidebar`, etc.) that the JSX consumes. When adding new UI, prefer Tailwind utilities directly; only extend `main.css` if you need a class that's reused across many components.
 
@@ -131,11 +131,10 @@ Settings are split in `config/settings/` (base, local, production, test_runner).
 
 - pytest + pytest-django; settings module: `config.settings.test_runner`
 - `model-bakery` and `django-test-plus` are installed (dev deps) but not yet adopted in the suite
-- Coverage config: `config/coverage.ini`
+- Coverage config: `[tool.coverage.*]` sections in `pyproject.toml`
 
 ## Code Standards
 
 - **Python**: Ruff (format + lint), type-checked with ty; 120-char line length
-- **JavaScript/TypeScript**: ESLint (config in `src/config/eslint.config.js`); npm scripts call `bunx` (project switched from npm to bun)
-- **CSS**: Tailwind v4; no Stylelint, no SCSS
+- **JavaScript/TypeScript/CSS**: Biome (`biome.json`) handles all three. CSS parser is configured with `tailwindDirectives: true` for Tailwind v4 at-rules. `bun run lint` lints; `bun run format` runs `biome check --write` (lint + format with fixes).
 - **HTML**: djLint; 120-char line length, 2-space indent

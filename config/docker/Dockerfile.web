@@ -70,17 +70,17 @@ CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
 # ------------------------------------------------------------
 # STAGE 3: Javascript assets layer
 # ------------------------------------------------------------
-FROM node:25.9 AS js_assets
+FROM oven/bun:1 AS js_assets
 
 WORKDIR /srv/app
 
-COPY package.json package-lock.json ./
+COPY package.json bun.lock vite.config.mjs tsconfig.json ./
 COPY src src
 
-# Install Node packages
-RUN --mount=type=cache,target=/root/.npm,id=budgeteer-npm \
-    npm ci \
-    && npm run build \
+# Install Node packages and build the frontend
+RUN --mount=type=cache,target=/root/.bun/install/cache,id=budgeteer-bun \
+    bun install --frozen-lockfile \
+    && bun run build \
     && ls -la public/static/dist/
 
 

@@ -2,11 +2,11 @@
   "name": "budgeteer",
   "description": "Budgeteer",
   "scripts": {
-    "dev": "bunx vite --config src/config/vite.config.mjs",
-    "build": "bunx vite build --config src/config/vite.config.mjs",
-    "preview": "bunx vite preview --config src/config/vite.config.mjs",
-    "lint-js": "bunx eslint --config src/config/eslint.config.js ./src/",
-    "format-js": "bunx eslint --config src/config/eslint.config.js --fix ./src/"
+    "dev": "bunx vite",
+    "build": "bunx vite build",
+    "preview": "bunx vite preview",
+    "lint": "bunx biome lint ./src",
+    "format": "bunx biome check --write ./src"
   },
   "dependencies": {
     "@inertiajs/react": "^3.0.3",
@@ -14,25 +14,14 @@
     "react-dom": "^19.2.5"
   },
   "devDependencies": {
-    "@eslint/js": "^10.0.0",
+    "@biomejs/biome": "^2",
     "@tailwindcss/vite": "^4.0.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^4.7.0",
-    "eslint": "^10.2.1",
-    "globals": "^17.5.0",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.7.2",
     "vite": "^6.3.5"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/epicserve/django-base-site.git"
-  },
-  "author": "Brent O'Connor",
-  "license": "MIT",
-  "bugs": {
-    "url": "https://github.com/epicserve/django-base-site/issues"
-  },
-  "homepage": "https://github.com/epicserve/django-base-site#readme"
+  "license": "MIT"
 }

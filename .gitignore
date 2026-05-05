@@ -19,7 +19,7 @@ latest.dump
 docs_site/
 
 # Local env / secrets
-.env*
+.env
 
 # Logs
 *.log

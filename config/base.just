@@ -31,7 +31,7 @@ reset := `tput -Txterm sgr0`
 
 # Build frontend assets
 @build_frontend:
-    {{ node_cmd_prefix }} npm run build
+    {{ node_cmd_prefix }} bun run build
     just collectstatic
 
 # Remove build files, python cache files and test coverage data
@@ -106,17 +106,17 @@ db_restore dump_file="":
     docker compose exec -T db pg_restore -d ${DATABASE_URL} --no-owner --no-privileges < "${DUMP_FILE}"
 
 # Format all code
-@format: format_py format_js format_just format_sass format_html
+@format: format_py format_frontend format_just format_html
 
 # Format HTML
 @format_html:
     just _start_msg "Formatting HTML using djLint"
     {{ python_cmd_prefix }} djlint . --reformat --quiet
 
-# Format Javascript code
-@format_js:
-    just _start_msg "Formatting Javascript code using eslint"
-    {{ node_cmd_prefix }} npm run format-js
+# Format frontend code (JS/TS/CSS) with Biome
+@format_frontend:
+    just _start_msg "Formatting frontend code using Biome"
+    {{ node_cmd_prefix }} bun run format
 
 # Format the justfile
 @format_just:
@@ -129,13 +129,8 @@ db_restore dump_file="":
     {{ python_cmd_prefix }} ruff format
     {{ python_cmd_prefix }} ruff check --fix
 
-# Format SASS/CSS code
-@format_sass:
-    just _start_msg "Formatting SASS code using stylelint"
-    {{ node_cmd_prefix }} npm run format-sass
-
 # Lint everything
-lint: lint_js lint_sass lint_html lint_py lint_migrations lint_types
+lint: lint_frontend lint_html lint_py lint_migrations lint_types
 
 # Lint docs with mkdocs-linkcheck
 @lint_docs:
@@ -147,10 +142,10 @@ lint: lint_js lint_sass lint_html lint_py lint_migrations lint_types
     just _start_msg "Checking HTML using djLint"
     {{ python_cmd_prefix }} djlint . --lint
 
-# Lint Javascript code with eslint
-@lint_js:
-    just _start_msg "Checking Javascript code using eslint"
-    {{ node_cmd_prefix }} npm run lint-js
+# Lint frontend code (JS/TS/CSS) with Biome
+@lint_frontend:
+    just _start_msg "Checking frontend code using Biome"
+    {{ node_cmd_prefix }} bun run lint
 
 # Check for missing Django migrations
 @lint_migrations:
@@ -162,11 +157,6 @@ lint: lint_js lint_sass lint_html lint_py lint_migrations lint_types
     just _start_msg "Checking code using Ruff"
     {{ python_cmd_prefix }} ruff check
     {{ python_cmd_prefix }} ruff format --check
-
-# Lint SASS code with stylelint
-@lint_sass:
-    just _start_msg "Checking SASS code using stylelint"
-    {{ node_cmd_prefix }} npm run lint-sass
 
 # Lint Python types
 @lint_types:
@@ -204,7 +194,7 @@ pre_commit: format lint test
 # Upgrade node requirements based on `package.json` file
 @upgrade_node_packages:
     just _start_msg "Upgrading node requirements"
-    {{ node_cmd_prefix }} npm upgrade
+    {{ node_cmd_prefix }} bun update
 
 # Upgrade python requirements
 upgrade_python_packages +packages="":

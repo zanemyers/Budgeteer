@@ -14,7 +14,7 @@ docs_site/
 htmlcov/
 
 # Local-only
-.env*
+.env
 .git/
 .github/
 .idea/

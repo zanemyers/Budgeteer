@@ -18,15 +18,17 @@ dependencies = [
     "psycopg2-binary~=2.9",
     "python-json-logger~=4.1",
     "redis~=7.1", # needed for celery
-    "gunicorn~=25.3",
+    "gunicorn~=26.0",
     "django-vite~=3.1",
     "pillow~=12.2",
     "requests~=2.33",
     "ty>=0.0.34",
+    "celery-types>=0.26.0",
 ]
 
 [dependency-groups]
 dev = [
+    "celery-types",
     "debugpy",
     "django-debug-toolbar",
     "django-test-plus",
@@ -46,7 +48,7 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-addopts = "--nomigrations --ds config.settings.test_runner --cov-config=config/coverage.ini"
+addopts = "--nomigrations --ds config.settings.test_runner"
 
 # Python warnings documentation: https://docs.python.org/3/library/warnings.html
 filterwarnings = [

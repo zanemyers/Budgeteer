@@ -92,10 +92,8 @@ Serializer functions live in `apps/budget/data.py` and are shared between Inerti
 
 ```
 src/
-  scss/
-    main.scss               # Bootstrap import, design tokens, global overrides
-    _main_nav.scss          # Sidebar layout and styles
-    _color_mode_picker.scss # ThemeToggle button + spin animation
+  css/
+    main.css                # Tailwind v4 entry + hand-rolled utility classes
   tsx/
     main.tsx                # Inertia bootstrap, default layout assignment
     layouts/
@@ -108,11 +106,13 @@ src/
       LoadingSpinner.tsx
 ```
 
+Frontend tool configs (`vite.config.mjs`, `tsconfig.json`, `biome.json`) live at the repo root. Biome handles linting and formatting for JS/TS *and* CSS — its CSS parser has `tailwindDirectives: true` so Tailwind v4 at-rules (`@import "tailwindcss"`, `@custom-variant`, `@theme`, `@apply`, etc.) parse cleanly.
+
 ## Theme System
 
-- Bootstrap 5 CSS variables are overridden in `src/scss/main.scss` using `:root` and `[data-bs-theme="dark"]` selectors
-- The `data-bs-theme` attribute is set on `<html>` by an inline script in `apps/base/templates/app.html` that reads from `localStorage` **before CSS loads**, preventing flash of unstyled content
-- `ThemeToggle` cycles auto → light → dark → auto, persisting to `localStorage`
+- `src/css/main.css` starts with `@import "tailwindcss"` and a `@custom-variant dark (&:where(.dark, .dark *))` declaration, then defines Bootstrap-shaped utility classes (`.btn`, `.card`, `.form-control`, etc.) consumed by JSX.
+- An inline script in `apps/base/templates/layouts/base.html` reads `localStorage.getItem("theme")` and toggles a `dark` class on `<html>` **before CSS loads**, preventing flash of unstyled content.
+- `ThemeToggle` cycles auto → light → dark → auto, persisting to `localStorage`.
 
 ## Apps
 

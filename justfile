@@ -10,16 +10,6 @@ project_slug := 'budgeteer'
 @create_env:
     uvx epicenv create
 
-# Remove extra Django Base Site files not needed in a new project
-@clean_extra_files:
-    rm -f LICENSE.md
-    rm -f README.md
-    rm -f CHANGELOG.md
-    rm -rf docs/
-    rm -rf .github/
-    rm -rf .readthedocs.yaml
-    rm -r scripts/start_new_project
-
 # Upgrade both Python and Node
 @upgrade_all_packages:
     # kill all running containers
