@@ -13,7 +13,7 @@ from apps.accounts.views import (
     PasswordResetView,
     SignInView,
 )
-from apps.base.views import http_404, http_500
+from apps.base.views import BankingView, http_404, http_500
 from apps.budget.views import BudgetHistoryView, BudgetHomeView
 
 # Includes
@@ -37,6 +37,7 @@ urlpatterns += [
     path("accounts/password/reset/key/done/", PasswordResetFromKeyDoneView.as_view(), name="account_reset_password_from_key_done"),
     path("accounts/confirm-email/<key>/", ConfirmEmailView.as_view(), name="account_confirm_email"),
     path("accounts/", include("allauth.urls")),
+    path("banking/", BankingView.as_view(), name="banking"),
     path("budgets/", include("apps.budget.urls", namespace="budget")),
 ]
 

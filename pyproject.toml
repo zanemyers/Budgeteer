@@ -7,6 +7,7 @@ dependencies = [
     "Django~=6.0",
     "boto3~=1.43",
     "celery~=5.6",
+    "cryptography~=48.0",
     "django-alive~=2.0",
     "django-allauth~=65.16",
     "django-maintenance-mode~=0.19",
@@ -123,6 +124,7 @@ env_file = ".env"
 # Django Core Settings
 DEBUG = { type = "bool", default = false, initial = "on", help_text = "Enable Django debug mode" }
 SECRET_KEY = { type = "str", required = true, initial_func = "epicenv.initializers.url_safe_password", args = [50], help_text = "Django secret key for cryptographic signing" }
+FERNET_KEY = { type = "str", required = true, initial_func = "apps.base.initializers.fernet_key", help_text = "Fernet key for encrypting at-rest secrets (e.g. SimpleFIN access URLs); rotating invalidates existing encrypted rows" }
 ALLOWED_HOSTS = { type = "list", default = [], help_text = "List of allowed host/domain names" }
 INTERNAL_IPS = { type = "list", default = ["127.0.0.1"], initial = "127.0.0.1,0.0.0.0", help_text = "IPs that can see debug toolbar" }
 

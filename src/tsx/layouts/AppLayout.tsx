@@ -167,6 +167,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 <NavLink href="/accounts/history/" active={isAt("/accounts/history")}>
                   History
                 </NavLink>
+                <NavLink href="/banking/" active={isAt("/banking")}>
+                  Banking
+                </NavLink>
               </div>
 
               {budgetPk && (

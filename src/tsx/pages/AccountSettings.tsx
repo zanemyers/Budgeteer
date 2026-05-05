@@ -13,6 +13,15 @@ interface CurrencyOption {
   symbol: string;
 }
 
+interface SimpleFINConnection {
+  id: number;
+  label: string;
+  last_synced_at: string | null;
+  last_sync_status: string;
+  last_sync_error: string;
+  created_at: string;
+}
+
 interface Props {
   first_name: string;
   last_name: string;
@@ -21,6 +30,7 @@ interface Props {
   avatar_url: string;
   currency: string;
   currencies: CurrencyOption[];
+  simplefin_connections: SimpleFINConnection[];
 }
 
 function getCsrfToken(): string {
@@ -28,7 +38,7 @@ function getCsrfToken(): string {
   return match ? match[1] : "";
 }
 
-type Tab = "profile" | "name" | "password" | "email";
+type Tab = "profile" | "name" | "password" | "email" | "bank";
 
 const COMMON_TIMEZONES = [
   "America/New_York", "America/Chicago", "America/Denver", "America/Phoenix",
@@ -421,20 +431,143 @@ function EmailTab({ addresses, setAddresses }: { addresses: EmailAddress[]; setA
   );
 }
 
-const TAB_LABELS: Record<Tab, string> = { profile: "Profile", name: "Name", password: "Password", email: "Email" };
+function BankTab({ connections, setConnections }: { connections: SimpleFINConnection[]; setConnections: React.Dispatch<React.SetStateAction<SimpleFINConnection[]>> }) {
+  const [token, setToken] = useState("");
+  const [label, setLabel] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState<number | null>(null);
 
-export default function AccountSettings({ first_name, last_name, email_addresses, timezone, avatar_url, currency, currencies }: Props) {
+  async function claim(e: React.FormEvent) {
+    e.preventDefault();
+    setSubmitting(true);
+    setError(null);
+    setSuccess(false);
+    try {
+      const res = await fetch("/accounts/settings/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() },
+        body: JSON.stringify({ action: "claim_simplefin_token", setup_token: token, label }),
+      });
+      const data = await res.json() as SimpleFINConnection & { error?: string };
+      if (!res.ok) {
+        setError(data.error ?? "Could not claim token.");
+        return;
+      }
+      setConnections((prev) => [...prev, data]);
+      setToken("");
+      setLabel("");
+      setSuccess(true);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function remove(conn: SimpleFINConnection) {
+    if (confirmRemove !== conn.id) { setConfirmRemove(conn.id); return; }
+    setConfirmRemove(null);
+    const res = await fetch("/accounts/settings/", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() },
+      body: JSON.stringify({ action: "remove_simplefin_connection", id: conn.id }),
+    });
+    if (res.ok) setConnections((prev) => prev.filter((c) => c.id !== conn.id));
+  }
+
+  return (
+    <div>
+      <div className="mb-6">
+        <h6 className="font-semibold mb-2">SimpleFIN Bridge</h6>
+        <p className="text-muted text-sm mb-0">
+          Link your bank accounts via <a href="https://beta-bridge.simplefin.org/" target="_blank" rel="noreferrer">SimpleFIN Bridge</a>.
+          After linking accounts there, generate a setup token and paste it below. The token is exchanged for an access URL once and stored encrypted.
+        </p>
+      </div>
+
+      {connections.length > 0 && (
+        <div className="list-group mb-6">
+          {connections.map((c) => (
+            <div key={c.id} className="list-group-item">
+              <div className="flex justify-between items-start">
+                <div>
+                  <span className="font-semibold">{c.label || `Connection #${c.id}`}</span>
+                  <div className="flex gap-2 mt-1 items-center">
+                    <span className={`badge ${c.last_sync_status === "ok" ? "bg-success-subtle text-success-emphasis" : c.last_sync_status === "error" ? "bg-danger-subtle text-danger-emphasis" : "bg-warning-subtle text-warning-emphasis"}`}>
+                      {c.last_sync_status}
+                    </span>
+                    <span className="text-muted text-sm">
+                      {c.last_synced_at ? `Last synced ${new Date(c.last_synced_at).toLocaleString()}` : "Never synced"}
+                    </span>
+                  </div>
+                  {c.last_sync_error && <div className="text-danger text-sm mt-1">{c.last_sync_error}</div>}
+                </div>
+                <div className="flex gap-2">
+                  {confirmRemove === c.id ? (
+                    <>
+                      <button className="btn btn-danger btn-sm" onClick={() => void remove(c)}>Confirm</button>
+                      <button className="btn btn-outline-secondary btn-sm" onClick={() => setConfirmRemove(null)}>Cancel</button>
+                    </>
+                  ) : (
+                    <button className="btn btn-outline-danger btn-sm" onClick={() => void remove(c)}>Remove</button>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <form onSubmit={(e) => void claim(e)}>
+        {success && <div className="alert alert-success py-2">Connection added.</div>}
+        {error && <div className="alert alert-danger py-2">{error}</div>}
+        <div className="mb-4">
+          <label className="form-label">Label (optional)</label>
+          <input
+            type="text"
+            className="form-control"
+            placeholder="e.g. Personal banks"
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+          />
+        </div>
+        <div className="mb-4">
+          <label className="form-label">Setup token</label>
+          <textarea
+            className="form-control font-mono text-sm"
+            rows={4}
+            placeholder="Paste the base64 setup token from SimpleFIN Bridge"
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            required
+          />
+          <p className="text-muted text-sm mt-1 mb-0">
+            Tokens are one-shot — once claimed, they cannot be reused.
+          </p>
+        </div>
+        <button className="btn btn-primary" disabled={submitting || !token}>
+          {submitting ? "Claiming…" : "Add connection"}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+const TAB_LABELS: Record<Tab, string> = { profile: "Profile", name: "Name", password: "Password", email: "Email", bank: "Bank Sync" };
+
+export default function AccountSettings({ first_name, last_name, email_addresses, timezone, avatar_url, currency, currencies, simplefin_connections }: Props) {
   const [tab, setTab] = useState<Tab>("profile");
   const [firstName, setFirstName] = useState(first_name);
   const [lastName, setLastName] = useState(last_name);
   const [addresses, setAddresses] = useState(email_addresses);
+  const [connections, setConnections] = useState(simplefin_connections);
 
   return (
     <div style={{ maxWidth: 540 }}>
       <h1 className="mb-6">Account Settings</h1>
 
       <ul className="nav nav-tabs mb-6">
-        {(["profile", "name", "password", "email"] as Tab[]).map((t) => (
+        {(["profile", "name", "password", "email", "bank"] as Tab[]).map((t) => (
           <li className="nav-item" key={t}>
             <button
               type="button"
@@ -457,6 +590,7 @@ export default function AccountSettings({ first_name, last_name, email_addresses
       )}
       {tab === "password" && <PasswordTab />}
       {tab === "email" && <EmailTab addresses={addresses} setAddresses={setAddresses} />}
+      {tab === "bank" && <BankTab connections={connections} setConnections={setConnections} />}
     </div>
   );
 }

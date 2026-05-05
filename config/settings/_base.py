@@ -29,6 +29,10 @@ if READ_DOT_ENV_FILE is True:
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = env("SECRET_KEY")
 
+# Fernet key for encrypting at-rest secrets (SimpleFIN access URLs, etc.).
+# Rotating invalidates existing encrypted rows.
+FERNET_KEY = env("FERNET_KEY")
+
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env.bool("DEBUG", default=False)
 

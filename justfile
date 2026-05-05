@@ -21,3 +21,9 @@ project_slug := 'budgeteer'
     just upgrade_node_packages
     just build
     just pre_commit
+
+@makemigrations *args:
+    {{ python_cmd_prefix }} ./manage.py makemigrations {{ args }}
+
+@migrate *args:
+    {{ python_cmd_prefix }} ./manage.py migrate {{ args }}

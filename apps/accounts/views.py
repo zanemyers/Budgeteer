@@ -18,6 +18,8 @@ from allauth.account.views import (
 from inertia import render as inertia_render
 
 from apps.accounts.forms import SignInForm
+from apps.base.models import SimpleFINConnection
+from apps.base.simplefin import SimpleFINError, claim_setup_token
 
 
 # ---------------------------------------------------------------------------
@@ -107,6 +109,17 @@ class ConfirmEmailView(InertiaAllauthMixin, AllAuthConfirmEmailView):
 # ---------------------------------------------------------------------------
 
 
+def _serialize_simplefin_connection(c: SimpleFINConnection) -> dict:
+    return {
+        "id": c.pk,
+        "label": c.label,
+        "last_synced_at": c.last_synced_at.isoformat() if c.last_synced_at else None,
+        "last_sync_status": c.last_sync_status,
+        "last_sync_error": c.last_sync_error,
+        "created_at": c.created_at.isoformat(),
+    }
+
+
 class AccountSettingsView(LoginRequiredMixin, View):
     def get(self, request):
         user = request.user
@@ -115,6 +128,10 @@ class AccountSettingsView(LoginRequiredMixin, View):
         )
         from apps.base.models import Currency
         currencies = list(Currency.objects.values("code", "name", "symbol").order_by("code"))
+        connections = [
+            _serialize_simplefin_connection(c)
+            for c in SimpleFINConnection.objects.filter(user=user)
+        ]
         return inertia_render(request, "AccountSettings", {
             "first_name": user.first_name,
             "last_name": user.last_name,
@@ -124,6 +141,7 @@ class AccountSettingsView(LoginRequiredMixin, View):
             "avatar_url": user.avatar_url,
             "currency": user.currency,
             "currencies": currencies,
+            "simplefin_connections": connections,
         })
 
     def patch(self, request):
@@ -156,6 +174,14 @@ class AccountSettingsView(LoginRequiredMixin, View):
             user.save(update_fields=["email"])
             addresses = list(EmailAddress.objects.filter(user=user).values("id", "email", "primary", "verified"))
             return JsonResponse({"email_addresses": addresses})
+
+        if action == "remove_simplefin_connection":
+            try:
+                conn = SimpleFINConnection.objects.get(user=user, pk=data.get("id"))
+            except SimpleFINConnection.DoesNotExist:
+                return JsonResponse({"error": "Connection not found."}, status=404)
+            conn.delete()
+            return JsonResponse({"ok": True})
 
         if action == "remove_email":
             email_str = data.get("email", "")
@@ -207,6 +233,21 @@ class AccountSettingsView(LoginRequiredMixin, View):
             ea = EmailAddress.objects.create(user=user, email=email_str, verified=False, primary=False)
             ea.send_confirmation(request)
             return JsonResponse({"id": ea.pk, "email": ea.email, "primary": False, "verified": False}, status=201)
+
+        if action == "claim_simplefin_token":
+            user = request.user
+            setup_token = data.get("setup_token", "")
+            label = data.get("label", "").strip()[:100]
+            try:
+                access_url = claim_setup_token(setup_token)
+            except SimpleFINError as e:
+                return JsonResponse({"error": str(e)}, status=400)
+            conn = SimpleFINConnection.objects.create(
+                user=user,
+                label=label,
+                access_url=access_url,
+            )
+            return JsonResponse(_serialize_simplefin_connection(conn), status=201)
 
         if action == "change_password":
             user = request.user
