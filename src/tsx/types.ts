@@ -97,6 +97,7 @@ export interface BudgetOverviewCategory {
   id: number;
   name: string;
   category_type: "income" | "expense";
+  parent_id: number | null;
   budgeted: string;
   assigned: string;
   activity: string;

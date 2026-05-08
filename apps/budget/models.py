@@ -3,8 +3,10 @@ import datetime
 from decimal import Decimal
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
-from django.db.models import Sum
+from django.db.models import Q, Sum
+from django.db.models.constraints import UniqueConstraint
 
 
 class Budget(models.Model):
@@ -68,6 +70,14 @@ class Category(models.Model):
     ]
 
     budget = models.ForeignKey(Budget, on_delete=models.CASCADE, related_name="categories")
+    parent = models.ForeignKey(
+        "self",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="children",
+        help_text="Optional parent category. Subcategories cannot have children of their own.",
+    )
     name = models.CharField(max_length=100)
     category_type = models.CharField(max_length=10, choices=TYPE_CHOICES)
     monthly_budget = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
@@ -84,11 +94,41 @@ class Category(models.Model):
     )
 
     class Meta:
-        unique_together = [("budget", "name", "category_type")]
         ordering = ["category_type", "name"]
+        constraints = [
+            UniqueConstraint(
+                fields=["budget", "name", "category_type"],
+                condition=Q(parent__isnull=True),
+                name="unique_root_category_per_budget_type",
+            ),
+            UniqueConstraint(
+                fields=["parent", "name"],
+                condition=Q(parent__isnull=False),
+                name="unique_subcategory_per_parent",
+            ),
+        ]
 
     def __str__(self) -> str:
+        if self.parent_id:
+            return f"{self.parent.name} → {self.name}"
         return f"{self.name} ({self.get_category_type_display()})"
+
+    def clean(self):
+        super().clean()
+        if self.parent_id:
+            parent = self.parent
+            if parent.parent_id:
+                raise ValidationError({"parent": "Subcategories cannot have their own subcategories."})
+            if parent.budget_id != self.budget_id:
+                raise ValidationError({"parent": "Parent must be in the same budget."})
+            if parent.category_type != self.category_type:
+                raise ValidationError({"category_type": "Subcategory type must match its parent."})
+
+    def save(self, *args, **kwargs):
+        if self.parent_id and self.parent.category_type:
+            # Inherit type from parent so reporting groups never split.
+            self.category_type = self.parent.category_type
+        super().save(*args, **kwargs)
 
 
 class RecurringTransaction(models.Model):

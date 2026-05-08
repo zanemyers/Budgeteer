@@ -5,6 +5,20 @@ from inertia import share
 from apps.base.models import Currency
 
 
+def _resolve_sidebar_budget(user):
+    """Pick the budget to surface in the sidebar: last viewed → default → first membership."""
+    from apps.budget.models import Budget
+
+    member_pks = set(Budget.objects.filter(members=user).values_list("pk", flat=True))
+    if not member_pks:
+        return None
+
+    for candidate_id in (user.last_viewed_budget_id, user.default_budget_id):
+        if candidate_id in member_pks:
+            return Budget.objects.get(pk=candidate_id)
+    return Budget.objects.filter(pk__in=member_pks).first()
+
+
 class InertiaShareMiddleware:
     """Share auth and flash data with every Inertia response."""
 
@@ -21,6 +35,13 @@ class InertiaShareMiddleware:
             except Currency.DoesNotExist:
                 currency_symbol = "$"
 
+            sidebar_budget = _resolve_sidebar_budget(user)
+            current_budget = (
+                {"pk": sidebar_budget.pk, "name": sidebar_budget.name or str(sidebar_budget)}
+                if sidebar_budget
+                else None
+            )
+
             share(
                 request,
                 auth={
@@ -35,6 +56,7 @@ class InertiaShareMiddleware:
                         "currency_rate": str(currency.rate_to_usd) if currency else "1",
                     }
                 },
+                current_budget=current_budget,
             )
 
         response = self.get_response(request)

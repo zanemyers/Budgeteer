@@ -23,6 +23,13 @@ class User(AbstractUser):
         on_delete=models.SET_NULL,
         related_name="+",
     )
+    last_viewed_budget = models.ForeignKey(
+        "budget.Budget",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
     timezone = models.CharField(max_length=63, default="America/Chicago", choices=TIMEZONE_CHOICES)
     currency = models.CharField(max_length=3, default="USD")
     avatar_thumbnail = models.ImageField(upload_to=avatar_thumbnail_path, blank=True)

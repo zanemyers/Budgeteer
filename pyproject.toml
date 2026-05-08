@@ -13,6 +13,7 @@ dependencies = [
     "django-maintenance-mode~=0.19",
     "django-ses~=4.3",
     "django-storages~=1.8",
+    "django-unfold~=0.50",
     "epicenv[django]~=1.2",
     "inertia-django~=1.2",
     "hiredis~=3.0", # needed for Django's native cache and sessions

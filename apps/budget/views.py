@@ -90,6 +90,9 @@ class BudgetMemberMixin(LoginRequiredMixin):
         if not self.budget.members.filter(pk=request.user.pk).exists():
             raise Http404
         self.check_budget_permissions(request)
+        if request.user.last_viewed_budget_id != self.budget.pk:
+            request.user.last_viewed_budget_id = self.budget.pk
+            request.user.save(update_fields=["last_viewed_budget"])
         return super().dispatch(request, *args, **kwargs)
 
     def check_budget_permissions(self, request):
@@ -456,11 +459,23 @@ class CategoryCreateView(BudgetMemberMixin, View):
         category_type = data.get("category_type", Category.TYPE_EXPENSE)
         is_sinking_fund = bool(data.get("is_sinking_fund", False))
         is_ongoing = bool(data.get("sinking_fund_ongoing", False))
+        parent_id = data.get("parent_id") or None
         errors: dict[str, list[str]] = {}
         if not name:
             errors["name"] = ["Name is required."]
         if category_type not in (Category.TYPE_INCOME, Category.TYPE_EXPENSE):
             errors["category_type"] = ["Select a valid type."]
+        parent = None
+        if parent_id:
+            try:
+                parent = Category.objects.get(pk=parent_id, budget=self.budget)
+            except Category.DoesNotExist:
+                errors["parent_id"] = ["Parent category not found."]
+            else:
+                if parent.parent_id:
+                    errors["parent_id"] = ["Cannot nest more than two levels deep."]
+                else:
+                    category_type = parent.category_type
         if is_sinking_fund:
             if not data.get("sinking_fund_target"):
                 errors["sinking_fund_target"] = ["Target amount is required."]
@@ -473,6 +488,7 @@ class CategoryCreateView(BudgetMemberMixin, View):
         try:
             cat = Category.objects.create(
                 budget=self.budget,
+                parent=parent,
                 name=name,
                 category_type=category_type,
                 is_sinking_fund=is_sinking_fund,
@@ -519,6 +535,21 @@ class CategoryUpdateView(BudgetMemberMixin, View):
         for field in ("name", "category_type", "monthly_budget", "sinking_fund_target", "sinking_fund_due_date", "sinking_fund_ongoing", "sinking_fund_monthly_goal"):
             if field in data:
                 setattr(category, field, data[field] or None if field in nullable_fields else data[field])
+        if "parent_id" in data:
+            new_parent_id = data["parent_id"] or None
+            if new_parent_id is None:
+                category.parent = None
+            else:
+                try:
+                    new_parent = Category.objects.get(pk=new_parent_id, budget=self.budget)
+                except Category.DoesNotExist:
+                    return JsonResponse({"errors": {"parent_id": ["Parent not found."]}}, status=400)
+                if new_parent.pk == category.pk or new_parent.parent_id:
+                    return JsonResponse({"errors": {"parent_id": ["Invalid parent."]}}, status=400)
+                if category.children.exists():
+                    return JsonResponse({"errors": {"parent_id": ["Cannot make a parent into a child."]}}, status=400)
+                category.parent = new_parent
+                category.category_type = new_parent.category_type
         category.save()
 
         # Create an income transaction if an add_amount was provided

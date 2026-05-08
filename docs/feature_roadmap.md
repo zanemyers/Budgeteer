@@ -253,6 +253,10 @@ gantt
 - **Constraints to design around:** (1) once-daily refresh — no realtime/webhooks; (2) **90-day transaction backfill cap** — hard limit, can't be negotiated, so the Phase 1 CSV/OFX importer stays a first-class citizen permanently for historical backfill; (3) occasional stale connections requiring user re-link; (4) balance-vs-transaction desync edge cases.
 - **What:** Token storage on `Account`; cron `sync_accounts` command (every 6h is fine — bridge refreshes ~daily) pulls transactions and runs them through the Phase 1 import pipeline (rules + dedup).
 - **Stack notes:** SimpleFIN bridge HTTP API is trivial; wrap behind a `SyncProvider` interface so Plaid can be added later as a second implementation without touching domain models. GoCardless is the equivalent move for EU users.
+- **Future fallback providers** (not implementing now, but the `SyncProvider` abstraction should accommodate):
+  - **Teller** — developer-friendly aggregator, free dev tier, ~$0.10/account/mo in production. Realtime webhooks and longer history than SimpleFIN. Worth revisiting if SimpleFIN's 90-day backfill cap or daily-only refresh becomes a real pain.
+  - **Plaid** — free dev tier with 100 live items (enough for personal use); production still requires business verification + entity. Right move only if Budgeteer's scope shifts from personal tool to public SaaS.
+  - **MX direct, Finicity direct** — ruled out: enterprise-sales-only, 5-figure+ annual contracts. SimpleFIN already proxies MX, so this would only matter if going B2B.
 
 #### 3.3 Debt payoff simulator — **M**
 - **Why:** YNAB and PocketGuard own this. Needs a `Loan`/`Debt` model that doesn't exist today.
@@ -316,6 +320,8 @@ Specifically used:
 - https://actualbudget.org/docs/advanced/bank-sync/simplefin/
 - https://www.simplefin.org/protocol.html
 - https://beta-bridge.simplefin.org/search-institutions
+- https://teller.io/ (alternative aggregator, indie-friendly pricing)
+- https://www.vendr.com/buyer-guides/mx-technologies (MX pricing floor reference)
 - https://robberger.com/monarch-money-review/
 - https://www.aitooldiscovery.com/guides/monarch-money-reddit
 - https://www.quicken.com/blog/best-personal-finance-software-for-cash-flow-and-expense-tracking/

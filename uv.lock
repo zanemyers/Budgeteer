@@ -231,6 +231,7 @@ dependencies = [
     { name = "django-maintenance-mode" },
     { name = "django-ses" },
     { name = "django-storages" },
+    { name = "django-unfold" },
     { name = "django-vite" },
     { name = "epicenv", extra = ["django"] },
     { name = "gunicorn" },
@@ -277,6 +278,7 @@ requires-dist = [
     { name = "django-maintenance-mode", specifier = "~=0.19" },
     { name = "django-ses", specifier = "~=4.3" },
     { name = "django-storages", specifier = "~=1.8" },
+    { name = "django-unfold", specifier = "~=0.50" },
     { name = "django-vite", specifier = "~=3.1" },
     { name = "epicenv", extras = ["django"], specifier = "~=1.2" },
     { name = "gunicorn", specifier = "~=26.0" },
@@ -863,6 +865,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/7d/ee/78030380389311ab967281d98ac2a7dd96d4005592149d7049f624b52275/django_test_plus-2.4.1.tar.gz", hash = "sha256:5bc0e2248c25020f7056056c4173250213f93464b4ceb6a53ab79804a1968d0d", size = 18333 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/fe/25/e7615f147c441738d3b0f39bf4547f79d52f32c46fa8ad1b64ba764438f4/django_test_plus-2.4.1-py3-none-any.whl", hash = "sha256:f2f14e4ece824dde29c6c52ce915ca38d8a6d1f6800e7076d708a47f02e02283", size = 17432 },
+]
+
+[[package]]
+name = "django-unfold"
+version = "0.92.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "django" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/2a/f7/789d25724f9466a6b0d61a5d88ae34d2dd96623ef478a2490330cb4a2aa5/django_unfold-0.92.0.tar.gz", hash = "sha256:cf3e2b1350899fc4380f5870eef25042993d10aa59544f92d4c9986854c5c048", size = 1122249 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e9/36/5546921b5217fe60a3deb2176ad778988dd9733ff9d2adc87534daa7b539/django_unfold-0.92.0-py3-none-any.whl", hash = "sha256:7f57f7db6208faa2eb108586b0d7c2dd03ac37eb45d5d79549f35594c6b24760", size = 1246206 },
 ]
 
 [[package]]

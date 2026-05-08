@@ -49,6 +49,10 @@ if env.bool("USE_DOCKER", default=False) is True:
 # Application definition
 
 INSTALLED_APPS = [
+    # Unfold and its contrib apps must come before django.contrib.admin
+    "unfold",
+    "unfold.contrib.filters",
+    "unfold.contrib.forms",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -56,6 +60,7 @@ INSTALLED_APPS = [
     "django.contrib.sites",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django.contrib.humanize",
     "django_vite",
     "apps.base",
     "apps.accounts",
@@ -87,7 +92,7 @@ ROOT_URLCONF = "config.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
+        "DIRS": [BASE_DIR / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -258,6 +263,33 @@ SITE_NAME = "Budgeteer"
 if DEBUG is True:
     INSTALLED_APPS += ["debug_toolbar"]
     MIDDLEWARE += ["debug_toolbar.middleware.DebugToolbarMiddleware"]
+
+# UNFOLD ADMIN SETTINGS (https://unfoldadmin.com/docs/configuration/settings/)
+UNFOLD = {
+    "SITE_TITLE": "Budgeteer Admin",
+    "SITE_HEADER": "Budgeteer",
+    "SITE_SYMBOL": "savings",  # Material Symbols icon shown in the header
+    "SHOW_HISTORY": True,
+    "SHOW_VIEW_ON_SITE": True,
+    "BORDER_RADIUS": "8px",
+    "DASHBOARD_CALLBACK": "apps.base.admin_callbacks.dashboard_callback",
+    "ENVIRONMENT": "apps.base.admin_callbacks.environment_callback",
+    "COLORS": {
+        "primary": {
+            "50": "240 253 244",
+            "100": "220 252 231",
+            "200": "187 247 208",
+            "300": "134 239 172",
+            "400": "74 222 128",
+            "500": "34 197 94",
+            "600": "22 163 74",
+            "700": "21 128 61",
+            "800": "22 101 52",
+            "900": "20 83 45",
+            "950": "5 46 22",
+        },
+    },
+}
 
 # ALLAUTH SETTINGS (https://django-allauth.readthedocs.io/en/latest/configuration.html)
 AUTHENTICATION_BACKENDS = ["allauth.account.auth_backends.AuthenticationBackend"]

@@ -478,10 +478,20 @@ function BankTab({ connections, setConnections }: { connections: SimpleFINConnec
   return (
     <div>
       <div className="mb-6">
-        <h6 className="font-semibold mb-2">SimpleFIN Bridge</h6>
+        <div className="flex justify-between items-start gap-3 mb-2 flex-wrap">
+          <h6 className="font-semibold mb-0">SimpleFIN Bridge</h6>
+          <a
+            className="btn btn-outline-primary btn-sm"
+            href="https://beta-bridge.simplefin.org/"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Open SimpleFIN Bridge ↗
+          </a>
+        </div>
         <p className="text-muted text-sm mb-0">
-          Link your bank accounts via <a href="https://beta-bridge.simplefin.org/" target="_blank" rel="noreferrer">SimpleFIN Bridge</a>.
-          After linking accounts there, generate a setup token and paste it below. The token is exchanged for an access URL once and stored encrypted.
+          Sign in at SimpleFIN Bridge, link your bank accounts, then generate a setup token and paste it below.
+          The token is exchanged for an access URL once and stored encrypted.
         </p>
       </div>
 

@@ -14,6 +14,7 @@ interface AuthUser {
 
 interface PageProps {
   auth?: { user: AuthUser };
+  current_budget?: { pk: number; name: string } | null;
   budget_pk?: number;
   month?: string;
 }
@@ -114,12 +115,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { props, url } = usePage<PageProps>();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const user = props.auth?.user;
-  const budgetPk = props.budget_pk;
+  const sidebarBudget = props.current_budget ?? null;
+  const sidebarBudgetPk = props.budget_pk ?? sidebarBudget?.pk;
   const month = props.month;
 
   const path = url.includes("://") ? new URL(url).pathname : url.split("?")[0];
   const isAt = (prefix: string) => path.startsWith(prefix);
-  const txnHref = `/budgets/${budgetPk}/transactions/?month=${month ?? ""}`;
+  const txnHref = `/budgets/${sidebarBudgetPk}/transactions/?month=${month ?? ""}`;
+  const onCurrentBudget = props.budget_pk != null;
 
   return (
     <div className="flex h-full">
@@ -161,7 +164,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <>
               <div className="sidebar-group">
                 <span className="sidebar-group-label">Budgets</span>
-                <NavLink href="/budgets/" active={isAt("/budgets/") && !budgetPk}>
+                <NavLink href="/budgets/" active={isAt("/budgets/") && !onCurrentBudget}>
                   My Budgets
                 </NavLink>
                 <NavLink href="/accounts/history/" active={isAt("/accounts/history")}>
@@ -172,31 +175,33 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 </NavLink>
               </div>
 
-              {budgetPk && (
+              {sidebarBudgetPk && (
                 <div className="sidebar-group">
-                  <span className="sidebar-group-label">Current Budget</span>
+                  <span className="sidebar-group-label" title={sidebarBudget?.name ?? undefined}>
+                    {sidebarBudget?.name || "Current Budget"}
+                  </span>
                   <NavLink
-                    href={`/budgets/${budgetPk}/`}
-                    active={path === `/budgets/${budgetPk}/` || path === `/budgets/${budgetPk}`}
+                    href={`/budgets/${sidebarBudgetPk}/`}
+                    active={path === `/budgets/${sidebarBudgetPk}/` || path === `/budgets/${sidebarBudgetPk}`}
                   >
                     Dashboard
                   </NavLink>
-                  <NavLink href={txnHref} active={isAt(`/budgets/${budgetPk}/transactions`)}>
+                  <NavLink href={txnHref} active={isAt(`/budgets/${sidebarBudgetPk}/transactions`)}>
                     All Transactions
                   </NavLink>
-                  <NavLink href={`/budgets/${budgetPk}/categories/`} active={isAt(`/budgets/${budgetPk}/categories`)}>
+                  <NavLink href={`/budgets/${sidebarBudgetPk}/categories/`} active={isAt(`/budgets/${sidebarBudgetPk}/categories`)}>
                     Categories
                   </NavLink>
-                  <NavLink href={`/budgets/${budgetPk}/sinking-funds/`} active={isAt(`/budgets/${budgetPk}/sinking-funds`)}>
+                  <NavLink href={`/budgets/${sidebarBudgetPk}/sinking-funds/`} active={isAt(`/budgets/${sidebarBudgetPk}/sinking-funds`)}>
                     Sinking Funds
                   </NavLink>
-                  <NavLink href={`/budgets/${budgetPk}/recurring/`} active={isAt(`/budgets/${budgetPk}/recurring`)}>
+                  <NavLink href={`/budgets/${sidebarBudgetPk}/recurring/`} active={isAt(`/budgets/${sidebarBudgetPk}/recurring`)}>
                     Recurring
                   </NavLink>
-                  <NavLink href={`/budgets/${budgetPk}/payment-methods/`} active={isAt(`/budgets/${budgetPk}/payment-methods`)}>
+                  <NavLink href={`/budgets/${sidebarBudgetPk}/payment-methods/`} active={isAt(`/budgets/${sidebarBudgetPk}/payment-methods`)}>
                     Payment Methods
                   </NavLink>
-                  <NavLink href={`/budgets/${budgetPk}/members/`} active={isAt(`/budgets/${budgetPk}/members`)}>
+                  <NavLink href={`/budgets/${sidebarBudgetPk}/members/`} active={isAt(`/budgets/${sidebarBudgetPk}/members`)}>
                     Members
                   </NavLink>
                 </div>

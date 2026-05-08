@@ -128,7 +128,7 @@ export default function Dashboard({ budget_pk, month, overview, categories, paym
     router.reload({ only: ["overview", "upcoming_transactions"], });
   }
 
-  function renderCategoryRow(cat: BudgetOverviewCategory) {
+  function renderCategoryRow(cat: BudgetOverviewCategory, isChild = false) {
 
     const isEditingAssigned = cat.id in editingAssigned;
     const isEditingBudgeted = cat.id in editingBudgeted;
@@ -146,7 +146,8 @@ export default function Dashboard({ budget_pk, month, overview, categories, paym
 
     return (
       <tr key={cat.id}>
-        <td>
+        <td style={isChild ? { paddingLeft: "2.25rem" } : undefined}>
+          {isChild && <span className="text-muted mr-1">↳</span>}
           <a href={`/budgets/${budget_pk}/transactions/?month=${month}&category=${cat.id}`} className="no-underline text-body">
             {cat.name}
           </a>
@@ -197,6 +198,22 @@ export default function Dashboard({ budget_pk, month, overview, categories, paym
 
   const income = overview.categories.filter((c) => c.category_type === "income");
   const expense = overview.categories.filter((c) => c.category_type === "expense" && !c.is_sinking_fund);
+
+  function renderHierarchical(cats: BudgetOverviewCategory[]) {
+    const roots = cats.filter((c) => c.parent_id === null);
+    const childrenByParent = new Map<number, BudgetOverviewCategory[]>();
+    for (const c of cats) {
+      if (c.parent_id !== null) {
+        const list = childrenByParent.get(c.parent_id) ?? [];
+        list.push(c);
+        childrenByParent.set(c.parent_id, list);
+      }
+    }
+    return roots.flatMap((root) => [
+      renderCategoryRow(root, false),
+      ...(childrenByParent.get(root.id) ?? []).map((child) => renderCategoryRow(child, true)),
+    ]);
+  }
   const sfMonthlySpending = parseFloat(overview.sf_monthly_spending);
   const totalSpent = expense.reduce((sum, c) => sum + parseFloat(c.activity), 0) + sfMonthlySpending;
   const sfSaved = parseFloat(overview.transfers_total);
@@ -246,12 +263,30 @@ export default function Dashboard({ budget_pk, month, overview, categories, paym
                   <table className="table table-hover mb-0">
                     <thead className="table-light"><tr><th>Category</th><th className="text-right">Activity</th></tr></thead>
                     <tbody>
-                      {income.map((cat) => (
-                        <tr key={cat.id}>
-                          <td><a href={`/budgets/${budget_pk}/transactions/?month=${month}&category=${cat.id}`} className="no-underline text-body">{cat.name}</a></td>
-                          <td className="text-right text-success">{fmt(cat.activity, symbol)}</td>
-                        </tr>
-                      ))}
+                      {(() => {
+                        const roots = income.filter((c) => c.parent_id === null);
+                        const kids = new Map<number, BudgetOverviewCategory[]>();
+                        for (const c of income) {
+                          if (c.parent_id !== null) {
+                            const list = kids.get(c.parent_id) ?? [];
+                            list.push(c);
+                            kids.set(c.parent_id, list);
+                          }
+                        }
+                        const renderRow = (cat: BudgetOverviewCategory, isChild: boolean) => (
+                          <tr key={cat.id}>
+                            <td style={isChild ? { paddingLeft: "2.25rem" } : undefined}>
+                              {isChild && <span className="text-muted mr-1">↳</span>}
+                              <a href={`/budgets/${budget_pk}/transactions/?month=${month}&category=${cat.id}`} className="no-underline text-body">{cat.name}</a>
+                            </td>
+                            <td className="text-right text-success">{fmt(cat.activity, symbol)}</td>
+                          </tr>
+                        );
+                        return roots.flatMap((root) => [
+                          renderRow(root, false),
+                          ...(kids.get(root.id) ?? []).map((child) => renderRow(child, true)),
+                        ]);
+                      })()}
                     </tbody>
                   </table>
                 </div>
@@ -325,7 +360,7 @@ export default function Dashboard({ budget_pk, month, overview, categories, paym
                     <thead className="table-light">
                       <tr><th>Category</th><th className="text-right">Budgeted</th><th className="text-right">Assigned</th><th className="text-right">Activity</th><th className="text-right">Available</th></tr>
                     </thead>
-                    <tbody>{expense.map(renderCategoryRow)}</tbody>
+                    <tbody>{renderHierarchical(expense)}</tbody>
                   </table>
                 </div>
               </div>

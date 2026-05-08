@@ -13,7 +13,8 @@ class Currency(models.Model):
 
     class Meta:
         ordering = ["code"]
-        verbose_name_plural = "currencies"
+        verbose_name = "Currency"
+        verbose_name_plural = "Currencies"
 
     def __str__(self):
         return f"{self.code} — {self.name}"
@@ -44,6 +45,8 @@ class SimpleFINConnection(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        verbose_name = "SimpleFIN Connection"
+        verbose_name_plural = "SimpleFIN Connections"
 
     def __str__(self) -> str:
         return self.label or f"SimpleFIN connection #{self.pk}"

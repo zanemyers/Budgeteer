@@ -1,43 +1,35 @@
 from django.contrib import admin
 
-from apps.budget.models import Budget, BudgetMembership, Category, RecurringTransaction, Transaction, TransactionLine
+from unfold.admin import ModelAdmin, TabularInline
+
+from apps.budget.models import Category
 
 
-class BudgetMembershipInline(admin.TabularInline):
-    model = BudgetMembership
-    extra = 0
-
-
-class CategoryInline(admin.TabularInline):
+class SubcategoryInline(TabularInline):
     model = Category
+    fk_name = "parent"
     extra = 0
-
-
-@admin.register(Budget)
-class BudgetAdmin(admin.ModelAdmin):
-    list_display = ["__str__", "created_by", "created_at"]
-    inlines = [BudgetMembershipInline, CategoryInline]
+    fields = ["name", "monthly_budget", "is_sinking_fund"]
+    show_change_link = True
+    verbose_name = "Subcategory"
+    verbose_name_plural = "Subcategories"
 
 
 @admin.register(Category)
-class CategoryAdmin(admin.ModelAdmin):
-    list_display = ["name", "category_type", "budget"]
-    list_filter = ["category_type", "budget"]
+class CategoryAdmin(ModelAdmin):
+    list_display = ["__str__", "category_type", "budget", "monthly_budget", "is_sinking_fund"]
+    list_filter = ["category_type", "is_sinking_fund", "budget"]
+    search_fields = ["name", "parent__name"]
+    autocomplete_fields = ["parent"]
+    list_select_related = ["parent", "budget"]
+    inlines = [SubcategoryInline]
 
+    def get_inlines(self, request, obj=None):
+        # Only root categories can have subcategories — hide the inline on subcategory edits.
+        if obj and obj.parent_id:
+            return []
+        return super().get_inlines(request, obj)
 
-class TransactionLineInline(admin.TabularInline):
-    model = TransactionLine
-    extra = 1
-
-
-@admin.register(Transaction)
-class TransactionAdmin(admin.ModelAdmin):
-    list_display = ["description", "due_date", "is_paid", "budget", "recurring"]
-    list_filter = ["is_paid", "budget"]
-    inlines = [TransactionLineInline]
-
-
-@admin.register(RecurringTransaction)
-class RecurringTransactionAdmin(admin.ModelAdmin):
-    list_display = ["name", "frequency", "amount", "start_date", "end_date", "is_active", "budget"]
-    list_filter = ["frequency", "is_active", "budget"]
+    def get_queryset(self, request):
+        # Show roots first; subcategories indented via __str__.
+        return super().get_queryset(request).order_by("budget", "category_type", "parent__name", "name")

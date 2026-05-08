@@ -1,10 +1,14 @@
 import time
 from datetime import UTC, datetime, timedelta
 
+from django.contrib import messages
+from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.shortcuts import render
+from django.http import JsonResponse
+from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.views import View
+from django.views.decorators.http import require_POST
 
 from inertia import render as inertia_render
 
@@ -18,6 +22,19 @@ def http_500(request):
 
 def http_404(request):
     return render(request, "404.html")
+
+
+@require_POST
+@staff_member_required
+def refresh_exchange_rates(request):
+    """Admin action: queue the update_exchange_rates Celery task. JSON for AJAX, redirect otherwise."""
+    from apps.base.tasks import update_exchange_rates
+
+    update_exchange_rates.delay()
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return JsonResponse({"ok": True})
+    messages.success(request, "Exchange rates refresh queued. Rates will update in a few seconds.")
+    return redirect("admin:index")
 
 
 class BankingView(LoginRequiredMixin, View):

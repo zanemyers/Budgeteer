@@ -13,11 +13,14 @@ from apps.accounts.views import (
     PasswordResetView,
     SignInView,
 )
-from apps.base.views import BankingView, http_404, http_500
+from apps.base.views import BankingView, http_404, http_500, refresh_exchange_rates
 from apps.budget.views import BudgetHistoryView, BudgetHomeView
 
 # Includes
-urlpatterns: list[URLResolver | URLPattern] = [path(r"admin/", admin.site.urls)]
+urlpatterns: list[URLResolver | URLPattern] = [
+    path("admin/refresh-exchange-rates/", refresh_exchange_rates, name="admin_refresh_exchange_rates"),
+    path(r"admin/", admin.site.urls),
+]
 
 # Project Urls
 urlpatterns += [
