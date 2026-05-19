@@ -1,4 +1,23 @@
-import { Component, createRef } from "react";
+import { useState } from "react";
+import { ConfirmButton } from "@/components/ConfirmButton";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface CategoryShape {
   id: number;
@@ -16,17 +35,13 @@ interface CategoryShape {
 interface Props {
   budgetPk: number;
   type: "income" | "expense";
-  categories: CategoryShape[];           // all categories — used to populate parent dropdown
-  category?: CategoryShape | null;       // when set, modal is in edit mode
+  categories: CategoryShape[];
+  category?: CategoryShape | null;
+  defaultParentId?: number | null;
   onClose: () => void;
   onSaved: (category: CategoryShape) => void;
-}
-
-interface State {
-  name: string;
-  parent_id: string;     // "" means root
-  saving: boolean;
-  error: string;
+  onChildSaved?: (child: CategoryShape) => void;
+  onChildDeleted?: (childId: number) => void;
 }
 
 function getCsrfToken(): string {
@@ -34,47 +49,58 @@ function getCsrfToken(): string {
   return match ? match[1] : "";
 }
 
-export default class CategoryModal extends Component<Props, State> {
-  private nameRef = createRef<HTMLInputElement>();
+export default function CategoryModal({
+  budgetPk,
+  type,
+  categories,
+  category,
+  defaultParentId,
+  onClose,
+  onSaved,
+  onChildSaved,
+  onChildDeleted,
+}: Props) {
+  const isEdit = !!category;
+  const initialParent = category?.parent_id ?? defaultParentId ?? null;
+  const [name, setName] = useState(category?.name ?? "");
+  const [parentId, setParentId] = useState(initialParent ? String(initialParent) : "none");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
-  constructor(props: Props) {
-    super(props);
-    this.state = {
-      name: props.category?.name ?? "",
-      parent_id: props.category?.parent_id ? String(props.category.parent_id) : "",
-      saving: false,
-      error: "",
-    };
-  }
+  // Inline child management — only meaningful when editing a top-level category.
+  const isTopLevel = isEdit && category!.parent_id === null && !category!.is_sinking_fund;
+  const children = isTopLevel
+    ? categories.filter((c) => c.parent_id === category!.id)
+    : [];
+  // If this category already has children, it can't itself become a child of another
+  // (the model only supports a single level of nesting).
+  const hasChildren = isEdit && children.length > 0;
+  const [newChildName, setNewChildName] = useState("");
+  const [addingChild, setAddingChild] = useState(false);
+  const [childError, setChildError] = useState("");
 
-  componentDidMount() {
-    document.addEventListener("keydown", this.handleEscape);
-    setTimeout(() => this.nameRef.current?.focus(), 0);
-  }
+  const eligibleParents = categories.filter((c) =>
+    c.category_type === type
+    && !c.is_sinking_fund
+    && c.parent_id === null
+    && (!isEdit || c.id !== category!.id)
+  );
 
-  componentWillUnmount() {
-    document.removeEventListener("keydown", this.handleEscape);
-  }
+  const typeLabel = type === "income" ? "Income" : "Expense";
 
-  handleEscape = (e: KeyboardEvent) => {
-    if (e.key === "Escape" && !this.state.saving) this.props.onClose();
-  };
-
-  handleSubmit = async (e: React.FormEvent) => {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const { budgetPk, type, category, onSaved } = this.props;
-    const { name, parent_id } = this.state;
-    const isEdit = !!category;
-    this.setState({ saving: true, error: "" });
+    setSaving(true);
+    setError("");
 
     const body: Record<string, unknown> = {
       name,
-      parent_id: parent_id || null,
+      parent_id: parentId === "none" ? null : parentId,
     };
     if (!isEdit) body.category_type = type;
 
     const url = isEdit
-      ? `/budgets/${budgetPk}/categories/${category.id}/edit/`
+      ? `/budgets/${budgetPk}/categories/${category!.id}/edit/`
       : `/budgets/${budgetPk}/categories/create/`;
     const method = isEdit ? "PATCH" : "POST";
 
@@ -87,93 +113,154 @@ export default class CategoryModal extends Component<Props, State> {
       if (!res.ok) {
         const data = await res.json() as { errors?: Record<string, string[]> };
         const flat = Object.values(data.errors ?? data).flat().join(" ");
-        this.setState({ error: flat || "Could not save.", saving: false });
+        setError(flat || "Could not save.");
+        setSaving(false);
         return;
       }
       const cat = await res.json() as CategoryShape;
       onSaved(cat);
     } catch {
-      this.setState({ error: "Network error.", saving: false });
+      setError("Network error.");
+      setSaving(false);
     }
-  };
-
-  render() {
-    const { type, categories, category, onClose } = this.props;
-    const { name, parent_id, saving, error } = this.state;
-    const isEdit = !!category;
-
-    // Eligible parents: same type, not a sinking fund, not the category being edited,
-    // not currently a child itself (no grandchildren), and the category being edited
-    // can't become its own ancestor.
-    const eligibleParents = categories.filter((c) =>
-      c.category_type === type
-      && !c.is_sinking_fund
-      && c.parent_id === null
-      && (!isEdit || c.id !== category.id)
-    );
-
-    const typeLabel = type === "income" ? "Income" : "Expense";
-
-    return (
-      <div
-        className="modal fade show block"
-        style={{ background: "rgba(0,0,0,0.5)" }}
-        tabIndex={-1}
-        onClick={(e) => { if (e.target === e.currentTarget && !saving) onClose(); }}
-      >
-        <div className="modal-dialog" role="document">
-          <div className="modal-content">
-            <form onSubmit={this.handleSubmit}>
-              <div className="modal-header">
-                <h5 className="modal-title">
-                  {isEdit ? "Edit" : "Add"} {typeLabel} Category
-                </h5>
-                <button type="button" className="btn-close" onClick={onClose} aria-label="Close" disabled={saving} />
-              </div>
-
-              <div className="modal-body">
-                <div className="mb-4">
-                  <label className="form-label">Name</label>
-                  <input
-                    ref={this.nameRef}
-                    className="form-control"
-                    placeholder="e.g. Groceries"
-                    value={name}
-                    onChange={(e) => this.setState({ name: e.target.value })}
-                    required
-                  />
-                </div>
-
-                <div className="mb-2">
-                  <label className="form-label">Parent category <span className="text-muted font-normal">(optional)</span></label>
-                  <select
-                    className="form-select"
-                    value={parent_id}
-                    onChange={(e) => this.setState({ parent_id: e.target.value })}
-                  >
-                    <option value="">— Top-level {typeLabel.toLowerCase()} category —</option>
-                    {eligibleParents.map((p) => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
-                    ))}
-                  </select>
-                  <small className="text-muted">
-                    Leave blank to create a top-level category, or choose a parent to make this a subcategory.
-                  </small>
-                </div>
-
-                {error && <div className="alert alert-danger py-2 mb-0 mt-3">{error}</div>}
-              </div>
-
-              <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={onClose} disabled={saving}>Cancel</button>
-                <button type="submit" className="btn btn-primary" disabled={saving || !name.trim()}>
-                  {saving ? "Saving…" : "Save"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      </div>
-    );
   }
+
+  async function addChild(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newChildName.trim() || !category) return;
+    setAddingChild(true);
+    setChildError("");
+    try {
+      const res = await fetch(`/budgets/${budgetPk}/categories/create/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() },
+        body: JSON.stringify({
+          name: newChildName.trim(),
+          category_type: type,
+          parent_id: category.id,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json() as { errors?: Record<string, string[]> };
+        setChildError(Object.values(data.errors ?? data).flat().join(" ") || "Could not add.");
+        return;
+      }
+      const child = await res.json() as CategoryShape;
+      onChildSaved?.(child);
+      setNewChildName("");
+    } finally {
+      setAddingChild(false);
+    }
+  }
+
+  async function deleteChild(child: CategoryShape) {
+    const res = await fetch(`/budgets/${budgetPk}/categories/${child.id}/delete/`, {
+      method: "DELETE",
+      headers: { "X-CSRFToken": getCsrfToken() },
+    });
+    if (res.ok || res.status === 204) {
+      onChildDeleted?.(child.id);
+    } else {
+      setChildError(`Could not delete ${child.name}.`);
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open && !saving) onClose(); }}>
+      <DialogContent>
+        <form onSubmit={handleSubmit}>
+          <DialogHeader>
+            <DialogTitle>{isEdit ? "Edit" : "Add"} {typeLabel} Category</DialogTitle>
+          </DialogHeader>
+
+          <div className="py-4 flex flex-col gap-4">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="cat-name">Name</Label>
+              <Input
+                id="cat-name"
+                placeholder="e.g. Groceries"
+                value={name}
+                autoFocus
+                onChange={(e) => setName(e.target.value)}
+                required
+              />
+            </div>
+
+            {!hasChildren && (
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="cat-parent">
+                  Parent category <span className="text-muted-foreground font-normal">(optional)</span>
+                </Label>
+                <Select value={parentId} onValueChange={setParentId}>
+                  <SelectTrigger id="cat-parent" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">— Top-level {typeLabel.toLowerCase()} category —</SelectItem>
+                    {eligibleParents.map((p) => (
+                      <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <small className="text-muted-foreground">
+                  Leave blank to create a top-level category, or choose a parent to make this a subcategory.
+                </small>
+              </div>
+            )}
+
+            {isTopLevel && (
+              <div className="flex flex-col gap-2 pt-2 border-t">
+                <Label className="mt-2">Subcategories</Label>
+                {children.length === 0 ? (
+                  <p className="text-muted-foreground text-sm">None yet.</p>
+                ) : (
+                  <div className="flex flex-col gap-1.5">
+                    {children.map((c) => (
+                      <div key={c.id} className="flex justify-between items-center px-3 py-1.5 rounded-md bg-muted/50">
+                        <span className="text-sm">{c.name}</span>
+                        <ConfirmButton size="xs" onConfirm={() => deleteChild(c)} label="Remove" />
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="flex gap-2 items-center">
+                  <Input
+                    placeholder="Add a subcategory…"
+                    value={newChildName}
+                    onChange={(e) => setNewChildName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        void addChild(e);
+                      }
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={!newChildName.trim() || addingChild}
+                    onClick={(e) => void addChild(e)}
+                  >
+                    {addingChild ? "Adding…" : "Add"}
+                  </Button>
+                </div>
+                {childError && <p className="text-destructive text-sm">{childError}</p>}
+              </div>
+            )}
+
+            {error && (
+              <Alert variant="destructive">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
+            <Button type="submit" disabled={saving || !name.trim()}>
+              {saving ? "Saving…" : "Save"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
 }

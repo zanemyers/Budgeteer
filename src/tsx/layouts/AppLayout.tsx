@@ -1,6 +1,15 @@
 import { usePage, router } from "@inertiajs/react";
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
+import { Menu } from "lucide-react";
 import ThemeToggle from "../components/ThemeToggle";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface AuthUser {
   id: number;
@@ -48,8 +57,7 @@ function NavLink({
   );
 }
 
-function logout(e: React.MouseEvent) {
-  e.preventDefault();
+function logout() {
   void fetch("/accounts/logout/", {
     method: "POST",
     headers: { "X-CSRFToken": document.cookie.match(/csrftoken=([^;]+)/)?.[1] ?? "" },
@@ -57,57 +65,35 @@ function logout(e: React.MouseEvent) {
 }
 
 function UserMenu({ user }: { user: AuthUser }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    }
-    if (open) document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [open]);
-
   return (
-    <div ref={ref} style={{ position: "relative" }}>
-      <button
-        className="sidebar-user"
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-      >
-        <span className="shrink-0">
-          <img src={user.gravatar} alt={user.name} width="26" height="26" className="rounded-full" />
-        </span>
-        <span className="sidebar-user-name">{user.email}</span>
-        <span className="sidebar-user-chevron">▾</span>
-      </button>
-
-      {open && (
-        <ul
-          className="dropdown-menu"
-          style={{ position: "absolute", bottom: "calc(100% + 4px)", left: 0, right: 0 }}
-        >
-          <li>
-            <a className="dropdown-item" href="/accounts/settings/" onClick={(e) => { e.preventDefault(); setOpen(false); router.visit("/accounts/settings/"); }}>
-              Account Settings
-            </a>
-          </li>
-          {user.is_staff && (
-            <li>
-              <a className="dropdown-item" href="/admin/">Administration</a>
-            </li>
-          )}
-          <li>
-            <button type="button" className="dropdown-item" onClick={(e) => { setOpen(false); logout(e); }}>
-              Sign Out
-            </button>
-          </li>
-        </ul>
-      )}
-    </div>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button className="sidebar-user" type="button">
+          <span className="shrink-0">
+            <img src={user.gravatar} alt={user.name} width="26" height="26" className="rounded-full" />
+          </span>
+          <span className="sidebar-user-name">{user.email}</span>
+          <span className="sidebar-user-chevron">▾</span>
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side="top" align="start" className="w-56">
+        <DropdownMenuItem onClick={() => router.visit("/accounts/settings/")}>
+          Account Settings
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => router.visit("/accounts/history/")}>
+          Budget History
+        </DropdownMenuItem>
+        {user.is_staff && (
+          <DropdownMenuItem asChild>
+            <a href="/admin/">Administration</a>
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => logout()}>
+          Sign Out
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -125,7 +111,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const onCurrentBudget = props.budget_pk != null;
 
   return (
-    <div className="flex h-full">
+    <div className="flex min-h-screen">
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
@@ -137,9 +123,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {/* Sidebar */}
       <div
         className="sidebar fixed lg:static inset-y-0 left-0 z-50 lg:z-auto"
-        style={{
-          transform: sidebarOpen ? "translateX(0)" : undefined,
-        }}
         data-sidebar-open={sidebarOpen || undefined}
       >
         <style>{`
@@ -152,7 +135,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         {/* Brand */}
         <div className="sidebar-brand-wrap">
           <a href="/" className="sidebar-brand">
-            <img src="/public/static/favicon.ico" alt="" width="28" height="28" />
+            <img
+              src="/public/static/concept_images/piggy/white/filled.png"
+              alt=""
+              width="28"
+              height="28"
+              className="block dark:hidden"
+            />
+            <img
+              src="/public/static/concept_images/piggy/black/filled.png"
+              alt=""
+              width="28"
+              height="28"
+              className="hidden dark:block"
+            />
             Budgeteer
           </a>
           <ThemeToggle />
@@ -166,9 +162,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 <span className="sidebar-group-label">Budgets</span>
                 <NavLink href="/budgets/" active={isAt("/budgets/") && !onCurrentBudget}>
                   My Budgets
-                </NavLink>
-                <NavLink href="/accounts/history/" active={isAt("/accounts/history")}>
-                  History
                 </NavLink>
                 <NavLink href="/banking/" active={isAt("/banking")}>
                   Banking
@@ -187,22 +180,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     Dashboard
                   </NavLink>
                   <NavLink href={txnHref} active={isAt(`/budgets/${sidebarBudgetPk}/transactions`)}>
-                    All Transactions
-                  </NavLink>
-                  <NavLink href={`/budgets/${sidebarBudgetPk}/categories/`} active={isAt(`/budgets/${sidebarBudgetPk}/categories`)}>
-                    Categories
+                    Transactions
                   </NavLink>
                   <NavLink href={`/budgets/${sidebarBudgetPk}/sinking-funds/`} active={isAt(`/budgets/${sidebarBudgetPk}/sinking-funds`)}>
-                    Sinking Funds
+                    Goals
                   </NavLink>
-                  <NavLink href={`/budgets/${sidebarBudgetPk}/recurring/`} active={isAt(`/budgets/${sidebarBudgetPk}/recurring`)}>
-                    Recurring
-                  </NavLink>
-                  <NavLink href={`/budgets/${sidebarBudgetPk}/payment-methods/`} active={isAt(`/budgets/${sidebarBudgetPk}/payment-methods`)}>
-                    Payment Methods
-                  </NavLink>
-                  <NavLink href={`/budgets/${sidebarBudgetPk}/members/`} active={isAt(`/budgets/${sidebarBudgetPk}/members`)}>
-                    Members
+                  <NavLink href={`/budgets/${sidebarBudgetPk}/settings/`} active={isAt(`/budgets/${sidebarBudgetPk}/settings`)}>
+                    Settings
                   </NavLink>
                 </div>
               )}
@@ -223,26 +207,24 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </div>
 
       {/* Main content */}
-      <div className="flex flex-col grow overflow-hidden">
+      <div className="flex flex-col grow min-w-0 min-h-screen">
         {/* Mobile top bar */}
-        <header className="flex lg:hidden items-center border-bottom px-4 py-2 gap-2">
-          <button
-            type="button"
-            className="btn btn-sm"
+        <header className="shrink-0 flex lg:hidden items-center border-b px-4 py-2 gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={() => setSidebarOpen(true)}
             aria-label="Open navigation"
           >
-            <svg width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
-              <path fillRule="evenodd" d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5z" />
-            </svg>
-          </button>
-          <a className="font-semibold no-underline text-body" href="/">Budgeteer</a>
+            <Menu />
+          </Button>
+          <a className="font-semibold no-underline text-foreground" href="/">Budgeteer</a>
         </header>
 
-        <main className="grow p-4 overflow-y-auto lg:p-6">{children}</main>
+        <main className="grow flex flex-col p-4 lg:p-6">{children}</main>
 
-        <footer className="footer border-top px-4 py-2">
-          <p className="text-sm text-secondary mb-0">
+        <footer className="shrink-0 border-t px-4 py-2">
+          <p className="text-sm text-muted-foreground">
             © Budgeteer {new Date().getFullYear()}
           </p>
         </footer>

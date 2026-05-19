@@ -1,4 +1,16 @@
-import { Component, createRef } from "react";
+import { useState } from "react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 
 export interface SinkingFundCategory {
   id: number;
@@ -21,82 +33,76 @@ interface Props {
   onSaved: (category: SinkingFundCategory) => void;
 }
 
-interface State {
-  name: string;
-  target: string;
-  due_date: string;
-  ongoing: boolean;
-  monthly_goal: string;
-  initial_balance: string;
-  add_amount: string;
-  add_description: string;
-  saving: boolean;
-  error: string;
-}
-
 function getCsrfToken(): string {
   const match = document.cookie.match(/csrftoken=([^;]+)/);
   return match ? match[1] : "";
 }
 
-export default class SinkingFundModal extends Component<Props, State> {
-  private nameRef = createRef<HTMLInputElement>();
+function CurrencyInput({
+  id, value, onChange, placeholder, required, min = "0", step = "0.01",
+}: {
+  id?: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  required?: boolean;
+  min?: string;
+  step?: string;
+}) {
+  return (
+    <div className="flex">
+      <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-input bg-muted text-muted-foreground text-sm">$</span>
+      <Input
+        id={id}
+        type="number"
+        className="rounded-l-none"
+        min={min}
+        step={step}
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        required={required}
+      />
+    </div>
+  );
+}
 
-  constructor(props: Props) {
-    super(props);
-    const fund = props.fund;
-    this.state = {
-      name: fund?.name ?? "",
-      target: fund?.sinking_fund_target ?? "",
-      due_date: fund?.sinking_fund_due_date ?? "",
-      ongoing: fund?.sinking_fund_ongoing ?? false,
-      monthly_goal: fund?.sinking_fund_monthly_goal ?? "",
-      initial_balance: "",
-      add_amount: "",
-      add_description: "",
-      saving: false,
-      error: "",
-    };
-  }
+export default function SinkingFundModal({ budgetPk, fund, onClose, onSaved }: Props) {
+  const isEdit = !!fund;
+  const [name, setName] = useState(fund?.name ?? "");
+  const [target, setTarget] = useState(fund?.sinking_fund_target ?? "");
+  const [dueDate, setDueDate] = useState(fund?.sinking_fund_due_date ?? "");
+  const [ongoing, setOngoing] = useState(fund?.sinking_fund_ongoing ?? false);
+  const [monthlyGoal, setMonthlyGoal] = useState(fund?.sinking_fund_monthly_goal ?? "");
+  const [initialBalance, setInitialBalance] = useState("");
+  const [addAmount, setAddAmount] = useState("");
+  const [addDescription, setAddDescription] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
-  componentDidMount() {
-    document.addEventListener("keydown", this.handleEscape);
-    setTimeout(() => this.nameRef.current?.focus(), 0);
-  }
-
-  componentWillUnmount() {
-    document.removeEventListener("keydown", this.handleEscape);
-  }
-
-  handleEscape = (e: KeyboardEvent) => {
-    if (e.key === "Escape" && !this.state.saving) this.props.onClose();
-  };
-
-  handleSubmit = async (e: React.FormEvent) => {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const { budgetPk, fund, onSaved } = this.props;
-    const { name, target, due_date, ongoing, monthly_goal, initial_balance, add_amount, add_description } = this.state;
-    const isEdit = !!fund;
-    this.setState({ saving: true, error: "" });
+    setSaving(true);
+    setError("");
 
     const body: Record<string, unknown> = {
       name,
       sinking_fund_target: target,
-      sinking_fund_due_date: ongoing ? null : due_date,
+      sinking_fund_due_date: ongoing ? null : dueDate,
       sinking_fund_ongoing: ongoing,
-      sinking_fund_monthly_goal: ongoing ? monthly_goal : null,
+      sinking_fund_monthly_goal: ongoing ? monthlyGoal : null,
     };
     if (isEdit) {
-      body.add_amount = add_amount || "0";
-      body.add_description = add_description;
+      body.add_amount = addAmount || "0";
+      body.add_description = addDescription;
     } else {
       body.category_type = "expense";
       body.is_sinking_fund = true;
-      body.sinking_fund_initial_balance = initial_balance || "0";
+      body.sinking_fund_initial_balance = initialBalance || "0";
     }
 
     const url = isEdit
-      ? `/budgets/${budgetPk}/categories/${fund.id}/edit/`
+      ? `/budgets/${budgetPk}/categories/${fund!.id}/edit/`
       : `/budgets/${budgetPk}/categories/create/`;
     const method = isEdit ? "PATCH" : "POST";
 
@@ -109,165 +115,141 @@ export default class SinkingFundModal extends Component<Props, State> {
       if (!res.ok) {
         const data = await res.json() as { errors?: Record<string, string[]> };
         const flat = Object.values(data.errors ?? data).flat().join(" ");
-        this.setState({ error: flat || "Could not save.", saving: false });
+        setError(flat || "Could not save.");
+        setSaving(false);
         return;
       }
       const cat = await res.json() as SinkingFundCategory;
       onSaved(cat);
     } catch {
-      this.setState({ error: "Network error.", saving: false });
+      setError("Network error.");
+      setSaving(false);
     }
-  };
+  }
 
-  render() {
-    const { fund, onClose } = this.props;
-    const { name, target, due_date, ongoing, monthly_goal, initial_balance, add_amount, add_description, saving, error } = this.state;
-    const isEdit = !!fund;
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open && !saving) onClose(); }}>
+      <DialogContent className="sm:max-w-2xl">
+        <form onSubmit={handleSubmit}>
+          <DialogHeader>
+            <DialogTitle>{isEdit ? "Edit Goal" : "Add Goal"}</DialogTitle>
+          </DialogHeader>
 
-    return (
-      <div
-        className="modal fade show block"
-        style={{ background: "rgba(0,0,0,0.5)" }}
-        tabIndex={-1}
-        onClick={(e) => { if (e.target === e.currentTarget && !saving) onClose(); }}
-      >
-        <div className="modal-dialog modal-lg" role="document">
-          <div className="modal-content">
-            <form onSubmit={this.handleSubmit}>
-              <div className="modal-header">
-                <h5 className="modal-title">{isEdit ? "Edit Sinking Fund" : "Add Sinking Fund"}</h5>
-                <button type="button" className="btn-close" onClick={onClose} aria-label="Close" disabled={saving} />
+          <div className="py-4 grid grid-cols-12 gap-3">
+            <div className="col-span-12 md:col-span-7 flex flex-col gap-2">
+              <Label htmlFor="sf-name">Name</Label>
+              <Input
+                id="sf-name"
+                placeholder="e.g. Vacation, New Car"
+                value={name}
+                autoFocus
+                onChange={(e) => setName(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="col-span-12 md:col-span-5 flex flex-col gap-2">
+              <Label htmlFor="sf-target">Target amount</Label>
+              <CurrencyInput
+                id="sf-target"
+                min="0.01"
+                placeholder="5000"
+                value={target}
+                onChange={setTarget}
+                required
+              />
+            </div>
+
+            <div className="col-span-12 flex items-center gap-2">
+              <Switch id="sf-ongoing" checked={ongoing} onCheckedChange={setOngoing} />
+              <Label htmlFor="sf-ongoing" className="font-normal">
+                Ongoing fund (monthly goal instead of due date)
+              </Label>
+            </div>
+
+            {ongoing ? (
+              <div className="col-span-12 md:col-span-6 flex flex-col gap-2">
+                <Label htmlFor="sf-monthly">Monthly goal</Label>
+                <CurrencyInput
+                  id="sf-monthly"
+                  placeholder="100"
+                  value={monthlyGoal}
+                  onChange={setMonthlyGoal}
+                  required={ongoing}
+                />
               </div>
+            ) : (
+              <div className="col-span-12 md:col-span-6 flex flex-col gap-2">
+                <Label htmlFor="sf-due">Due date</Label>
+                <Input
+                  id="sf-due"
+                  type="date"
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                  required={!ongoing}
+                />
+              </div>
+            )}
 
-              <div className="modal-body">
-                <div className="grid grid-cols-12 gap-3">
-                  <div className="col-span-12 md:col-span-7">
-                    <label className="form-label">Name</label>
-                    <input
-                      ref={this.nameRef}
-                      className="form-control"
-                      placeholder="e.g. Vacation, New Car"
-                      value={name}
-                      onChange={(e) => this.setState({ name: e.target.value })}
-                      required
+            {!isEdit && (
+              <div className="col-span-12 md:col-span-6 flex flex-col gap-2">
+                <Label htmlFor="sf-initial">
+                  Already saved <span className="text-muted-foreground font-normal">(optional)</span>
+                </Label>
+                <CurrencyInput
+                  id="sf-initial"
+                  placeholder="0"
+                  value={initialBalance}
+                  onChange={setInitialBalance}
+                />
+              </div>
+            )}
+
+            {isEdit && (
+              <>
+                <div className="col-span-12 md:col-span-5 flex flex-col gap-2">
+                  <Label htmlFor="sf-add">
+                    Add to balance <span className="text-muted-foreground font-normal">(optional)</span>
+                  </Label>
+                  <CurrencyInput
+                    id="sf-add"
+                    min="0.01"
+                    placeholder="0.00"
+                    value={addAmount}
+                    onChange={setAddAmount}
+                  />
+                </div>
+                {addAmount && parseFloat(addAmount) > 0 && (
+                  <div className="col-span-12 md:col-span-7 flex flex-col gap-2">
+                    <Label htmlFor="sf-add-desc">Description</Label>
+                    <Input
+                      id="sf-add-desc"
+                      placeholder="e.g. Initial deposit"
+                      value={addDescription}
+                      onChange={(e) => setAddDescription(e.target.value)}
                     />
                   </div>
+                )}
+              </>
+            )}
 
-                  <div className="col-span-12 md:col-span-5">
-                    <label className="form-label">Target amount</label>
-                    <div className="input-group">
-                      <span className="input-group-text">$</span>
-                      <input
-                        type="number" className="form-control" min="0.01" step="0.01"
-                        placeholder="5000"
-                        value={target}
-                        onChange={(e) => this.setState({ target: e.target.value })}
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div className="col-span-12">
-                    <div className="form-check form-switch">
-                      <input
-                        className="form-check-input" type="checkbox" role="switch"
-                        id="sf-modal-ongoing"
-                        checked={ongoing}
-                        onChange={(e) => this.setState({ ongoing: e.target.checked })}
-                      />
-                      <label className="form-check-label" htmlFor="sf-modal-ongoing">
-                        Ongoing fund (monthly goal instead of due date)
-                      </label>
-                    </div>
-                  </div>
-
-                  {ongoing ? (
-                    <div className="col-span-12 md:col-span-6">
-                      <label className="form-label">Monthly goal</label>
-                      <div className="input-group">
-                        <span className="input-group-text">$</span>
-                        <input
-                          type="number" className="form-control" min="0" step="0.01"
-                          placeholder="100"
-                          value={monthly_goal}
-                          onChange={(e) => this.setState({ monthly_goal: e.target.value })}
-                          required={ongoing}
-                        />
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="col-span-12 md:col-span-6">
-                      <label className="form-label">Due date</label>
-                      <input
-                        type="date" className="form-control"
-                        value={due_date}
-                        onChange={(e) => this.setState({ due_date: e.target.value })}
-                        required={!ongoing}
-                      />
-                    </div>
-                  )}
-
-                  {!isEdit && (
-                    <div className="col-span-12 md:col-span-6">
-                      <label className="form-label">
-                        Already saved <span className="text-muted font-normal">(optional)</span>
-                      </label>
-                      <div className="input-group">
-                        <span className="input-group-text">$</span>
-                        <input
-                          type="number" className="form-control" min="0" step="0.01"
-                          placeholder="0"
-                          value={initial_balance}
-                          onChange={(e) => this.setState({ initial_balance: e.target.value })}
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {isEdit && (
-                    <>
-                      <div className="col-span-12 md:col-span-5">
-                        <label className="form-label">
-                          Add to balance <span className="text-muted font-normal">(optional)</span>
-                        </label>
-                        <div className="input-group">
-                          <span className="input-group-text">$</span>
-                          <input
-                            type="number" className="form-control" min="0.01" step="0.01"
-                            placeholder="0.00"
-                            value={add_amount}
-                            onChange={(e) => this.setState({ add_amount: e.target.value })}
-                          />
-                        </div>
-                      </div>
-                      {add_amount && parseFloat(add_amount) > 0 && (
-                        <div className="col-span-12 md:col-span-7">
-                          <label className="form-label">Description</label>
-                          <input
-                            className="form-control"
-                            placeholder="e.g. Initial deposit"
-                            value={add_description}
-                            onChange={(e) => this.setState({ add_description: e.target.value })}
-                          />
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-
-                {error && <div className="alert alert-danger py-2 mb-0 mt-3">{error}</div>}
+            {error && (
+              <div className="col-span-12">
+                <Alert variant="destructive">
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
               </div>
-
-              <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={onClose} disabled={saving}>Cancel</button>
-                <button type="submit" className="btn btn-primary" disabled={saving || !name.trim() || !target}>
-                  {saving ? "Saving…" : "Save"}
-                </button>
-              </div>
-            </form>
+            )}
           </div>
-        </div>
-      </div>
-    );
-  }
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
+            <Button type="submit" disabled={saving || !name.trim() || !target}>
+              {saving ? "Saving…" : "Save"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
 }

@@ -1,6 +1,11 @@
 import { createElement, useState } from "react";
 import { router } from "@inertiajs/react";
 import AuthLayout from "../layouts/AuthLayout";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 interface Props {
   done: boolean;
@@ -47,81 +52,81 @@ export default function PasswordResetConfirm({ done, token_fail, errors: initial
 
   if (done) {
     return (
-      <div className="card shadow-sm">
-        <div className="card-body p-6 text-center">
-          <div className="mb-4" style={{ fontSize: "2rem" }}>✓</div>
-          <h1 className="font-semibold mb-2">Password changed</h1>
-          <p className="text-muted text-sm mb-6">Your password has been updated. You can now sign in.</p>
-          <a
-            href="/accounts/login/"
-            className="btn btn-primary"
-            onClick={(e) => { e.preventDefault(); router.visit("/accounts/login/"); }}
-          >
-            Sign in
-          </a>
-        </div>
-      </div>
+      <Card>
+        <CardContent className="text-center">
+          <div className="mb-4 text-3xl text-primary">✓</div>
+          <h1 className="text-xl font-semibold mb-2">Password changed</h1>
+          <p className="text-muted-foreground text-sm mb-6">Your password has been updated. You can now sign in.</p>
+          <Button asChild>
+            <a href="/accounts/login/" onClick={(e) => { e.preventDefault(); router.visit("/accounts/login/"); }}>
+              Sign in
+            </a>
+          </Button>
+        </CardContent>
+      </Card>
     );
   }
 
   if (token_fail) {
     return (
-      <div className="card shadow-sm">
-        <div className="card-body p-6 text-center">
-          <h1 className="font-semibold mb-2">Link expired</h1>
-          <p className="text-muted text-sm mb-6">
+      <Card>
+        <CardContent className="text-center">
+          <h1 className="text-xl font-semibold mb-2">Link expired</h1>
+          <p className="text-muted-foreground text-sm mb-6">
             This password reset link is invalid or has already been used.
           </p>
-          <a
-            href="/accounts/password/reset/"
-            className="btn btn-primary"
-            onClick={(e) => { e.preventDefault(); router.visit("/accounts/password/reset/"); }}
-          >
-            Request a new link
-          </a>
-        </div>
-      </div>
+          <Button asChild>
+            <a href="/accounts/password/reset/" onClick={(e) => { e.preventDefault(); router.visit("/accounts/password/reset/"); }}>
+              Request a new link
+            </a>
+          </Button>
+        </CardContent>
+      </Card>
     );
   }
 
   const error = errors.password1 ?? errors.password2 ?? errors.__all__ ?? null;
 
   return (
-    <div className="card shadow-sm">
-      <div className="card-body p-6">
-        <h1 className="mb-1 font-semibold">New password</h1>
-        <p className="text-muted text-sm mb-6">Choose a new password for your account.</p>
+    <Card>
+      <CardContent>
+        <h1 className="text-2xl font-semibold mb-1">New password</h1>
+        <p className="text-muted-foreground text-sm mb-6">Choose a new password for your account.</p>
 
-        {error && <div className="alert alert-danger py-2 text-sm">{error}</div>}
+        {error && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
 
-        <form onSubmit={(e) => void submit(e)}>
-          <div className="mb-4">
-            <label className="form-label">New password</label>
-            <input
+        <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="pw1">New password</Label>
+            <Input
+              id="pw1"
               type="password"
-              className="form-control"
               autoFocus
               autoComplete="new-password"
               value={password1}
               onChange={(e) => setPassword1(e.target.value)}
             />
           </div>
-          <div className="mb-6">
-            <label className="form-label">Confirm new password</label>
-            <input
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="pw2">Confirm new password</Label>
+            <Input
+              id="pw2"
               type="password"
-              className="form-control"
               autoComplete="new-password"
               value={password2}
               onChange={(e) => setPassword2(e.target.value)}
             />
           </div>
-          <button className="btn btn-primary w-full" disabled={loading}>
+          <Button className="w-full mt-2" disabled={loading}>
             {loading ? "Saving…" : "Set new password"}
-          </button>
+          </Button>
         </form>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 }
 

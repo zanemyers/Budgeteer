@@ -1,5 +1,16 @@
 import { router } from "@inertiajs/react";
 import type { Transaction } from "../types";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 interface Props {
   budget_pk: number;
@@ -15,104 +26,98 @@ export default function TransactionDetail({ budget_pk, transaction: txn }: Props
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
-        <h1 className="mb-0">{txn.description}</h1>
-        <div className="flex gap-2">
+        <h1 className="text-2xl font-semibold">{txn.description}</h1>
+        <Button asChild variant="outline" size="sm">
           <a
             href={`/budgets/${budget_pk}/transactions/`}
-            className="btn btn-outline-secondary btn-sm"
             onClick={(e) => { e.preventDefault(); router.visit(`/budgets/${budget_pk}/transactions/`); }}
           >
             ← Back
           </a>
-        </div>
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-        <div className="md:col-span-5">
-          <div className="card">
-            <div className="card-header text-sm font-semibold text-muted py-2">Details</div>
-            <div className="card-body">
-              <dl className="mb-0">
-                <dt>Description</dt>
-                <dd>{txn.description}</dd>
-                <dt>Due Date</dt>
-                <dd>{fmtDate(txn.due_date)}</dd>
-                <dt>Paid Date</dt>
-                <dd>{fmtDate(txn.paid_date)}</dd>
-                <dt>Status</dt>
-                <dd>
-                  {txn.transaction_type === "income"
-                    ? <span className={`badge ${txn.is_paid ? "bg-success" : "bg-secondary"}`}>{txn.is_paid ? "Received" : "Pending"}</span>
-                    : <span className={`badge ${txn.is_paid ? "bg-success" : "bg-warning text-dark"}`}>{txn.is_paid ? "Paid" : "Unpaid"}</span>}
-                </dd>
-                <dt>Payment Method</dt>
-                <dd>{txn.payment_method_name ?? "—"}</dd>
-                {txn.notes && (
-                  <>
-                    <dt>Notes</dt>
-                    <dd className="text-muted">{txn.notes}</dd>
-                  </>
-                )}
-                {txn.recurring !== null && (
-                  <>
-                    <dt>Recurring</dt>
-                    <dd>
-                      <a
-                        href={`/budgets/${budget_pk}/recurring/${txn.recurring}/`}
-                        onClick={(e) => { e.preventDefault(); router.visit(`/budgets/${budget_pk}/recurring/${txn.recurring}/`); }}
-                      >
-                        View Schedule
-                      </a>
-                    </dd>
-                  </>
-                )}
-              </dl>
-            </div>
+        <Card className="md:col-span-5 p-0 gap-0 overflow-hidden">
+          <div className="px-6 py-2 text-sm font-semibold text-muted-foreground border-b">Details</div>
+          <div className="p-6">
+            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+              <dt className="text-muted-foreground">Description</dt>
+              <dd>{txn.description}</dd>
+              <dt className="text-muted-foreground">Due Date</dt>
+              <dd>{fmtDate(txn.due_date)}</dd>
+              <dt className="text-muted-foreground">Paid Date</dt>
+              <dd>{fmtDate(txn.paid_date)}</dd>
+              <dt className="text-muted-foreground">Status</dt>
+              <dd>
+                {txn.transaction_type === "income"
+                  ? <Badge variant={txn.is_paid ? "success" : "secondary"}>{txn.is_paid ? "Received" : "Pending"}</Badge>
+                  : <Badge variant={txn.is_paid ? "success" : "warning"}>{txn.is_paid ? "Paid" : "Unpaid"}</Badge>}
+              </dd>
+              <dt className="text-muted-foreground">Payment Method</dt>
+              <dd>{txn.payment_method_name ?? "—"}</dd>
+              {txn.notes && (
+                <>
+                  <dt className="text-muted-foreground">Notes</dt>
+                  <dd className="text-muted-foreground">{txn.notes}</dd>
+                </>
+              )}
+              {txn.recurring !== null && (
+                <>
+                  <dt className="text-muted-foreground">Recurring</dt>
+                  <dd>
+                    <a
+                      href={`/budgets/${budget_pk}/recurring/${txn.recurring}/`}
+                      className="text-primary hover:underline"
+                      onClick={(e) => { e.preventDefault(); router.visit(`/budgets/${budget_pk}/recurring/${txn.recurring}/`); }}
+                    >
+                      View Schedule
+                    </a>
+                  </dd>
+                </>
+              )}
+            </dl>
           </div>
-        </div>
+        </Card>
 
-        <div className="md:col-span-7">
-          <div className="card">
-            <div className="card-header text-sm font-semibold text-muted py-2">Line Items</div>
-            <div className="table-responsive">
-              <table className="table table-sm mb-0 align-middle">
-                <thead>
-                  <tr>
-                    <th>Category</th>
-                    <th className="text-right">Amount</th>
-                    <th>Note</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {txn.lines.map((line) => (
-                    <tr key={line.id}>
-                      <td>
-                        <a
-                          href={`/budgets/${budget_pk}/transactions/?category=${line.category}`}
-                          className="no-underline text-body"
-                          onClick={(e) => { e.preventDefault(); router.visit(`/budgets/${budget_pk}/transactions/?category=${line.category}`); }}
-                        >
-                          {line.category_name}
-                        </a>
-                      </td>
-                      <td className={`text-right font-semibold ${line.category_type === "income" ? "text-success" : "text-danger"}`}>
-                        ${parseFloat(line.amount).toFixed(2)}
-                      </td>
-                      <td className="text-muted text-sm">{line.description}</td>
-                    </tr>
-                  ))}
-                  <tr className="table-light font-semibold">
-                    <td>Total</td>
-                    <td className={`text-right ${txn.transaction_type === "income" ? "text-success" : "text-danger"}`}>
-                      ${parseFloat(txn.total_amount).toFixed(2)}
-                    </td>
-                    <td></td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
+        <Card className="md:col-span-7 p-0 gap-0 overflow-hidden">
+          <div className="px-4 py-2 text-sm font-semibold text-muted-foreground border-b">Line Items</div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Category</TableHead>
+                <TableHead className="text-right">Amount</TableHead>
+                <TableHead>Note</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {txn.lines.map((line) => (
+                <TableRow key={line.id}>
+                  <TableCell>
+                    <a
+                      href={`/budgets/${budget_pk}/transactions/?category=${line.category}`}
+                      className="no-underline hover:underline"
+                      onClick={(e) => { e.preventDefault(); router.visit(`/budgets/${budget_pk}/transactions/?category=${line.category}`); }}
+                    >
+                      {line.category_name}
+                    </a>
+                  </TableCell>
+                  <TableCell className={`text-right font-semibold ${line.category_type === "income" ? "text-primary" : "text-destructive"}`}>
+                    ${parseFloat(line.amount).toFixed(2)}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground text-sm">{line.description}</TableCell>
+                </TableRow>
+              ))}
+              <TableRow className="bg-muted/50 hover:bg-muted/50 font-semibold">
+                <TableCell>Total</TableCell>
+                <TableCell className={`text-right ${txn.transaction_type === "income" ? "text-primary" : "text-destructive"}`}>
+                  ${parseFloat(txn.total_amount).toFixed(2)}
+                </TableCell>
+                <TableCell></TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        </Card>
       </div>
     </div>
   );

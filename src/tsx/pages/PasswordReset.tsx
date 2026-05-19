@@ -1,6 +1,11 @@
 import { createElement, useState } from "react";
 import { router } from "@inertiajs/react";
 import AuthLayout from "../layouts/AuthLayout";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 interface Props {
   done: boolean;
@@ -46,60 +51,62 @@ export default function PasswordReset({ done: initialDone, errors: initialErrors
 
   if (done) {
     return (
-      <div className="card shadow-sm">
-        <div className="card-body p-6 text-center">
-          <div className="mb-4" style={{ fontSize: "2rem" }}>✉</div>
-          <h1 className="font-semibold mb-2">Check your email</h1>
-          <p className="text-muted text-sm mb-6">
+      <Card>
+        <CardContent className="text-center">
+          <div className="mb-4 text-3xl text-primary">✉</div>
+          <h1 className="text-xl font-semibold mb-2">Check your email</h1>
+          <p className="text-muted-foreground text-sm mb-6">
             If an account exists for that address, we&apos;ve sent password reset instructions.
           </p>
-          <a
-            href="/accounts/login/"
-            className="btn btn-outline-secondary btn-sm"
-            onClick={(e) => { e.preventDefault(); router.visit("/accounts/login/"); }}
-          >
-            Back to sign in
-          </a>
-        </div>
-      </div>
+          <Button asChild variant="outline" size="sm">
+            <a href="/accounts/login/" onClick={(e) => { e.preventDefault(); router.visit("/accounts/login/"); }}>
+              Back to sign in
+            </a>
+          </Button>
+        </CardContent>
+      </Card>
     );
   }
 
   return (
-    <div className="card shadow-sm">
-      <div className="card-body p-6">
-        <h1 className="mb-1 font-semibold">Reset password</h1>
-        <p className="text-muted text-sm mb-6">Enter your email and we&apos;ll send reset instructions.</p>
+    <Card>
+      <CardContent>
+        <h1 className="text-2xl font-semibold mb-1">Reset password</h1>
+        <p className="text-muted-foreground text-sm mb-6">Enter your email and we&apos;ll send reset instructions.</p>
 
-        {errors.email && <div className="alert alert-danger py-2 text-sm">{errors.email}</div>}
+        {errors.email && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertDescription>{errors.email}</AlertDescription>
+          </Alert>
+        )}
 
-        <form onSubmit={(e) => void submit(e)}>
-          <div className="mb-6">
-            <label className="form-label">Email</label>
-            <input
+        <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
               type="email"
-              className="form-control"
               autoFocus
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
           </div>
-          <button className="btn btn-primary w-full" disabled={loading}>
+          <Button className="w-full mt-2" disabled={loading}>
             {loading ? "Sending…" : "Send reset link"}
-          </button>
+          </Button>
         </form>
 
         <div className="text-center mt-4">
           <a
             href="/accounts/login/"
-            className="text-sm text-muted"
+            className="text-sm text-muted-foreground hover:underline"
             onClick={(e) => { e.preventDefault(); router.visit("/accounts/login/"); }}
           >
             Back to sign in
           </a>
         </div>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 }
 

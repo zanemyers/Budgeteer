@@ -1,21 +1,15 @@
-import { Component } from "react";
+import { Loader2 } from "lucide-react";
 
 interface Props {
   message?: string;
 }
 
-class LoadingSpinner extends Component<Props> {
-  render() {
-    const { message = "Loading..." } = this.props;
-    return (
-      <div className="flex justify-center items-center py-12">
-        <div className="spinner-border text-primary mr-4" role="status">
-          <span className="sr-only">{message}</span>
-        </div>
-        <span className="text-muted">{message}</span>
-      </div>
-    );
-  }
+export default function LoadingSpinner({ message = "Loading..." }: Props) {
+  return (
+    <div className="flex justify-center items-center py-12 gap-3">
+      <Loader2 className="size-5 animate-spin text-primary" aria-hidden="true" />
+      <span className="text-muted-foreground">{message}</span>
+      <span className="sr-only">{message}</span>
+    </div>
+  );
 }
-
-export default LoadingSpinner;

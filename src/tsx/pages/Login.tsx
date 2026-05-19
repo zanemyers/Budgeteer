@@ -1,6 +1,11 @@
 import { createElement, useState } from "react";
 import { router } from "@inertiajs/react";
 import AuthLayout from "../layouts/AuthLayout";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 interface Props {
   errors: Record<string, string>;
@@ -47,45 +52,49 @@ export default function Login({ errors: initialErrors, next }: Props) {
   }
 
   return (
-    <div className="card shadow-sm">
-      <div className="card-body p-4">
-        <h1 className="mb-6 font-semibold">Sign in</h1>
+    <Card>
+      <CardContent>
+        <h1 className="mb-6 text-2xl font-semibold">Sign in</h1>
 
-        {error && <div className="alert alert-danger py-2 text-sm">{error}</div>}
+        {error && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
 
-        <form onSubmit={(e) => void submit(e)}>
-          <div className="mb-4">
-            <label className="form-label">Email</label>
-            <input
+        <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
               type="email"
-              className="form-control"
               autoComplete="email"
               autoFocus
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
           </div>
-          <div className="mb-6">
-            <div className="flex justify-between items-center mb-1">
-              <label className="form-label mb-0">Password</label>
-              <a href="/accounts/password/reset/" className="text-sm text-muted">
+          <div className="flex flex-col gap-2">
+            <div className="flex justify-between items-center">
+              <Label htmlFor="password">Password</Label>
+              <a href="/accounts/password/reset/" className="text-sm text-muted-foreground hover:underline">
                 Forgot password?
               </a>
             </div>
-            <input
+            <Input
+              id="password"
               type="password"
-              className="form-control"
               autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
           </div>
-          <button className="btn btn-primary w-full" disabled={loading}>
+          <Button className="w-full mt-2" disabled={loading}>
             {loading ? "Signing in…" : "Sign in"}
-          </button>
+          </Button>
         </form>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 }
 
