@@ -1,0 +1,188 @@
+erDiagram
+    User ||--o{ Budget : "created_by"
+    User ||--o{ BudgetMembership : ""
+    User }o--|| Budget : "default_budget"
+    User }o--|| Budget : "last_viewed_budget"
+    User ||--o{ SimpleFINConnection : ""
+    User ||--o{ Transaction : "created_by"
+    User ||--o{ RecurringTransaction : "created_by"
+    User ||--o{ Category : "created_by"
+
+    Budget ||--o{ BudgetMembership : ""
+    Budget ||--o{ Category : ""
+    Budget ||--o{ PaymentMethod : ""
+    Budget ||--o{ Transaction : ""
+    Budget ||--o{ RecurringTransaction : ""
+    Budget ||--o{ CategoryBudget : ""
+
+    Category ||--o{ Category : "parent self-FK"
+    Category ||--o{ TransactionLine : ""
+    Category ||--o{ RecurringTransaction : ""
+    Category ||--o{ CategoryBudget : ""
+    Category ||--o| SinkingFund : "1:1 optional"
+
+    RecurringTransaction ||--o{ Transaction : "instances"
+    RecurringTransaction }o--|| PaymentMethod : ""
+
+    Transaction ||--o{ TransactionLine : "lines"
+    Transaction }o--|| PaymentMethod : ""
+    Transaction ||--o| BankTransaction : "1:1 optional"
+
+    PaymentMethod ||--o{ BankAccount : "SimpleFIN mapping"
+
+    SimpleFINConnection ||--o{ BankAccount : ""
+    BankAccount ||--o{ BankTransaction : ""
+
+    Currency ||--o{ Transaction : "by code"
+    Currency ||--o{ BankAccount : "by code"
+    Currency ||--o{ User : "by code"
+
+    User {
+        bigint id PK
+        string email UK
+        string first_name
+        string last_name
+        string currency "ISO code"
+        string timezone
+        bigint default_budget_id FK
+        bigint last_viewed_budget_id FK
+    }
+
+    Budget {
+        bigint id PK
+        string name
+        bigint created_by_id FK
+        datetime created_at
+        datetime updated_at
+    }
+
+    BudgetMembership {
+        bigint id PK
+        bigint budget_id FK
+        bigint user_id FK
+        string role "owner or member"
+        datetime joined_at
+    }
+
+    Category {
+        bigint id PK
+        bigint budget_id FK
+        bigint parent_id FK "null = top level"
+        string name
+        string category_type "income or expense"
+        decimal monthly_budget
+        bigint created_by_id FK
+    }
+
+    SinkingFund {
+        bigint category_id PK "1:1 with Category"
+        decimal target
+        date due_date "null when ongoing"
+        bool ongoing
+        decimal monthly_goal "set when ongoing"
+    }
+
+    CategoryBudget {
+        bigint id PK
+        bigint budget_id FK
+        bigint category_id FK
+        date month "first day of month"
+        decimal assigned
+    }
+
+    PaymentMethod {
+        bigint id PK
+        bigint budget_id FK
+        string name
+        string payment_type
+        string last_four
+        bool is_active
+    }
+
+    RecurringTransaction {
+        bigint id PK
+        bigint budget_id FK
+        bigint category_id FK
+        bigint payment_method_id FK
+        bigint created_by_id FK
+        string name
+        decimal amount
+        string frequency
+        smallint interval
+        date start_date
+        date end_date
+        bool is_active
+        date generated_through
+    }
+
+    Transaction {
+        bigint id PK
+        bigint budget_id FK
+        bigint recurring_id FK "null when ad-hoc"
+        bigint payment_method_id FK
+        bigint created_by_id FK
+        string description
+        date due_date
+        date paid_date "null = unpaid"
+        string notes
+        string transaction_type "income, expense, transfer"
+        string currency
+        decimal exchange_rate_to_usd
+        datetime created_at
+    }
+
+    TransactionLine {
+        bigint id PK
+        bigint transaction_id FK
+        bigint category_id FK
+        decimal amount
+        decimal amount_usd
+        string description
+    }
+
+    Currency {
+        string code PK "ISO-4217"
+        string name
+        string symbol
+        decimal rate_to_usd
+        datetime updated_at
+    }
+
+    SimpleFINConnection {
+        bigint id PK
+        bigint user_id FK
+        string label
+        text access_url "encrypted"
+        datetime last_synced_at
+        text last_sync_error "empty when healthy"
+    }
+
+    BankAccount {
+        bigint id PK
+        bigint connection_id FK
+        bigint payment_method_id FK "nullable mapping"
+        string simplefin_id "unique with connection"
+        string name
+        string org_name
+        string org_domain
+        string currency
+        decimal balance
+        decimal available_balance
+        datetime balance_as_of
+        bool is_hidden
+    }
+
+    BankTransaction {
+        bigint id PK
+        bigint bank_account_id FK
+        bigint transaction_id FK "1:1, set when linked"
+        string simplefin_id "unique with bank_account"
+        datetime posted_at
+        decimal amount "signed"
+        string description
+        string payee
+        string memo
+        bool is_pending_at_bank
+        json raw
+        string status "pending, linked, ignored"
+    }
