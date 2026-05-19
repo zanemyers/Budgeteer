@@ -18,8 +18,8 @@ from allauth.account.views import (
 from inertia import render as inertia_render
 
 from apps.accounts.forms import SignInForm
-from apps.base.models import SimpleFINConnection
-from apps.base.simplefin import SimpleFINError, claim_setup_token
+from apps.banking.models import SimpleFINConnection
+from apps.banking.simplefin import SimpleFINError, claim_setup_token
 
 
 # ---------------------------------------------------------------------------
@@ -114,7 +114,7 @@ def _serialize_simplefin_connection(c: SimpleFINConnection) -> dict:
         "id": c.pk,
         "label": c.label,
         "last_synced_at": c.last_synced_at.isoformat() if c.last_synced_at else None,
-        "last_sync_status": c.last_sync_status,
+        "last_sync_status": c.sync_status,
         "last_sync_error": c.last_sync_error,
         "created_at": c.created_at.isoformat(),
     }

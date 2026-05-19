@@ -21,21 +21,21 @@ def _humanize_delta(then) -> str:
 
 
 def _sync_health(now):
-    from apps.base.models import SimpleFINConnection
+    from apps.banking.models import SimpleFINConnection
 
     counts = SimpleFINConnection.objects.aggregate(
         total=Count("id"),
-        ok=Count("id", filter=Q(last_sync_status="ok")),
-        error=Count("id", filter=Q(last_sync_status="error")),
-        pending=Count("id", filter=Q(last_sync_status="pending")),
+        ok=Count("id", filter=Q(last_synced_at__isnull=False) & Q(last_sync_error="")),
+        error=Count("id", filter=~Q(last_sync_error="")),
+        pending=Count("id", filter=Q(last_synced_at__isnull=True)),
     )
     last_ok = (
-        SimpleFINConnection.objects.filter(last_sync_status="ok")
+        SimpleFINConnection.objects.filter(last_synced_at__isnull=False, last_sync_error="")
         .order_by("-last_synced_at")
         .first()
     )
     recent_errors = list(
-        SimpleFINConnection.objects.filter(last_sync_status="error")
+        SimpleFINConnection.objects.exclude(last_sync_error="")
         .order_by("-last_synced_at")[:5]
         .values("id", "label", "last_sync_error", "last_synced_at")
     )
@@ -87,8 +87,8 @@ def _system_totals(now):
     real_expense_lines = (
         TransactionLine.objects.filter(
             category__category_type="expense",
-            category__is_sinking_fund=False,
-            transaction__is_paid=True,
+            category__sinking_fund__isnull=True,
+            transaction__paid_date__isnull=False,
         )
         .exclude(transaction__transaction_type="transfer")
     )
@@ -122,8 +122,8 @@ def _spend_trend(now, months=6):
     rows = (
         TransactionLine.objects.filter(
             category__category_type="expense",
-            category__is_sinking_fund=False,
-            transaction__is_paid=True,
+            category__sinking_fund__isnull=True,
+            transaction__paid_date__isnull=False,
         )
         .exclude(transaction__transaction_type="transfer")
         .annotate(
@@ -163,8 +163,8 @@ def _spend_by_category(now, top_n=7):
     rows = list(
         TransactionLine.objects.filter(
             category__category_type="expense",
-            category__is_sinking_fund=False,
-            transaction__is_paid=True,
+            category__sinking_fund__isnull=True,
+            transaction__paid_date__isnull=False,
         )
         .exclude(transaction__transaction_type="transfer")
         .annotate(
