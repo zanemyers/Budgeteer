@@ -22,7 +22,7 @@ export interface TransactionLine {
 export interface PaymentMethod {
   id: number;
   name: string;
-  payment_type: "credit_card" | "debit_card" | "cash" | "bank_transfer" | "other";
+  payment_type: "credit_card" | "debit_card" | "cash" | "bank_transfer" | "direct_deposit" | "other";
   payment_type_display: string;
   last_four: string;
   is_active: boolean;
@@ -44,6 +44,19 @@ export interface Transaction {
   currency: string;
   exchange_rate_to_usd: string;
   created_at: string;
+  bank_linked?: boolean;
+  linked_bank_transactions?: LinkedBankTransaction[];
+}
+
+export interface LinkedBankTransaction {
+  id: number;
+  posted_date: string;
+  amount: string;
+  description: string;
+  payee: string;
+  memo: string;
+  bank_account_name: string;
+  org_name: string;
 }
 
 export interface CurrencyOption {
@@ -66,6 +79,32 @@ export interface Budget {
   id: number;
   members: BudgetMember[];
   created_at: string;
+}
+
+export interface BankTransaction {
+  id: number;
+  posted_date: string;
+  amount: string;
+  description: string;
+  payee: string;
+  memo: string;
+  status: "pending" | "linked" | "ignored";
+  ignore_reason?: string;
+  transaction_id: number | null;
+  bank_account_id: number;
+  bank_account_name: string;
+  org_name: string;
+}
+
+export interface BankMatchSuggestion {
+  kind: "transaction" | "recurring" | "merchant_rule";
+  confidence: number;
+  label: string;
+  sublabel: string;
+  transaction_id: number | null;
+  category_id: number | null;
+  category_name: string | null;
+  payment_method_id: number | null;
 }
 
 export interface RecurringTransaction {

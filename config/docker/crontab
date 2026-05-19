@@ -6,4 +6,6 @@ DJANGO_SETTINGS_MODULE=config.settings
 0 4 * * * root cd /srv/app && python manage.py update_exchange_rates --if-stale >> /proc/1/fd/1 2>&1
 # Daily at 04:30 UTC: generate Transaction instances for active RecurringTransaction schedules.
 30 4 * * * root cd /srv/app && python manage.py generate_recurring_instances >> /proc/1/fd/1 2>&1
+# Every 6 hours: pull fresh data from each SimpleFIN connection.
+0 */6 * * * root cd /srv/app && python manage.py sync_simplefin >> /proc/1/fd/1 2>&1
 # Cron requires a trailing newline:

@@ -19,7 +19,7 @@ from inertia import render as inertia_render
 from apps.budget.data import (
     get_budget_overview,
     get_sf_total_saved,
-    get_upcoming_transactions,
+    get_pending_count,
     serialize_category,
     serialize_membership,
     serialize_payment_method,
@@ -33,10 +33,12 @@ from apps.budget.models import (
     CategoryBudget,
     PaymentMethod,
     RecurringTransaction,
+    SinkingFund,
     Transaction,
     TransactionLine,
 )
 from apps.accounts.models import User
+from apps.banking.models import BankTransaction
 from apps.base.models import Currency as CurrencyModel
 
 
@@ -116,14 +118,6 @@ class BudgetOwnerMixin(BudgetMemberMixin):
 
 
 class PaymentMethodsView(BudgetMemberMixin, View):
-    def get(self, request, budget_pk):
-        methods = PaymentMethod.objects.filter(budget=self.budget)
-        return inertia_render(request, "PaymentMethods", {
-            "budget_pk": self.budget.pk,
-            "payment_methods": [serialize_payment_method(pm) for pm in methods],
-            "type_choices": [{"value": v, "label": l} for v, l in PaymentMethod.TYPE_CHOICES],
-        })
-
     def post(self, request, budget_pk):
         data = _parse_json_body(request)
         name = data.get("name", "").strip()
@@ -163,12 +157,19 @@ class BudgetHistoryView(LoginRequiredMixin, View):
     def get(self, request):
         from django.db.models.functions import TruncMonth
 
-        budgets = Budget.objects.filter(members=request.user).order_by("-created_at")
+        budgets = list(Budget.objects.filter(members=request.user).order_by("-created_at"))
+        # Default budget always pinned to the top.
+        default_id = request.user.default_budget_id
+        if default_id:
+            budgets.sort(key=lambda b: 0 if b.pk == default_id else 1)
         result = []
         for budget in budgets:
+            # Months with actual recorded activity — paid transactions only.
+            # Future recurring stubs (unpaid, auto-generated) are excluded so the
+            # archive reflects what really happened, not what's scheduled.
             month_qs = list(
-                Transaction.objects.filter(budget=budget)
-                .annotate(month=TruncMonth("due_date"))
+                Transaction.objects.filter(budget=budget, paid_date__isnull=False)
+                .annotate(month=TruncMonth("paid_date"))
                 .values("month")
                 .distinct()
                 .order_by("-month")
@@ -177,6 +178,7 @@ class BudgetHistoryView(LoginRequiredMixin, View):
                 "id": budget.pk,
                 "name": budget.name or f"Budget #{budget.pk}",
                 "months": [m["month"].strftime("%Y-%m") for m in month_qs],
+                "is_default": budget.pk == default_id,
             })
         return inertia_render(request, "BudgetHistory", {"budgets": result})
 
@@ -199,12 +201,15 @@ class BudgetHomeView(LoginRequiredMixin, View):
 
 class BudgetListView(LoginRequiredMixin, View):
     def get(self, request):
-        budgets = list(Budget.objects.filter(members=request.user))
+        budgets = list(Budget.objects.filter(members=request.user).order_by("-created_at"))
         membership_map = {
             m.budget_id: m.role
             for m in BudgetMembership.objects.filter(budget__in=budgets, user=request.user)
         }
         default_id = request.user.default_budget_id
+        # Default budget always pinned to the top.
+        if default_id:
+            budgets.sort(key=lambda b: 0 if b.pk == default_id else 1)
         return inertia_render(request, "BudgetList", {
             "budgets": [
                 {
@@ -225,6 +230,30 @@ class BudgetSetDefaultView(LoginRequiredMixin, View):
         request.user.default_budget = budget
         request.user.save(update_fields=["default_budget"])
         return JsonResponse({"default_budget": budget.pk})
+
+
+DEFAULT_CATEGORIES: list[tuple[str, str, list[str]]] = [
+    # (type, parent name, [subcategory names])
+    ("income", "Salary", []),
+    ("income", "Other Income", []),
+    ("expense", "Housing", ["Rent/Mortgage", "Utilities", "Internet", "Phone"]),
+    ("expense", "Food", ["Groceries", "Dining Out"]),
+    ("expense", "Transportation", ["Gas", "Auto Maintenance"]),
+    ("expense", "Healthcare", ["Insurance", "Medical"]),
+    ("expense", "Personal", ["Clothing", "Subscriptions", "Entertainment"]),
+    ("expense", "Other", []),
+]
+
+
+def _create_default_categories(budget: Budget, user) -> None:
+    for cat_type, parent_name, child_names in DEFAULT_CATEGORIES:
+        parent = Category.objects.create(
+            budget=budget, name=parent_name, category_type=cat_type, created_by=user,
+        )
+        for child_name in child_names:
+            Category.objects.create(
+                budget=budget, name=child_name, category_type=cat_type, parent=parent, created_by=user,
+            )
 
 
 class BudgetCreateView(LoginRequiredMixin, View):
@@ -266,6 +295,8 @@ class BudgetCreateView(LoginRequiredMixin, View):
                         for m in source.memberships.select_related("user").all()
                         if m.user != request.user
                     ])
+        elif data.get("add_default_categories", False):
+            _create_default_categories(budget, request.user)
 
         return JsonResponse({"id": budget.pk}, status=201)
 
@@ -290,7 +321,7 @@ class BudgetDetailView(BudgetMemberMixin, View):
                 serialize_payment_method(pm)
                 for pm in PaymentMethod.objects.filter(budget=self.budget, is_active=True)
             ],
-            "upcoming_transactions": lambda: get_upcoming_transactions(budget),
+            "pending_count": lambda: get_pending_count(budget, month_str),
             "currencies": _serialize_currencies,
             "user_currency": request.user.currency or "USD",
         })
@@ -332,6 +363,76 @@ class BudgetDeleteView(BudgetOwnerMixin, View):
         return JsonResponse({}, status=204)
 
 
+class BudgetSettingsView(BudgetMemberMixin, View):
+    """Single per-budget settings page — Budget / Income / Expense / Payment Methods / Members."""
+
+    def get(self, request, budget_pk):
+        from decimal import Decimal as D
+        from django.db.models import Sum
+
+        budget = self.budget
+        is_owner = BudgetMembership.objects.filter(
+            budget=budget, user=request.user, role=BudgetMembership.ROLE_OWNER
+        ).exists()
+        is_default = request.user.default_budget_id == budget.pk
+
+        # Categories — include sinking_fund total_saved like CategoryListView did,
+        # so the modal can present accurate balances when editing.
+        categories = list(Category.objects.filter(budget=budget).order_by("category_type", "name"))
+        sf_ids = [c.pk for c in categories if c.is_sinking_fund]
+        income_saved = {
+            row["category_id"]: row["total"]
+            for row in TransactionLine.objects.filter(
+                transaction__budget=budget,
+                category_id__in=sf_ids,
+                transaction__transaction_type__in=("income", "transfer"),
+            ).values("category_id").annotate(total=Sum("amount"))
+        }
+        expense_saved = {
+            row["category_id"]: row["total"]
+            for row in TransactionLine.objects.filter(
+                transaction__budget=budget,
+                category_id__in=sf_ids,
+                transaction__transaction_type="expense",
+            ).values("category_id").annotate(total=Sum("amount"))
+        }
+
+        def _serialize_cat(c):
+            d = serialize_category(c)
+            if c.is_sinking_fund:
+                d["total_saved"] = str(
+                    income_saved.get(c.pk, D("0.00")) - expense_saved.get(c.pk, D("0.00"))
+                )
+            return d
+
+        memberships = []
+        if is_owner:
+            memberships = [
+                serialize_membership(m)
+                for m in BudgetMembership.objects.filter(budget=budget).select_related("user")
+            ]
+
+        recurring_qs = RecurringTransaction.objects.filter(budget=budget).select_related("category", "payment_method")
+
+        return inertia_render(request, "BudgetSettings", {
+            "budget_pk": budget.pk,
+            "budget": {
+                "pk": budget.pk,
+                "name": budget.name or "",
+                "is_default": is_default,
+                "is_owner": is_owner,
+            },
+            "categories": [_serialize_cat(c) for c in categories],
+            "category_type_choices": [{"value": v, "label": l} for v, l in Category.TYPE_CHOICES],
+            "payment_methods": [serialize_payment_method(pm) for pm in PaymentMethod.objects.filter(budget=budget)],
+            "payment_method_type_choices": [{"value": v, "label": l} for v, l in PaymentMethod.TYPE_CHOICES],
+            "memberships": memberships,
+            "role_choices": [{"value": v, "label": l} for v, l in BudgetMembership.ROLE_CHOICES],
+            "recurring": lambda: [serialize_recurring(rt) for rt in recurring_qs],
+            "freq_choices": [{"value": v, "label": l} for v, l in RecurringTransaction.FREQ_CHOICES],
+        })
+
+
 # ---------------------------------------------------------------------------
 # Category Budget (assigned amounts)
 # ---------------------------------------------------------------------------
@@ -369,16 +470,6 @@ class CategoryBudgetUpdateView(BudgetMemberMixin, View):
 # ---------------------------------------------------------------------------
 
 
-class MemberListView(BudgetOwnerMixin, View):
-    def get(self, request, budget_pk):
-        memberships = BudgetMembership.objects.filter(budget=self.budget).select_related("user")
-        return inertia_render(request, "Members", {
-            "budget_pk": self.budget.pk,
-            "memberships": [serialize_membership(m) for m in memberships],
-            "role_choices": [{"value": v, "label": l} for v, l in BudgetMembership.ROLE_CHOICES],
-        })
-
-
 class MemberInviteView(BudgetOwnerMixin, View):
     def post(self, request, budget_pk):
         data = _parse_json_body(request)
@@ -414,42 +505,6 @@ class MemberRemoveView(BudgetOwnerMixin, View):
 # ---------------------------------------------------------------------------
 # Categories
 # ---------------------------------------------------------------------------
-
-
-class CategoryListView(BudgetMemberMixin, View):
-    def get(self, request, budget_pk):
-        from decimal import Decimal as D
-        from django.db.models import Sum
-        categories = list(Category.objects.filter(budget=self.budget).order_by("category_type", "name"))
-        sf_ids = [c.pk for c in categories if c.is_sinking_fund]
-        income_saved = {
-            row["category_id"]: row["total"]
-            for row in TransactionLine.objects.filter(
-                transaction__budget=self.budget,
-                category_id__in=sf_ids,
-                transaction__transaction_type__in=("income", "transfer"),
-            ).values("category_id").annotate(total=Sum("amount"))
-        }
-        expense_saved = {
-            row["category_id"]: row["total"]
-            for row in TransactionLine.objects.filter(
-                transaction__budget=self.budget,
-                category_id__in=sf_ids,
-                transaction__transaction_type="expense",
-            ).values("category_id").annotate(total=Sum("amount"))
-        }
-        def _serialize(c):
-            d = serialize_category(c)
-            if c.is_sinking_fund:
-                d["total_saved"] = str(
-                    income_saved.get(c.pk, D("0.00")) - expense_saved.get(c.pk, D("0.00"))
-                )
-            return d
-        return inertia_render(request, "Categories", {
-            "budget_pk": self.budget.pk,
-            "categories": [_serialize(c) for c in categories],
-            "type_choices": [{"value": v, "label": l} for v, l in Category.TYPE_CHOICES],
-        })
 
 
 class CategoryCreateView(BudgetMemberMixin, View):
@@ -491,15 +546,18 @@ class CategoryCreateView(BudgetMemberMixin, View):
                 parent=parent,
                 name=name,
                 category_type=category_type,
-                is_sinking_fund=is_sinking_fund,
-                sinking_fund_target=data.get("sinking_fund_target") if is_sinking_fund else None,
-                sinking_fund_due_date=data.get("sinking_fund_due_date") if (is_sinking_fund and not is_ongoing) else None,
-                sinking_fund_ongoing=is_ongoing if is_sinking_fund else False,
-                sinking_fund_monthly_goal=data.get("sinking_fund_monthly_goal") if (is_sinking_fund and is_ongoing) else None,
                 created_by=request.user,
             )
         except Exception:
             return JsonResponse({"errors": {"name": ["A category with this name and type already exists."]}}, status=400)
+        if is_sinking_fund:
+            SinkingFund.objects.create(
+                category=cat,
+                target=data.get("sinking_fund_target"),
+                due_date=data.get("sinking_fund_due_date") if not is_ongoing else None,
+                ongoing=is_ongoing,
+                monthly_goal=data.get("sinking_fund_monthly_goal") if is_ongoing else None,
+            )
 
         # Create an opening balance transaction if an initial amount was provided
         if is_sinking_fund:
@@ -514,7 +572,6 @@ class CategoryCreateView(BudgetMemberMixin, View):
                         description=f"{cat.name} — opening balance",
                         due_date=today,
                         paid_date=today,
-                        is_paid=True,
                         transaction_type="income",
                         created_by=request.user,
                     )
@@ -531,10 +588,30 @@ class CategoryUpdateView(BudgetMemberMixin, View):
         from decimal import Decimal as D
         category = get_object_or_404(Category, pk=pk, budget=self.budget)
         data = _parse_json_body(request)
-        nullable_fields = ("sinking_fund_target", "sinking_fund_due_date", "sinking_fund_monthly_goal")
-        for field in ("name", "category_type", "monthly_budget", "sinking_fund_target", "sinking_fund_due_date", "sinking_fund_ongoing", "sinking_fund_monthly_goal"):
+        for field in ("name", "category_type", "monthly_budget"):
             if field in data:
-                setattr(category, field, data[field] or None if field in nullable_fields else data[field])
+                setattr(category, field, data[field])
+
+        # Sinking-fund fields land on the related SinkingFund row.
+        sf_fields = {"sinking_fund_target", "sinking_fund_due_date", "sinking_fund_ongoing", "sinking_fund_monthly_goal"}
+        if sf_fields & set(data.keys()):
+            sf = getattr(category, "sinking_fund", None)
+            target = data.get("sinking_fund_target") if "sinking_fund_target" in data else (sf.target if sf else None)
+            due_date = data.get("sinking_fund_due_date") if "sinking_fund_due_date" in data else (sf.due_date if sf else None)
+            ongoing = bool(data.get("sinking_fund_ongoing")) if "sinking_fund_ongoing" in data else (sf.ongoing if sf else False)
+            monthly_goal = data.get("sinking_fund_monthly_goal") if "sinking_fund_monthly_goal" in data else (sf.monthly_goal if sf else None)
+            if target:
+                SinkingFund.objects.update_or_create(
+                    category=category,
+                    defaults={
+                        "target": target,
+                        "due_date": due_date or None,
+                        "ongoing": ongoing,
+                        "monthly_goal": monthly_goal or None,
+                    },
+                )
+            elif sf:
+                sf.delete()
         if "parent_id" in data:
             new_parent_id = data["parent_id"] or None
             if new_parent_id is None:
@@ -566,7 +643,6 @@ class CategoryUpdateView(BudgetMemberMixin, View):
                 description=desc,
                 due_date=today,
                 paid_date=today,
-                is_paid=True,
                 transaction_type="income",
                 created_by=request.user,
             )
@@ -600,6 +676,34 @@ class TransactionListView(BudgetMemberMixin, View):
         category_filter = request.GET.get("category")
         budget = self.budget
 
+        def _bank_txns_with_status(status):
+            try:
+                month_start = datetime.date.fromisoformat(month_str + "-01")
+                last_day = calendar.monthrange(month_start.year, month_start.month)[1]
+                month_end = month_start.replace(day=last_day)
+            except (ValueError, TypeError):
+                month_start = datetime.date.today().replace(day=1)
+                last_day = calendar.monthrange(month_start.year, month_start.month)[1]
+                month_end = month_start.replace(day=last_day)
+            qs = (
+                BankTransaction.objects
+                .filter(
+                    bank_account__connection__user=request.user,
+                    bank_account__payment_method__budget=budget,
+                    status=status,
+                    posted_at__date__range=(month_start, month_end),
+                )
+                .select_related("bank_account")
+                .order_by("-posted_at")
+            )
+            return [serialize_bank_transaction(bt) for bt in qs]
+
+        def _bank_txns():
+            return _bank_txns_with_status(BankTransaction.Status.PENDING)
+
+        def _ignored_bank_txns():
+            return _bank_txns_with_status(BankTransaction.Status.IGNORED)
+
         def _transactions():
             try:
                 month_start = datetime.date.fromisoformat(month_str + "-01")
@@ -615,7 +719,7 @@ class TransactionListView(BudgetMemberMixin, View):
                 .annotate(effective_date=Coalesce("paid_date", "due_date"))
                 .filter(effective_date__range=(month_start, month_end))
                 .select_related("recurring__category", "payment_method")
-                .prefetch_related("lines__category")
+                .prefetch_related("lines__category", "bank_transaction__bank_account")
             )
             if category_filter:
                 try:
@@ -632,6 +736,8 @@ class TransactionListView(BudgetMemberMixin, View):
             "month": month_str,
             "category_filter": category_filter or "",
             "transactions": _transactions,
+            "bank_transactions": _bank_txns,
+            "ignored_bank_transactions": _ignored_bank_txns,
             "categories": lambda: [
                 serialize_category(c)
                 for c in Category.objects.filter(budget=budget).order_by("category_type", "name")
@@ -652,7 +758,6 @@ class TransactionCreateView(BudgetMemberMixin, View):
         description = data.get("description", "").strip()
         due_date_str = data.get("due_date", "")
         paid_date_str = data.get("paid_date", "")
-        is_paid = bool(data.get("is_paid", False))
         notes = data.get("notes", "")
         payment_method_id = data.get("payment_method")
         lines_data = data.get("lines", [])
@@ -680,10 +785,13 @@ class TransactionCreateView(BudgetMemberMixin, View):
         if not lines_data:
             errors["lines"] = ["At least one line item is required."]
         else:
-            types = {Category.objects.filter(pk=l.get("category")).values_list("category_type", "is_sinking_fund").first() for l in lines_data if l.get("category")}
-            types.discard(None)
-            non_sf_types = {t[0] for t in types if not t[1]}
-            all_sf = all(t[1] for t in types) if types else False
+            line_cat_ids = [l.get("category") for l in lines_data if l.get("category")]
+            cat_info = list(
+                Category.objects.filter(pk__in=line_cat_ids)
+                .values_list("category_type", "sinking_fund")
+            )
+            non_sf_types = {ct for ct, sf in cat_info if sf is None}
+            all_sf = bool(cat_info) and all(sf is not None for _ct, sf in cat_info)
             if len(non_sf_types) > 1:
                 errors["lines"] = ["All lines must be the same type (income or expense)."]
             # Income deposits to sinking funds are transfers, not income
@@ -703,7 +811,6 @@ class TransactionCreateView(BudgetMemberMixin, View):
                 description=description,
                 due_date=due_date,
                 paid_date=paid_date,
-                is_paid=is_paid,
                 notes=notes,
                 transaction_type=explicit_txn_type,
                 payment_method=payment_method,
@@ -721,14 +828,14 @@ class TransactionCreateView(BudgetMemberMixin, View):
                     description=line.get("description", ""),
                 )
 
-        txn = Transaction.objects.select_related("recurring__category", "payment_method").prefetch_related("lines__category").get(pk=txn.pk)
+        txn = Transaction.objects.select_related("recurring__category", "payment_method").prefetch_related("lines__category", "bank_transaction__bank_account").get(pk=txn.pk)
         return JsonResponse(serialize_transaction(txn), status=201)
 
 
 class TransactionDetailView(BudgetMemberMixin, View):
     def get(self, request, budget_pk, pk):
         txn = get_object_or_404(
-            Transaction.objects.select_related("recurring__category", "payment_method").prefetch_related("lines__category"),
+            Transaction.objects.select_related("recurring__category", "payment_method").prefetch_related("lines__category", "bank_transaction__bank_account"),
             pk=pk,
             budget=self.budget,
         )
@@ -749,9 +856,13 @@ class TransactionUpdateView(BudgetMemberMixin, View):
         if "due_date" in data:
             txn.due_date = datetime.date.fromisoformat(data["due_date"])
         if "paid_date" in data:
-            txn.paid_date = datetime.date.fromisoformat(data["paid_date"]) if data["paid_date"] else None
-        if "is_paid" in data:
-            txn.is_paid = bool(data["is_paid"])
+            # If this transaction is linked to a bank transaction, the bank's posted date wins —
+            # the budget paid_date is locked to it and any incoming value is ignored.
+            bt = getattr(txn, "bank_transaction", None)
+            if bt is not None:
+                txn.paid_date = bt.posted_at.date()
+            else:
+                txn.paid_date = datetime.date.fromisoformat(data["paid_date"]) if data["paid_date"] else None
         if "notes" in data:
             txn.notes = data["notes"]
         if "payment_method" in data:
@@ -784,7 +895,7 @@ class TransactionUpdateView(BudgetMemberMixin, View):
                         description=line.get("description", ""),
                     )
 
-        txn = Transaction.objects.select_related("recurring__category", "payment_method").prefetch_related("lines__category").get(pk=txn.pk)
+        txn = Transaction.objects.select_related("recurring__category", "payment_method").prefetch_related("lines__category", "bank_transaction__bank_account").get(pk=txn.pk)
         return JsonResponse(serialize_transaction(txn))
 
 
@@ -802,9 +913,13 @@ class TransactionDeleteView(BudgetMemberMixin, View):
 class TransactionMarkPaidView(BudgetMemberMixin, View):
     def post(self, request, budget_pk, pk):
         transaction = get_object_or_404(Transaction, pk=pk, budget=self.budget)
-        transaction.is_paid = not transaction.is_paid
-        transaction.paid_date = datetime.date.today() if transaction.is_paid else None
-        transaction.save(update_fields=["is_paid", "paid_date"])
+        # Bank-linked transactions are pinned to the bank's posted date — can't be toggled here.
+        bt = getattr(transaction, "bank_transaction", None)
+        if bt is not None:
+            transaction.paid_date = bt.posted_at.date()
+        else:
+            transaction.paid_date = None if transaction.paid_date else datetime.date.today()
+        transaction.save(update_fields=["paid_date"])
         # Support both Inertia (redirect) and JSON (fetch) callers
         if request.headers.get("X-Inertia"):
             next_url = request.POST.get("next") or reverse(
@@ -812,7 +927,7 @@ class TransactionMarkPaidView(BudgetMemberMixin, View):
             )
             return redirect(next_url)
         return JsonResponse(serialize_transaction(
-            Transaction.objects.select_related("recurring__category", "payment_method").prefetch_related("lines__category").get(pk=pk)
+            Transaction.objects.select_related("recurring__category", "payment_method").prefetch_related("lines__category", "bank_transaction__bank_account").get(pk=pk)
         ))
 
 
@@ -821,46 +936,14 @@ class TransactionMarkPaidView(BudgetMemberMixin, View):
 # ---------------------------------------------------------------------------
 
 
-class RecurringListView(BudgetMemberMixin, View):
-    def get(self, request, budget_pk):
-        qs = RecurringTransaction.objects.filter(budget=self.budget).select_related("category", "payment_method")
-        return inertia_render(request, "RecurringList", {
-            "budget_pk": self.budget.pk,
-            "recurring_transactions": [serialize_recurring(rt) for rt in qs],
-        })
-
-
 class RecurringCreateView(BudgetMemberMixin, View):
-    def get(self, request, budget_pk):
-        categories = Category.objects.filter(budget=self.budget).order_by("category_type", "name")
-        payment_methods = PaymentMethod.objects.filter(budget=self.budget, is_active=True)
-        return inertia_render(request, "RecurringForm", {
-            "budget_pk": self.budget.pk,
-            "recurring": None,
-            "categories": [serialize_category(c) for c in categories],
-            "payment_methods": [serialize_payment_method(pm) for pm in payment_methods],
-            "freq_choices": [{"value": v, "label": l} for v, l in RecurringTransaction.FREQ_CHOICES],
-        })
-
     def post(self, request, budget_pk):
         data = _parse_json_body(request)
         errors = self._validate(data)
         if errors:
-            categories = Category.objects.filter(budget=self.budget).order_by("category_type", "name")
-            payment_methods = PaymentMethod.objects.filter(budget=self.budget, is_active=True)
-            return inertia_render(request, "RecurringForm", {
-                "budget_pk": self.budget.pk,
-                "recurring": None,
-                "categories": [serialize_category(c) for c in categories],
-                "payment_methods": [serialize_payment_method(pm) for pm in payment_methods],
-                "freq_choices": [{"value": v, "label": l} for v, l in RecurringTransaction.FREQ_CHOICES],
-                "errors": errors,
-                "values": data,
-            }, status=422)
-
+            return JsonResponse({"errors": errors}, status=422)
         rt = self._create(request, data)
-        messages.success(request, "Recurring transaction created.")
-        return redirect(reverse("budget:recurring-detail", kwargs={"budget_pk": budget_pk, "pk": rt.pk}))
+        return JsonResponse(serialize_recurring(rt), status=201)
 
     def _validate(self, data) -> dict:
         errors: dict[str, list[str]] = {}
@@ -916,25 +999,6 @@ class RecurringCreateView(BudgetMemberMixin, View):
 
 
 class RecurringDetailView(BudgetMemberMixin, View):
-    def get(self, request, budget_pk, pk):
-        rt = get_object_or_404(RecurringTransaction, pk=pk, budget=self.budget)
-        instances = (
-            Transaction.objects.filter(recurring=rt)
-            .select_related("payment_method")
-            .prefetch_related("lines__category")
-            .order_by("due_date")
-        )
-        categories = Category.objects.filter(budget=self.budget).order_by("category_type", "name")
-        payment_methods = PaymentMethod.objects.filter(budget=self.budget, is_active=True)
-        return inertia_render(request, "RecurringDetail", {
-            "budget_pk": self.budget.pk,
-            "recurring": serialize_recurring(rt),
-            "instances": [serialize_transaction(t) for t in instances],
-            "categories": [serialize_category(c) for c in categories],
-            "payment_methods": [serialize_payment_method(pm) for pm in payment_methods],
-            "freq_choices": [{"value": v, "label": l} for v, l in RecurringTransaction.FREQ_CHOICES],
-        })
-
     def patch(self, request, budget_pk, pk):
         rt = get_object_or_404(RecurringTransaction, pk=pk, budget=self.budget)
         data = _parse_json_body(request)
@@ -957,7 +1021,7 @@ class RecurringDetailView(BudgetMemberMixin, View):
 
         if data.get("delete_future_unpaid"):
             today = datetime.date.today()
-            Transaction.objects.filter(recurring=rt, is_paid=False, due_date__gt=today).delete()
+            Transaction.objects.filter(recurring=rt, paid_date__isnull=True, due_date__gt=today).delete()
             rt.generated_through = None
             rt.save(update_fields=["generated_through"])
             lookahead = getattr(django_settings, "BUDGET_RECURRING_LOOKAHEAD_MONTHS", 3)
@@ -985,10 +1049,15 @@ class RecurringDetailView(BudgetMemberMixin, View):
             description=data.get("description") or rt.name,
             due_date=due_date,
             created_by=request.user,
-            is_paid=False,
             payment_method=rt.payment_method,
         )
-        txn = Transaction.objects.select_related("recurring__category", "payment_method").prefetch_related("lines__category").get(pk=txn.pk)
+        TransactionLine.objects.create(
+            transaction=txn,
+            category=rt.category,
+            amount=rt.amount,
+            amount_usd=rt.amount,
+        )
+        txn = Transaction.objects.select_related("recurring__category", "payment_method").prefetch_related("lines__category", "bank_transaction__bank_account").get(pk=txn.pk)
         return JsonResponse(serialize_transaction(txn), status=201)
 
     def delete(self, request, budget_pk, pk):
@@ -998,84 +1067,241 @@ class RecurringDetailView(BudgetMemberMixin, View):
             return JsonResponse({}, status=204)
         today = datetime.date.today()
         if request.GET.get("delete_future_unpaid"):
-            Transaction.objects.filter(recurring=rt, is_paid=False, due_date__gt=today).delete()
+            Transaction.objects.filter(recurring=rt, paid_date__isnull=True, due_date__gt=today).delete()
         rt.is_active = False
         rt.end_date = today
         rt.save(update_fields=["is_active", "end_date"])
         return JsonResponse({}, status=204)
 
 
-class RecurringUpdateView(BudgetMemberMixin, View):
-    def get(self, request, budget_pk, pk):
-        rt = get_object_or_404(RecurringTransaction, pk=pk, budget=self.budget)
-        categories = Category.objects.filter(budget=self.budget).order_by("category_type", "name")
-        payment_methods = PaymentMethod.objects.filter(budget=self.budget, is_active=True)
-        return inertia_render(request, "RecurringForm", {
-            "budget_pk": self.budget.pk,
-            "recurring": serialize_recurring(rt),
-            "categories": [serialize_category(c) for c in categories],
-            "payment_methods": [serialize_payment_method(pm) for pm in payment_methods],
-            "freq_choices": [{"value": v, "label": l} for v, l in RecurringTransaction.FREQ_CHOICES],
+# ---------------------------------------------------------------------------
+# Bank transactions (SimpleFIN → local Transaction reconciliation)
+# ---------------------------------------------------------------------------
+
+
+def serialize_bank_transaction(bt: BankTransaction) -> dict:
+    return {
+        "id": bt.pk,
+        "posted_date": bt.posted_at.date().isoformat(),
+        "amount": str(bt.amount),
+        "description": bt.description,
+        "payee": bt.payee,
+        "memo": bt.memo,
+        "status": bt.status,
+        "ignore_reason": bt.ignore_reason,
+        "transaction_id": bt.transaction_id,
+        "bank_account_id": bt.bank_account_id,
+        "bank_account_name": bt.bank_account.name,
+        "org_name": bt.bank_account.org_name,
+    }
+
+
+def _bank_txn_for_budget(request, budget, pk) -> BankTransaction:
+    """Fetch a BankTransaction that belongs to (a) the requesting user and (b) the given budget
+    via its bank account's payment_method mapping."""
+    qs = (
+        BankTransaction.objects
+        .select_related("bank_account__payment_method", "bank_account__connection")
+        .filter(bank_account__connection__user=request.user)
+    )
+    bt = get_object_or_404(qs, pk=pk)
+    pm = bt.bank_account.payment_method
+    if pm is None or pm.budget_id != budget.pk:
+        raise Http404
+    return bt
+
+
+class BankTransactionListView(BudgetMemberMixin, View):
+    """List pending BankTransactions whose bank account is mapped to a PaymentMethod in this budget."""
+
+    def get(self, request, budget_pk):
+        qs = (
+            BankTransaction.objects
+            .filter(
+                bank_account__connection__user=request.user,
+                bank_account__payment_method__budget=self.budget,
+                status=BankTransaction.Status.PENDING,
+            )
+            .select_related("bank_account")
+            .order_by("-posted_at")
+        )
+        return JsonResponse({
+            "bank_transactions": [serialize_bank_transaction(bt) for bt in qs],
         })
 
+
+class BankTransactionSuggestionsView(BudgetMemberMixin, View):
+    def get(self, request, budget_pk, pk):
+        from apps.budget.bank_matching import suggest_matches
+
+        bt = _bank_txn_for_budget(request, self.budget, pk)
+        return JsonResponse({
+            "bank_transaction": serialize_bank_transaction(bt),
+            "suggestions": suggest_matches(bt, self.budget),
+        })
+
+
+class BankTransactionLinkView(BudgetMemberMixin, View):
+    """Link a BankTransaction to an existing Transaction in this budget."""
+
     def post(self, request, budget_pk, pk):
-        rt = get_object_or_404(RecurringTransaction, pk=pk, budget=self.budget)
+        bt = _bank_txn_for_budget(request, self.budget, pk)
         data = _parse_json_body(request)
-        creator = RecurringCreateView()
-        creator.budget = self.budget
-        errors = creator._validate(data)
-        if errors:
-            categories = Category.objects.filter(budget=self.budget).order_by("category_type", "name")
-            payment_methods = PaymentMethod.objects.filter(budget=self.budget, is_active=True)
-            return inertia_render(request, "RecurringForm", {
-                "budget_pk": self.budget.pk,
-                "recurring": serialize_recurring(rt),
-                "categories": [serialize_category(c) for c in categories],
-                "payment_methods": [serialize_payment_method(pm) for pm in payment_methods],
-                "freq_choices": [{"value": v, "label": l} for v, l in RecurringTransaction.FREQ_CHOICES],
-                "errors": errors,
-                "values": data,
-            }, status=422)
-
-        pm_id = data.get("payment_method")
-        rt.payment_method = PaymentMethod.objects.filter(pk=pm_id, budget=self.budget).first() if pm_id else None
-        rt.category = get_object_or_404(Category, pk=data["category"], budget=self.budget)
-        rt.name = data["name"].strip()
-        rt.description = data.get("description", "")
-        rt.amount = data["amount"]
-        rt.frequency = data["frequency"]
-        rt.interval = int(data.get("interval", 1))
-        rt.start_date = datetime.date.fromisoformat(data["start_date"])
-        rt.end_date = datetime.date.fromisoformat(data["end_date"]) if data.get("end_date") else None
-        rt.is_active = data.get("is_active", True)
-        rt.save()
-
-        if data.get("delete_future_unpaid"):
-            today = datetime.date.today()
-            Transaction.objects.filter(recurring=rt, is_paid=False, due_date__gt=today).delete()
-            rt.generated_through = None
-            rt.save(update_fields=["generated_through"])
-            lookahead = getattr(django_settings, "BUDGET_RECURRING_LOOKAHEAD_MONTHS", 3)
-            today = datetime.date.today()
-            year = today.year + (today.month + lookahead - 1) // 12
-            month = (today.month + lookahead - 1) % 12 + 1
-            through_date = today.replace(year=year, month=month, day=calendar.monthrange(year, month)[1])
-            rt.generate_instances_up_to(through_date)
-            messages.success(request, "Schedule updated and future unpaid instances regenerated.")
-        else:
-            messages.success(request, "Schedule updated.")
-
-        return redirect(reverse("budget:recurring-detail", kwargs={"budget_pk": budget_pk, "pk": rt.pk}))
+        txn_id = data.get("transaction_id")
+        if not txn_id:
+            return JsonResponse({"errors": {"transaction_id": ["Required."]}}, status=400)
+        txn = get_object_or_404(Transaction, pk=txn_id, budget=self.budget)
+        with db_transaction.atomic():
+            bt.transaction = txn
+            bt.status = BankTransaction.Status.LINKED
+            bt.save(update_fields=["transaction", "status", "last_seen_at"])
+            txn.paid_date = bt.posted_at.date()
+            if not txn.payment_method_id and bt.bank_account.payment_method_id:
+                txn.payment_method_id = bt.bank_account.payment_method_id
+            txn.save(update_fields=["paid_date", "payment_method", "updated_at"])
+        txn = (
+            Transaction.objects
+            .select_related("recurring__category", "payment_method")
+            .prefetch_related("lines__category", "bank_transaction__bank_account")
+            .get(pk=txn.pk)
+        )
+        return JsonResponse({
+            "bank_transaction": serialize_bank_transaction(bt),
+            "transaction": serialize_transaction(txn),
+        })
 
 
-class RecurringDeleteView(BudgetMemberMixin, View):
+class BankTransactionCreateTxnView(BudgetMemberMixin, View):
+    """Create a new Transaction from a BankTransaction and link them.
+
+    Accepts either:
+    - `lines: [{category_id, amount, description?}]` — explicit splits; must sum to abs(bt.amount)
+    - `category_id` (legacy) — single-line shortcut using the bank transaction's full amount
+    """
+
     def post(self, request, budget_pk, pk):
-        rt = get_object_or_404(RecurringTransaction, pk=pk, budget=self.budget)
-        if request.POST.get("delete_future_unpaid"):
-            today = datetime.date.today()
-            Transaction.objects.filter(recurring=rt, is_paid=False, due_date__gt=today).delete()
-        rt.is_active = False
-        rt.end_date = datetime.date.today()
-        rt.save(update_fields=["is_active", "end_date"])
-        messages.success(request, "Recurring transaction deactivated.")
-        return redirect(reverse("budget:recurring-list", kwargs={"budget_pk": budget_pk}))
+        from decimal import Decimal, InvalidOperation
+
+        bt = _bank_txn_for_budget(request, self.budget, pk)
+        data = _parse_json_body(request)
+        description = (data.get("description") or bt.payee or bt.description).strip()
+
+        bt_amount = abs(bt.amount)
+        lines_data = data.get("lines")
+        if not lines_data:
+            category_id = data.get("category_id")
+            if not category_id:
+                return JsonResponse({"errors": {"category_id": ["Required."]}}, status=400)
+            lines_data = [{"category_id": category_id, "amount": str(bt_amount), "description": ""}]
+
+        # Validate lines
+        errors: dict[str, list[str]] = {}
+        parsed_lines = []
+        total = Decimal("0")
+        categories_in_lines: list[Category] = []
+        for i, ln in enumerate(lines_data):
+            cat_id = ln.get("category_id") or ln.get("category")
+            if not cat_id:
+                errors[f"lines[{i}].category"] = ["Required."]
+                continue
+            try:
+                cat = Category.objects.get(pk=cat_id, budget=self.budget)
+            except Category.DoesNotExist:
+                errors[f"lines[{i}].category"] = ["Not found."]
+                continue
+            try:
+                amt = Decimal(str(ln.get("amount", "0")))
+            except (InvalidOperation, ValueError):
+                errors[f"lines[{i}].amount"] = ["Enter a valid number."]
+                continue
+            if amt <= 0:
+                errors[f"lines[{i}].amount"] = ["Must be greater than 0."]
+                continue
+            total += amt
+            categories_in_lines.append(cat)
+            parsed_lines.append({"category": cat, "amount": amt, "description": (ln.get("description") or "")[:200]})
+
+        if not parsed_lines and not errors:
+            errors["lines"] = ["At least one line is required."]
+        if total and abs(total - bt_amount) > Decimal("0.01"):
+            errors["lines"] = [f"Line amounts must sum to {bt_amount}, got {total}."]
+
+        if errors:
+            return JsonResponse({"errors": errors}, status=400)
+
+        pm_id = data.get("payment_method_id") or bt.bank_account.payment_method_id
+        payment_method = (
+            PaymentMethod.objects.filter(pk=pm_id, budget=self.budget).first() if pm_id else None
+        )
+
+        # Derive transaction_type from the lines' categories (same rule as TransactionCreateView).
+        non_sf_types = {c.category_type for c in categories_in_lines if not c.is_sinking_fund}
+        all_sf = bool(categories_in_lines) and all(c.is_sinking_fund for c in categories_in_lines)
+        base_type = non_sf_types.pop() if len(non_sf_types) == 1 else (categories_in_lines[0].category_type if categories_in_lines else "expense")
+        if base_type == "income" and all_sf:
+            base_type = "transfer"
+        txn_type = data.get("transaction_type") or base_type
+
+        currency = bt.bank_account.currency or request.user.currency or "USD"
+        try:
+            exchange_rate = CurrencyModel.objects.get(code=currency).rate_to_usd
+        except CurrencyModel.DoesNotExist:
+            exchange_rate = Decimal("1")
+
+        with db_transaction.atomic():
+            txn = Transaction.objects.create(
+                budget=self.budget,
+                created_by=request.user,
+                description=description[:200],
+                due_date=bt.posted_at.date(),
+                paid_date=bt.posted_at.date(),
+                transaction_type=txn_type,
+                payment_method=payment_method,
+                currency=currency,
+                exchange_rate_to_usd=exchange_rate,
+            )
+            for ln in parsed_lines:
+                TransactionLine.objects.create(
+                    transaction=txn,
+                    category=ln["category"],
+                    amount=ln["amount"],
+                    amount_usd=ln["amount"] / exchange_rate if exchange_rate else ln["amount"],
+                    description=ln["description"],
+                )
+            bt.transaction = txn
+            bt.status = BankTransaction.Status.LINKED
+            bt.save(update_fields=["transaction", "status", "last_seen_at"])
+
+        txn = (
+            Transaction.objects
+            .select_related("recurring__category", "payment_method")
+            .prefetch_related("lines__category", "bank_transaction__bank_account")
+            .get(pk=txn.pk)
+        )
+        return JsonResponse({
+            "bank_transaction": serialize_bank_transaction(bt),
+            "transaction": serialize_transaction(txn),
+        }, status=201)
+
+
+class BankTransactionIgnoreView(BudgetMemberMixin, View):
+    def post(self, request, budget_pk, pk):
+        bt = _bank_txn_for_budget(request, self.budget, pk)
+        data = _parse_json_body(request)
+        bt.status = BankTransaction.Status.IGNORED
+        bt.transaction = None
+        bt.ignore_reason = (data.get("reason") or "").strip()[:500]
+        bt.save(update_fields=["status", "transaction", "ignore_reason", "last_seen_at"])
+        return JsonResponse({"bank_transaction": serialize_bank_transaction(bt)})
+
+
+class BankTransactionUnlinkView(BudgetMemberMixin, View):
+    """Unlink a BankTransaction from its Transaction (does not delete the Transaction)."""
+
+    def post(self, request, budget_pk, pk):
+        bt = _bank_txn_for_budget(request, self.budget, pk)
+        bt.status = BankTransaction.Status.PENDING
+        bt.transaction = None
+        bt.ignore_reason = ""
+        bt.save(update_fields=["status", "transaction", "ignore_reason", "last_seen_at"])
+        return JsonResponse({"bank_transaction": serialize_bank_transaction(bt)})

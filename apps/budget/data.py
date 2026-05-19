@@ -68,27 +68,29 @@ def serialize_transaction_line(line) -> dict:
     }
 
 
+def serialize_linked_bank_transaction(bt) -> dict:
+    return {
+        "id": bt.pk,
+        "posted_date": bt.posted_at.date().isoformat(),
+        "amount": str(bt.amount),
+        "description": bt.description,
+        "payee": bt.payee,
+        "memo": bt.memo,
+        "bank_account_name": bt.bank_account.name,
+        "org_name": bt.bank_account.org_name,
+    }
+
+
 def serialize_transaction(txn) -> dict:
     lines = [serialize_transaction_line(line) for line in txn.lines.all()]
-    # Recurring instances have no TransactionLine rows — synthesize one from the template.
-    if not lines and txn.recurring_id:
-        rt = txn.recurring
-        lines = [
-            {
-                "id": None,
-                "category": rt.category_id,
-                "category_name": rt.category.name,
-                "category_type": rt.category.category_type,
-                "amount": str(rt.amount),
-                "description": rt.name,
-            }
-        ]
+    linked_bt = getattr(txn, "bank_transaction", None) if txn.pk else None
+    linked = [linked_bt] if linked_bt else []
     return {
         "id": txn.pk,
         "description": txn.description,
         "due_date": str(txn.due_date),
         "paid_date": str(txn.paid_date) if txn.paid_date else None,
-        "is_paid": txn.is_paid,
+        "is_paid": txn.paid_date is not None,
         "notes": txn.notes,
         "recurring": txn.recurring_id,
         "payment_method": txn.payment_method_id,
@@ -99,6 +101,8 @@ def serialize_transaction(txn) -> dict:
         "currency": txn.currency,
         "exchange_rate_to_usd": str(txn.exchange_rate_to_usd),
         "created_at": txn.created_at.isoformat(),
+        "bank_linked": bool(linked),
+        "linked_bank_transactions": [serialize_linked_bank_transaction(bt) for bt in linked],
     }
 
 
@@ -132,7 +136,7 @@ def serialize_membership(membership) -> dict:
         "email": membership.user.email,
         "name": membership.user.get_full_name() or membership.user.email,
         "role": membership.role,
-        "gravatar_url": membership.user._get_gravatar_url(),
+        "gravatar_url": membership.user.avatar_url,
         "joined_at": membership.joined_at.isoformat(),
     }
 
@@ -157,7 +161,7 @@ def get_budget_overview(budget, month_str: str | None, user_rate: "Decimal" = De
     regular_activity_qs = (
         TransactionLine.objects.filter(
             transaction__budget=budget,
-            category__is_sinking_fund=False,
+            category__sinking_fund__isnull=True,
         )
         .exclude(transaction__transaction_type="transfer")
         .annotate(effective_date=Coalesce("transaction__paid_date", "transaction__due_date"))
@@ -171,7 +175,7 @@ def get_budget_overview(budget, month_str: str | None, user_rate: "Decimal" = De
     sf_activity_qs = (
         TransactionLine.objects.filter(
             transaction__budget=budget,
-            category__is_sinking_fund=True,
+            category__sinking_fund__isnull=False,
             transaction__transaction_type="expense",
         )
         .values("category_id")
@@ -179,24 +183,6 @@ def get_budget_overview(budget, month_str: str | None, user_rate: "Decimal" = De
     )
     for row in sf_activity_qs:
         activity_map[row["category_id"]] = row["total"] * user_rate
-
-    # Activity from paid recurring instances that have no explicit lines.
-    # Recurring amounts have no exchange rate stored, so treat as user-currency already.
-    recurring_activity_qs = (
-        Transaction.objects.filter(
-            budget=budget,
-            recurring__isnull=False,
-            is_paid=True,
-            lines__isnull=True,
-        )
-        .annotate(effective_date=Coalesce("paid_date", "due_date"))
-        .filter(effective_date__range=(period_start, period_end))
-        .values("recurring__category_id")
-        .annotate(total=Sum("recurring__amount"))
-    )
-    for row in recurring_activity_qs:
-        cat_id = row["recurring__category_id"]
-        activity_map[cat_id] = activity_map.get(cat_id, Decimal("0.00")) + row["total"]
 
     # Assigned amounts
     assigned_qs = CategoryBudget.objects.filter(budget=budget, month=period_start).values("category_id", "assigned")
@@ -206,7 +192,7 @@ def get_budget_overview(budget, month_str: str | None, user_rate: "Decimal" = De
     saved_credits_qs = (
         TransactionLine.objects.filter(
             transaction__budget=budget,
-            category__is_sinking_fund=True,
+            category__sinking_fund__isnull=False,
             transaction__transaction_type__in=("income", "transfer"),
         )
         .values("category_id")
@@ -215,7 +201,7 @@ def get_budget_overview(budget, month_str: str | None, user_rate: "Decimal" = De
     saved_expense_qs = (
         TransactionLine.objects.filter(
             transaction__budget=budget,
-            category__is_sinking_fund=True,
+            category__sinking_fund__isnull=False,
             transaction__transaction_type="expense",
         )
         .values("category_id")
@@ -233,7 +219,7 @@ def get_budget_overview(budget, month_str: str | None, user_rate: "Decimal" = De
     sf_monthly_expense_qs = (
         TransactionLine.objects.filter(
             transaction__budget=budget,
-            category__is_sinking_fund=True,
+            category__sinking_fund__isnull=False,
             transaction__transaction_type="expense",
         )
         .annotate(effective_date=Coalesce("transaction__paid_date", "transaction__due_date"))
@@ -247,7 +233,7 @@ def get_budget_overview(budget, month_str: str | None, user_rate: "Decimal" = De
         TransactionLine.objects.filter(
             transaction__budget=budget,
             transaction__transaction_type="transfer",
-            category__is_sinking_fund=True,
+            category__sinking_fund__isnull=False,
         )
         .annotate(effective_date=Coalesce("transaction__paid_date", "transaction__due_date"))
         .filter(effective_date__range=(period_start, period_end))
@@ -326,7 +312,7 @@ def get_upcoming_transactions(budget) -> list:
         Transaction.objects.filter(
             budget=budget,
             recurring__isnull=False,
-            is_paid=False,
+            paid_date__isnull=True,
             due_date__lte=week_out,
         )
         .select_related("recurring__category", "payment_method")
@@ -334,3 +320,26 @@ def get_upcoming_transactions(budget) -> list:
         .order_by("due_date")
     )
     return [serialize_transaction(t) for t in upcoming]
+
+
+def get_pending_count(budget, month_str: str | None) -> int:
+    """Count transactions in the given month that need user review.
+
+    Mirrors the Transactions page's Pending section logic: a transaction is
+    pending if it has no paid_date OR if it's recurring and not yet marked paid.
+    Month scoping uses Coalesce(paid_date, due_date), matching TransactionListView.
+    """
+    try:
+        month_start = datetime.date.fromisoformat(month_str + "-01") if month_str else datetime.date.today().replace(day=1)
+    except (ValueError, TypeError, AttributeError):
+        month_start = datetime.date.today().replace(day=1)
+    last_day = calendar.monthrange(month_start.year, month_start.month)[1]
+    month_end = month_start.replace(day=last_day)
+
+    return (
+        Transaction.objects.filter(budget=budget)
+        .annotate(effective_date=Coalesce("paid_date", "due_date"))
+        .filter(effective_date__range=(month_start, month_end))
+        .filter(paid_date__isnull=True)
+        .count()
+    )

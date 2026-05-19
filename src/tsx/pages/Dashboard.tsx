@@ -1,8 +1,25 @@
 import { router } from "@inertiajs/react";
 import { useState } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import AssignModal from "../components/AssignModal";
+import CleanupAssignedModal from "../components/CleanupAssignedModal";
 import TransactionModal from "../components/TransactionModal";
 import type { BudgetOverview, BudgetOverviewCategory, Category, CurrencyOption, PaymentMethod, Transaction } from "../types";
 import { fmt, useCurrencySymbol } from "../utils/currency";
+import { formatMonth, getDefaultMonth, isAtBackLimit, nextMonth, prevMonth } from "../utils/month";
+import { getCsrfToken } from "../lib/api";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 interface Props {
   budget_pk: number;
@@ -10,46 +27,86 @@ interface Props {
   overview: BudgetOverview;
   categories: Category[];
   payment_methods: PaymentMethod[];
-  upcoming_transactions: Transaction[];
+  pending_count: number;
   currencies: CurrencyOption[];
   user_currency: string;
 }
 
-function getDefaultMonth(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+const SECTION_LABEL_CLASS = "text-[0.6875rem] font-semibold uppercase tracking-[0.08em]";
+
+interface CurrencyEditCellProps {
+  symbol: string;
+  value: string;
+  editing: string | undefined;
+  onStart: () => void;
+  onChange: (v: string) => void;
+  onCommit: () => void;
+  onCancel: () => void;
+  saving: boolean;
+  valueClass?: string;
+  title?: string;
 }
 
-function prevMonth(month: string): string {
-  const [year, mon] = month.split("-").map(Number);
-  if (mon === 1) return `${year - 1}-12`;
-  return `${year}-${String(mon - 1).padStart(2, "0")}`;
+function CurrencyEditCell({
+  symbol,
+  value,
+  editing,
+  onStart,
+  onChange,
+  onCommit,
+  onCancel,
+  saving,
+  valueClass,
+  title,
+}: CurrencyEditCellProps) {
+  const numeric = parseFloat(value);
+  if (editing !== undefined) {
+    return (
+      <div className="flex justify-end">
+        <div className="flex items-center gap-0 max-w-[130px]">
+          <span className="inline-flex items-center px-2 h-8 rounded-l-md border border-r-0 border-input bg-muted text-muted-foreground text-sm">{symbol}</span>
+          <Input
+            type="number"
+            className="h-8 rounded-l-none"
+            min="0"
+            step="0.01"
+            autoFocus
+            value={editing}
+            onChange={(e) => onChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") onCommit();
+              if (e.key === "Escape") onCancel();
+            }}
+            onBlur={onCommit}
+            disabled={saving}
+          />
+        </div>
+      </div>
+    );
+  }
+  return (
+    <button
+      type="button"
+      className="text-right cursor-pointer rounded-sm hover:underline focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
+      title={title}
+      onClick={onStart}
+    >
+      {numeric > 0
+        ? <span className={valueClass}>{fmt(value, symbol)}</span>
+        : <span className="text-muted-foreground italic">—</span>}
+    </button>
+  );
 }
 
-function nextMonth(month: string): string {
-  const [year, mon] = month.split("-").map(Number);
-  if (mon === 12) return `${year + 1}-01`;
-  return `${year}-${String(mon + 1).padStart(2, "0")}`;
-}
-
-function formatMonth(month: string): string {
-  const [year, mon] = month.split("-").map(Number);
-  return new Date(year, mon - 1, 1).toLocaleString("default", { month: "long", year: "numeric" });
-}
-
-function getCsrfToken(): string {
-  const match = document.cookie.match(/csrftoken=([^;]+)/);
-  return match ? match[1] : "";
-}
-
-export default function Dashboard({ budget_pk, month, overview, categories, payment_methods, upcoming_transactions, currencies, user_currency }: Props) {
+export default function Dashboard({ budget_pk, month, overview, categories, payment_methods, pending_count, currencies, user_currency }: Props) {
   const symbol = useCurrencySymbol();
   const [editingAssigned, setEditingAssigned] = useState<Record<number, string>>({});
   const [editingBudgeted, setEditingBudgeted] = useState<Record<number, string>>({});
   const [savingAssigned, setSavingAssigned] = useState<Record<number, boolean>>({});
   const [savingBudgeted, setSavingBudgeted] = useState<Record<number, boolean>>({});
-  const [markingPaid, setMarkingPaid] = useState<Set<number>>(new Set());
   const [addTransactionType, setAddTransactionType] = useState<"income" | "expense" | null>(null);
+  const [assigning, setAssigning] = useState(false);
+  const [cleaning, setCleaning] = useState(false);
 
   const isCurrentMonth = month === getDefaultMonth();
 
@@ -71,8 +128,7 @@ export default function Dashboard({ budget_pk, month, overview, categories, paym
         body: JSON.stringify({ assigned: val, month }),
       });
       if (res.ok || res.redirected) {
-        // Partial reload: only refresh overview
-        router.reload({ only: ["overview"], });
+        router.reload({ only: ["overview"] });
       }
     } finally {
       setEditingAssigned((prev) => { const next = { ...prev }; delete next[cat.id]; return next; });
@@ -94,24 +150,11 @@ export default function Dashboard({ budget_pk, month, overview, categories, paym
         body: JSON.stringify({ monthly_budget: val }),
       });
       if (res.ok) {
-        router.reload({ only: ["overview"], });
+        router.reload({ only: ["overview"] });
       }
     } finally {
       setEditingBudgeted((prev) => { const next = { ...prev }; delete next[cat.id]; return next; });
       setSavingBudgeted((prev) => { const next = { ...prev }; delete next[cat.id]; return next; });
-    }
-  }
-
-  async function markPaid(txnId: number) {
-    setMarkingPaid((prev) => new Set(prev).add(txnId));
-    try {
-      await fetch(`/budgets/${budget_pk}/transactions/${txnId}/mark-paid/`, {
-        method: "POST",
-        headers: { "X-CSRFToken": getCsrfToken() },
-      });
-      router.reload({ only: ["overview", "upcoming_transactions"], });
-    } finally {
-      setMarkingPaid((prev) => { const next = new Set(prev); next.delete(txnId); return next; });
     }
   }
 
@@ -125,74 +168,60 @@ export default function Dashboard({ budget_pk, month, overview, categories, paym
       const json = await res.json() as { errors?: Record<string, string[]> };
       throw json.errors ?? json;
     }
-    router.reload({ only: ["overview", "upcoming_transactions"], });
+    router.reload({ only: ["overview", "pending_count"] });
   }
 
   function renderCategoryRow(cat: BudgetOverviewCategory, isChild = false) {
-
-    const isEditingAssigned = cat.id in editingAssigned;
-    const isEditingBudgeted = cat.id in editingBudgeted;
     const available = parseFloat(cat.available);
     const budgeted = parseFloat(cat.budgeted);
     const assigned = parseFloat(cat.assigned);
     const activity = parseFloat(cat.activity);
     const isExpense = cat.category_type === "expense";
 
-    const budgetedClass = budgeted > 0 && activity > budgeted ? "text-danger" : "";
-    const assignedClass = budgeted > 0 && assigned === budgeted ? "text-success" : "";
+    const budgetedClass = budgeted > 0 && activity > budgeted ? "text-expense" : "";
+    const assignedClass = budgeted > 0 && assigned === budgeted ? "text-moss" : "";
     const availableClass = isExpense
-      ? available < 0 ? "text-danger font-bold" : available === 0 ? "text-muted" : "text-success"
-      : "text-success";
+      ? available < 0 ? "text-expense font-semibold" : available === 0 ? "text-muted-foreground" : "text-moss"
+      : "text-moss";
 
     return (
-      <tr key={cat.id}>
-        <td style={isChild ? { paddingLeft: "2.25rem" } : undefined}>
-          {isChild && <span className="text-muted mr-1">↳</span>}
-          <a href={`/budgets/${budget_pk}/transactions/?month=${month}&category=${cat.id}`} className="no-underline text-body">
+      <TableRow key={cat.id}>
+        <TableCell style={isChild ? { paddingLeft: "2.25rem" } : undefined}>
+          <a href={`/budgets/${budget_pk}/transactions/?month=${month}&category=${cat.id}`} className="no-underline hover:underline">
             {cat.name}
           </a>
-        </td>
-        <td className="text-right">
-          {isEditingBudgeted ? (
-            <div className="input-group input-group-sm justify-end" style={{ maxWidth: 130 }}>
-              <span className="input-group-text">{symbol}</span>
-              <input
-                type="number" className="form-control" min="0" step="0.01" autoFocus
-                value={editingBudgeted[cat.id]}
-                onChange={(e) => setEditingBudgeted((prev) => ({ ...prev, [cat.id]: e.target.value }))}
-                onKeyDown={(e) => { if (e.key === "Enter") void saveBudgeted(cat); if (e.key === "Escape") setEditingBudgeted((prev) => { const n = { ...prev }; delete n[cat.id]; return n; }); }}
-                onBlur={() => void saveBudgeted(cat)}
-                disabled={savingBudgeted[cat.id]}
-              />
-            </div>
-          ) : (
-            <span style={{ cursor: "pointer" }} title="Click to set monthly target" onClick={() => setEditingBudgeted((prev) => ({ ...prev, [cat.id]: "" }))}>
-              {budgeted > 0 ? <span className={budgetedClass}>{fmt(cat.budgeted, symbol)}</span> : <span className="text-muted italic">—</span>}
-            </span>
-          )}
-        </td>
-        <td className="text-right">
-          {isEditingAssigned ? (
-            <div className="input-group input-group-sm justify-end" style={{ maxWidth: 130 }}>
-              <span className="input-group-text">{symbol}</span>
-              <input
-                type="number" className="form-control" min="0" step="0.01" autoFocus
-                value={editingAssigned[cat.id]}
-                onChange={(e) => setEditingAssigned((prev) => ({ ...prev, [cat.id]: e.target.value }))}
-                onKeyDown={(e) => { if (e.key === "Enter") void saveAssigned(cat); if (e.key === "Escape") setEditingAssigned((prev) => { const n = { ...prev }; delete n[cat.id]; return n; }); }}
-                onBlur={() => void saveAssigned(cat)}
-                disabled={savingAssigned[cat.id]}
-              />
-            </div>
-          ) : (
-            <span style={{ cursor: "pointer" }} title="Click to set assigned amount" onClick={() => setEditingAssigned((prev) => ({ ...prev, [cat.id]: "" }))}>
-              {assigned > 0 ? <span className={assignedClass}>{fmt(cat.assigned, symbol)}</span> : <span className="text-muted italic">—</span>}
-            </span>
-          )}
-        </td>
-        <td className="text-right">{fmt(cat.activity, symbol)}</td>
-        <td className={`text-right ${availableClass}`}>{fmt(cat.available, symbol)}</td>
-      </tr>
+        </TableCell>
+        <TableCell className="text-right">
+          <CurrencyEditCell
+            symbol={symbol}
+            value={cat.budgeted}
+            editing={editingBudgeted[cat.id]}
+            onStart={() => setEditingBudgeted((prev) => ({ ...prev, [cat.id]: "" }))}
+            onChange={(v) => setEditingBudgeted((prev) => ({ ...prev, [cat.id]: v }))}
+            onCommit={() => void saveBudgeted(cat)}
+            onCancel={() => setEditingBudgeted((prev) => { const n = { ...prev }; delete n[cat.id]; return n; })}
+            saving={savingBudgeted[cat.id] ?? false}
+            valueClass={budgetedClass}
+            title="Click to set monthly target"
+          />
+        </TableCell>
+        <TableCell className="text-right">
+          <CurrencyEditCell
+            symbol={symbol}
+            value={cat.assigned}
+            editing={editingAssigned[cat.id]}
+            onStart={() => setEditingAssigned((prev) => ({ ...prev, [cat.id]: "" }))}
+            onChange={(v) => setEditingAssigned((prev) => ({ ...prev, [cat.id]: v }))}
+            onCommit={() => void saveAssigned(cat)}
+            onCancel={() => setEditingAssigned((prev) => { const n = { ...prev }; delete n[cat.id]; return n; })}
+            saving={savingAssigned[cat.id] ?? false}
+            valueClass={assignedClass}
+            title="Click to set assigned amount"
+          />
+        </TableCell>
+        <TableCell className="text-right">{fmt(cat.activity, symbol)}</TableCell>
+        <TableCell className={`text-right ${availableClass}`}>{fmt(cat.available, symbol)}</TableCell>
+      </TableRow>
     );
   }
 
@@ -214,177 +243,271 @@ export default function Dashboard({ budget_pk, month, overview, categories, paym
       ...(childrenByParent.get(root.id) ?? []).map((child) => renderCategoryRow(child, true)),
     ]);
   }
+
   const sfMonthlySpending = parseFloat(overview.sf_monthly_spending);
   const totalSpent = expense.reduce((sum, c) => sum + parseFloat(c.activity), 0) + sfMonthlySpending;
   const sfSaved = parseFloat(overview.transfers_total);
-  const netAmount = parseFloat(overview.income_total) - totalSpent - sfSaved;
+  const incomeTotal = parseFloat(overview.income_total);
+  const netAmount = incomeTotal - totalSpent - sfSaved;
   const netPositive = netAmount >= 0;
   const rta = parseFloat(overview.ready_to_assign);
 
   return (
-    <div>
-      {/* Header */}
-      <div className="flex items-center gap-4 mb-6">
-        <button className="btn btn-outline-secondary btn-sm" onClick={() => navigateMonth(prevMonth(month))}>&laquo;</button>
-        <h4 className="mb-0">{formatMonth(month)}</h4>
-        <button className="btn btn-outline-secondary btn-sm" onClick={() => navigateMonth(nextMonth(month))} disabled={isCurrentMonth}>&raquo;</button>
-      </div>
+    <div className="max-w-[1200px]">
+      {/* Page header */}
+      <header className="mb-8 flex items-center gap-3">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          disabled={isAtBackLimit(month)}
+          onClick={() => navigateMonth(prevMonth(month))}
+          aria-label="Previous month"
+        >
+          <ChevronLeft />
+        </Button>
+        <h1 className="text-3xl font-semibold tracking-tight">{formatMonth(month)}</h1>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={() => navigateMonth(nextMonth(month))}
+          disabled={isCurrentMonth}
+          aria-label="Next month"
+        >
+          <ChevronRight />
+        </Button>
+      </header>
 
       {/* Ready to Assign */}
-      {parseFloat(overview.income_total) > 0 && (
-        <div className={`alert ${rta >= 0 ? "alert-success" : "alert-danger"} flex justify-between items-center mb-6`}>
-          <div>
-            <strong>Ready to Assign</strong>
-            <div className="text-sm text-muted">
-              Income {fmt(overview.income_total, symbol)}
-              {" "}&minus; Assigned {fmt(overview.expense_assigned, symbol)}
-              {parseFloat(overview.transfers_total) > 0 && <> &minus; Saved {fmt(overview.transfers_total, symbol)}</>}
+      {(incomeTotal > 0 || parseFloat(overview.expense_assigned) > 0) && (
+        <Alert variant={rta >= 0 ? "success" : "destructive"} className={isCurrentMonth && pending_count > 0 ? "mb-4" : "mb-8"}>
+          <AlertDescription>
+            <div className="flex justify-between items-center w-full gap-4 flex-wrap">
+              <div>
+                <strong className="font-semibold">Ready to Assign</strong>
+                <div className="text-sm text-muted-foreground">
+                  Income {fmt(overview.income_total, symbol)}
+                  {" "}&minus; Assigned {fmt(overview.expense_assigned, symbol)}
+                  {parseFloat(overview.transfers_total) > 0 && <> &minus; Saved {fmt(overview.transfers_total, symbol)}</>}
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-2xl font-semibold tracking-tight tabular-nums">{fmt(overview.ready_to_assign, symbol)}</span>
+                {rta > 0 && (
+                  <Button size="sm" onClick={() => setAssigning(true)}>
+                    Assign
+                  </Button>
+                )}
+                {rta < 0 && (
+                  <Button size="sm" onClick={() => setCleaning(true)}>
+                    Reduce
+                  </Button>
+                )}
+              </div>
             </div>
-          </div>
-          <span className="text-2xl font-bold">{fmt(overview.ready_to_assign, symbol)}</span>
-        </div>
+          </AlertDescription>
+        </Alert>
       )}
+
+      {/* Pending review */}
+      {isCurrentMonth && pending_count > 0 && (
+        <Alert className="mb-8 border-fund/30 bg-fund-soft text-ink *:data-[slot=alert-description]:text-ink/90">
+          <AlertDescription>
+            <div className="flex justify-between items-center w-full gap-4">
+              <div>
+                <strong className="font-semibold">
+                  {pending_count} transaction{pending_count === 1 ? "" : "s"} awaiting review
+                </strong>
+                <div className="text-sm text-ink-quiet">
+                  Recurring transactions or entries without a paid date.
+                </div>
+              </div>
+              <Button
+                size="sm"
+                onClick={() => router.visit(`/budgets/${budget_pk}/transactions/?month=${month}`)}
+                className="bg-fund/20 text-ink hover:bg-fund/30 border-fund/40 dark:hover:bg-fund/35"
+              >
+                Review
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
 
       {/* Budget Grid */}
       {overview.categories.length === 0 ? (
-        <div className="text-muted text-center py-12">
-          No categories yet. <a href={`/budgets/${budget_pk}/categories/`}>Add some categories</a> to get started.
+        <div className="text-muted-foreground text-center py-16">
+          <p className="mb-4">No categories yet.</p>
+          <Button asChild variant="outline">
+            <a href={`/budgets/${budget_pk}/categories/`}>Add some categories to get started</a>
+          </Button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
           {income.length > 0 && (
-            <div className="md:col-span-4 flex flex-col gap-4">
-              <div className="card">
-                <div className="card-header bg-success bg-opacity-10 flex justify-between items-center">
-                  <span className="text-success text-sm font-bold">Income</span>
-                  <button className="btn btn-outline-success btn-sm py-0 px-2" style={{ fontSize: "0.75rem" }} onClick={() => setAddTransactionType("income")}>+ Add</button>
+            <div className="md:col-span-4 flex flex-col gap-6">
+              {/* Income card — short */}
+              <Card className="p-0 gap-0 overflow-hidden border-rule shadow-none">
+                <div className="flex justify-between items-center px-4 py-2 bg-moss-soft text-ink">
+                  <span className={SECTION_LABEL_CLASS}>Income</span>
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    className="hover:bg-moss/20 hover:text-ink"
+                    onClick={() => setAddTransactionType("income")}
+                  >
+                    + Add
+                  </Button>
                 </div>
-                <div className="table-responsive">
-                  <table className="table table-hover mb-0">
-                    <thead className="table-light"><tr><th>Category</th><th className="text-right">Activity</th></tr></thead>
-                    <tbody>
-                      {(() => {
-                        const roots = income.filter((c) => c.parent_id === null);
-                        const kids = new Map<number, BudgetOverviewCategory[]>();
-                        for (const c of income) {
-                          if (c.parent_id !== null) {
-                            const list = kids.get(c.parent_id) ?? [];
-                            list.push(c);
-                            kids.set(c.parent_id, list);
-                          }
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Category</TableHead>
+                      <TableHead className="text-right">Activity</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(() => {
+                      const roots = income.filter((c) => c.parent_id === null);
+                      const kids = new Map<number, BudgetOverviewCategory[]>();
+                      for (const c of income) {
+                        if (c.parent_id !== null) {
+                          const list = kids.get(c.parent_id) ?? [];
+                          list.push(c);
+                          kids.set(c.parent_id, list);
                         }
-                        const renderRow = (cat: BudgetOverviewCategory, isChild: boolean) => (
-                          <tr key={cat.id}>
-                            <td style={isChild ? { paddingLeft: "2.25rem" } : undefined}>
-                              {isChild && <span className="text-muted mr-1">↳</span>}
-                              <a href={`/budgets/${budget_pk}/transactions/?month=${month}&category=${cat.id}`} className="no-underline text-body">{cat.name}</a>
-                            </td>
-                            <td className="text-right text-success">{fmt(cat.activity, symbol)}</td>
-                          </tr>
-                        );
-                        return roots.flatMap((root) => [
-                          renderRow(root, false),
-                          ...(kids.get(root.id) ?? []).map((child) => renderRow(child, true)),
-                        ]);
-                      })()}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-              <div className="card">
-                <div className="card-body py-2">
-                  <div className="flex justify-between items-center py-1">
-                    <span className="text-sm text-muted">Income</span>
-                    <span className="font-semibold text-success">{fmt(overview.income_total, symbol)}</span>
-                  </div>
-                  <div className="flex justify-between items-center py-1">
-                    <span className="text-sm text-muted">Spent</span>
-                    <span className="font-semibold text-danger">{fmt(totalSpent, symbol)}</span>
-                  </div>
-                  <div className="flex justify-between items-center py-1">
-                    <span className="text-sm text-muted">Saved to funds</span>
-                    <span className="font-semibold text-warning">{fmt(sfSaved, symbol)}</span>
-                  </div>
-                  <hr className="my-1" />
-                  <div className="flex justify-between items-center py-1">
-                    <span className="text-sm font-semibold">Net</span>
-                    <span className={`font-bold ${netPositive ? "text-success" : "text-danger"}`}>{`${netPositive ? "" : "-"}${fmt(Math.abs(netAmount), symbol)}`}</span>
-                  </div>
-                </div>
-              </div>
-              {isCurrentMonth && upcoming_transactions.length > 0 && (
-                <div className="card">
-                  <div className="card-header text-sm font-semibold text-muted py-2">Upcoming Recurring</div>
-                  <ul className="list-group list-group-flush">
-                    {upcoming_transactions.map((txn) => {
-                      const category = txn.lines[0]?.category_name ?? "";
-                      const isMarking = markingPaid.has(txn.id);
-                      const due = new Date(txn.due_date + "T00:00:00");
-                      const today = new Date(); today.setHours(0, 0, 0, 0);
-                      const isOverdue = due < today;
-                      const dueFmt = due.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-                      return (
-                        <li key={txn.id} className="list-group-item flex justify-between items-center py-2">
-                          <div>
-                            <div className="font-medium">{txn.description}</div>
-                            <div className="text-sm text-muted">
-                              {category && <span className="mr-2">{category}</span>}
-                              <span className={isOverdue ? "text-danger font-semibold" : ""}>{dueFmt}</span>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-4">
-                            <span className={`font-semibold ${txn.transaction_type === "income" ? "text-success" : "text-danger"}`}>
-                              {fmt(txn.total_amount, symbol)}
-                            </span>
-                            <button className="btn btn-success btn-sm px-4" disabled={isMarking} onClick={() => void markPaid(txn.id)}>
-                              {isMarking ? "…" : "✓"}
-                            </button>
-                          </div>
-                        </li>
+                      }
+                      const renderRow = (cat: BudgetOverviewCategory, isChild: boolean) => (
+                        <TableRow key={cat.id}>
+                          <TableCell style={isChild ? { paddingLeft: "2.25rem" } : undefined}>
+                            <a href={`/budgets/${budget_pk}/transactions/?month=${month}&category=${cat.id}`} className="no-underline hover:underline">{cat.name}</a>
+                          </TableCell>
+                          <TableCell className="text-right text-income">{fmt(cat.activity, symbol)}</TableCell>
+                        </TableRow>
                       );
-                    })}
-                  </ul>
+                      return roots.flatMap((root) => [
+                        renderRow(root, false),
+                        ...(kids.get(root.id) ?? []).map((child) => renderRow(child, true)),
+                      ]);
+                    })()}
+                  </TableBody>
+                </Table>
+              </Card>
+
+              {/* This month summary — single coherent card, plain header */}
+              <Card className="border-rule shadow-none">
+                <div className="px-5 py-4 flex flex-col gap-2.5">
+                  <span className={`${SECTION_LABEL_CLASS} text-ink-quiet`}>This month</span>
+                  <dl className="flex flex-col gap-1.5">
+                    <div className="flex justify-between items-baseline">
+                      <dt className="text-sm text-ink-quiet">Earned</dt>
+                      <dd className="text-income tabular-nums">{fmt(overview.income_total, symbol)}</dd>
+                    </div>
+                    <div className="flex justify-between items-baseline">
+                      <dt className="text-sm text-ink-quiet">Spent</dt>
+                      <dd className="text-expense tabular-nums text-right">
+                        {fmt(totalSpent, symbol)}
+                        {sfMonthlySpending > 0 && (
+                          <div className="text-[0.7rem] text-ink-quiet font-normal not-tabular-nums">
+                            incl. {fmt(sfMonthlySpending, symbol)} from goals
+                          </div>
+                        )}
+                      </dd>
+                    </div>
+                    <div className="flex justify-between items-baseline">
+                      <dt className="text-sm text-ink-quiet">Saved to goals</dt>
+                      <dd className="text-fund tabular-nums">{fmt(sfSaved, symbol)}</dd>
+                    </div>
+                    <hr className="border-rule my-1.5" />
+                    <div className="flex justify-between items-baseline">
+                      <dt className="text-sm font-medium">Kept</dt>
+                      <dd className={`text-xl font-semibold tracking-tight tabular-nums ${netPositive ? "text-moss" : "text-expense"}`}>
+                        {netPositive ? "" : "−"}{fmt(Math.abs(netAmount), symbol)}
+                      </dd>
+                    </div>
+                  </dl>
                 </div>
-              )}
+              </Card>
+
             </div>
           )}
+
+          {/* Expenses — primary, full-height column */}
           {expense.length > 0 && (
-            <div className="md:col-span-8 flex flex-col gap-4">
-              <div className="card">
-                <div className="card-header bg-danger bg-opacity-10 flex justify-between items-center">
-                  <span className="text-danger text-sm font-bold">Expenses</span>
-                  <button className="btn btn-outline-danger btn-sm py-0 px-2" style={{ fontSize: "0.75rem" }} onClick={() => setAddTransactionType("expense")}>+ Add</button>
+            <div className="md:col-span-8 flex flex-col gap-6">
+              <Card className="p-0 gap-0 overflow-hidden border-rule shadow-none">
+                <div className="flex justify-between items-center px-4 py-2 bg-expense-soft text-ink">
+                  <span className={SECTION_LABEL_CLASS}>Expenses</span>
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    className="hover:bg-expense/20 hover:text-ink"
+                    onClick={() => setAddTransactionType("expense")}
+                  >
+                    + Add
+                  </Button>
                 </div>
-                <div className="table-responsive">
-                  <table className="table table-hover mb-0">
-                    <thead className="table-light">
-                      <tr><th>Category</th><th className="text-right">Budgeted</th><th className="text-right">Assigned</th><th className="text-right">Activity</th><th className="text-right">Available</th></tr>
-                    </thead>
-                    <tbody>{renderHierarchical(expense)}</tbody>
-                  </table>
-                </div>
-              </div>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Category</TableHead>
+                      <TableHead className="text-right">Budgeted</TableHead>
+                      <TableHead className="text-right">Assigned</TableHead>
+                      <TableHead className="text-right">Activity</TableHead>
+                      <TableHead className="text-right">Available</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>{renderHierarchical(expense)}</TableBody>
+                </Table>
+              </Card>
             </div>
           )}
         </div>
+      )}
+
+      {/* Assign Modal */}
+      {assigning && (
+        <AssignModal
+          budgetPk={budget_pk}
+          month={month}
+          categories={overview.categories}
+          readyToAssign={rta}
+          onClose={() => setAssigning(false)}
+          onSaved={() => {
+            setAssigning(false);
+            router.reload({ only: ["overview"] });
+          }}
+        />
+      )}
+
+      {/* Cleanup Assigned Modal */}
+      {cleaning && (
+        <CleanupAssignedModal
+          budgetPk={budget_pk}
+          month={month}
+          categories={overview.categories}
+          overAssignedBy={Math.abs(rta)}
+          onClose={() => setCleaning(false)}
+          onSaved={() => {
+            setCleaning(false);
+            router.reload({ only: ["overview"] });
+          }}
+        />
       )}
 
       {/* Transaction Modal */}
       {addTransactionType !== null && (
-        <>
-          <div className="modal-backdrop fade show" onClick={() => { setAddTransactionType(null); }} />
-          <TransactionModal
-            categories={categories}
-            paymentMethods={payment_methods}
-            currencies={currencies}
-            userCurrency={user_currency}
-            budgetPk={budget_pk}
-            transaction={null}
-            defaultCategoryType={addTransactionType}
-            onSave={createTransaction}
-            onClose={() => { setAddTransactionType(null); }}
-          />
-        </>
+        <TransactionModal
+          categories={categories}
+          paymentMethods={payment_methods}
+          currencies={currencies}
+          userCurrency={user_currency}
+          budgetPk={budget_pk}
+          transaction={null}
+          defaultCategoryType={addTransactionType}
+          onSave={createTransaction}
+          onClose={() => setAddTransactionType(null)}
+        />
       )}
     </div>
   );
