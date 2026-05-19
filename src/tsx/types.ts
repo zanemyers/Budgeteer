@@ -97,7 +97,7 @@ export interface BankTransaction {
 }
 
 export interface BankMatchSuggestion {
-  kind: "transaction" | "recurring" | "merchant_rule";
+  kind: "transaction" | "recurring" | "paid_transaction" | "merchant_rule";
   confidence: number;
   label: string;
   sublabel: string;

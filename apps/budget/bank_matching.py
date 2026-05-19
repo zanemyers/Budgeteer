@@ -1,9 +1,10 @@
 """Suggest matches between an unlinked BankTransaction and local Transactions.
 
 A "suggestion" is one of:
-- {"kind": "transaction", "transaction_id": id, ...}  — link to an existing unpaid Transaction
-- {"kind": "recurring", "transaction_id": id, ...}    — same, but the Transaction was generated from a RecurringTransaction
-- {"kind": "merchant_rule", "category_id": id, ...}   — propose creating a new Transaction in a likely category
+- {"kind": "transaction", "transaction_id": id, ...}       — link to an existing unpaid Transaction
+- {"kind": "recurring", "transaction_id": id, ...}         — same, but the Transaction was generated from a RecurringTransaction
+- {"kind": "paid_transaction", "transaction_id": id, ...}  — link to an already-paid manual entry that hasn't been bank-linked yet
+- {"kind": "merchant_rule", "category_id": id, ...}        — propose creating a new Transaction in a likely category
 
 Confidence is in [0, 1]. Higher = better match. The caller decides how to present them.
 """
@@ -109,6 +110,36 @@ def suggest_matches(bank_txn: "BankTransaction", budget: "Budget") -> list[dict]
                 confidence=confidence,
                 label=label,
                 sublabel=sublabel,
+                transaction_id=txn.pk,
+            )
+        )
+
+    # 1b. Already-paid Transactions in window with no bank link yet — covers the
+    # "enter as you spend, bank confirms a day later" workflow. We use paid_date for
+    # date proximity (vs. due_date for unpaid).
+    paid_candidates = (
+        Transaction.objects.filter(
+            budget=budget,
+            paid_date__range=(earliest, latest),
+            bank_transaction__isnull=True,
+        )
+        .select_related("payment_method")
+        .prefetch_related("lines__category")
+    )
+    for txn in paid_candidates:
+        txn_amount = txn.total_amount
+        if not _amount_matches(amount, txn_amount):
+            continue
+        date_score = _date_proximity(bank_date, txn.paid_date)
+        name_score = _name_similarity(bank_txn, txn.description)
+        pm_bonus = 0.1 if same_pm_filter and txn.payment_method_id == same_pm_filter else 0.0
+        confidence = min(1.0, 0.55 * date_score + 0.35 * name_score + pm_bonus + 0.1)
+        suggestions.append(
+            Suggestion(
+                kind="paid_transaction",
+                confidence=confidence,
+                label=txn.description,
+                sublabel=f"Already recorded {txn.paid_date.isoformat()} · {txn_amount}",
                 transaction_id=txn.pk,
             )
         )

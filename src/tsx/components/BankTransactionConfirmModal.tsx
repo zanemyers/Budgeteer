@@ -227,7 +227,13 @@ export default function BankTransactionConfirmModal({ bankTxn, budgetPk, categor
                 <div className="flex justify-between items-center">
                   <div className="font-medium">{s.label}</div>
                   <div className="text-ink-quiet text-xs">
-                    {s.kind === "recurring" ? "Recurring" : s.kind === "merchant_rule" ? "Suggested" : "Match"}
+                    {s.kind === "recurring"
+                      ? "Recurring"
+                      : s.kind === "merchant_rule"
+                        ? "Suggested"
+                        : s.kind === "paid_transaction"
+                          ? "Already recorded"
+                          : "Match"}
                     {" · "}
                     {Math.round(s.confidence * 100)}%
                   </div>
