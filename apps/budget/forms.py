@@ -23,7 +23,7 @@ class CategoryForm(forms.ModelForm):
 class TransactionForm(forms.ModelForm):
     class Meta:
         model = Transaction
-        fields = ["description", "due_date", "paid_date", "is_paid", "notes"]
+        fields = ["description", "due_date", "paid_date", "notes"]
         widgets = {
             "due_date": forms.DateInput(attrs={"type": "date"}),
             "paid_date": forms.DateInput(attrs={"type": "date"}),

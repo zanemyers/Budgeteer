@@ -81,11 +81,6 @@ class Category(models.Model):
     name = models.CharField(max_length=100)
     category_type = models.CharField(max_length=10, choices=TYPE_CHOICES)
     monthly_budget = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
-    is_sinking_fund = models.BooleanField(default=False)
-    sinking_fund_target = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
-    sinking_fund_due_date = models.DateField(null=True, blank=True)
-    sinking_fund_ongoing = models.BooleanField(default=False)
-    sinking_fund_monthly_goal = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -129,6 +124,51 @@ class Category(models.Model):
             # Inherit type from parent so reporting groups never split.
             self.category_type = self.parent.category_type
         super().save(*args, **kwargs)
+
+    @property
+    def is_sinking_fund(self) -> bool:
+        try:
+            return self.sinking_fund is not None
+        except SinkingFund.DoesNotExist:
+            return False
+
+    @property
+    def sinking_fund_target(self):
+        sf = getattr(self, "sinking_fund", None)
+        return sf.target if sf else None
+
+    @property
+    def sinking_fund_due_date(self):
+        sf = getattr(self, "sinking_fund", None)
+        return sf.due_date if sf else None
+
+    @property
+    def sinking_fund_ongoing(self) -> bool:
+        sf = getattr(self, "sinking_fund", None)
+        return bool(sf and sf.ongoing)
+
+    @property
+    def sinking_fund_monthly_goal(self):
+        sf = getattr(self, "sinking_fund", None)
+        return sf.monthly_goal if sf else None
+
+
+class SinkingFund(models.Model):
+    """Optional details for a Category that's a sinking fund (savings target)."""
+
+    category = models.OneToOneField(
+        Category,
+        on_delete=models.CASCADE,
+        related_name="sinking_fund",
+        primary_key=True,
+    )
+    target = models.DecimalField(max_digits=12, decimal_places=2)
+    due_date = models.DateField(null=True, blank=True)
+    ongoing = models.BooleanField(default=False)
+    monthly_goal = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+
+    def __str__(self) -> str:
+        return f"{self.category.name} fund — target {self.target}"
 
 
 class RecurringTransaction(models.Model):
@@ -197,13 +237,15 @@ class RecurringTransaction(models.Model):
         return datetime.date(year, month, day)
 
     def generate_instances_up_to(self, through_date: datetime.date) -> list["Transaction"]:
-        """Generate Transaction instances up to through_date. Returns new instances created."""
-        from apps.budget.models import Transaction
+        """Generate Transaction instances (with TransactionLines) up to through_date.
+
+        Returns new instances created. Existing instances without lines have a line backfilled
+        so every Transaction in the system has a canonical line structure.
+        """
+        from apps.budget.models import Transaction, TransactionLine
 
         start = self.generated_through if self.generated_through else self.start_date - datetime.timedelta(days=1)
-        due = self.start_date if self.generated_through is None else None
 
-        # Build all due dates in range
         due_dates: list[datetime.date] = []
         candidate = self.start_date
         while candidate <= through_date:
@@ -221,12 +263,18 @@ class RecurringTransaction(models.Model):
                     "budget": self.budget,
                     "created_by": self.created_by,
                     "description": self.name,
-                    "is_paid": False,
                     "payment_method": self.payment_method,
                 },
             )
             if is_new:
                 created.append(transaction)
+            if not transaction.lines.exists():
+                TransactionLine.objects.create(
+                    transaction=transaction,
+                    category=self.category,
+                    amount=self.amount,
+                    amount_usd=self.amount,
+                )
 
         if due_dates:
             self.generated_through = due_dates[-1]
@@ -260,7 +308,6 @@ class Transaction(models.Model):
     description = models.CharField(max_length=200)
     due_date = models.DateField()
     paid_date = models.DateField(null=True, blank=True)
-    is_paid = models.BooleanField(default=False)
     notes = models.TextField(blank=True)
     transaction_type = models.CharField(max_length=10, blank=True, default="")
     currency = models.CharField(max_length=3, default="USD")
@@ -276,23 +323,13 @@ class Transaction(models.Model):
 
     @property
     def total_amount(self) -> Decimal:
-        result = self.lines.aggregate(total=Sum("amount"))["total"]
-        if result is not None:
-            return result
-        # Recurring instances inherit amount from the template
-        if self.recurring_id:
-            return self.recurring.amount  # type: ignore[union-attr]
-        return Decimal("0.00")
+        return self.lines.aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
 
     def derive_transaction_type(self) -> str:
         if self.transaction_type:
             return self.transaction_type
         first_line = self.lines.select_related("category").first()
-        if first_line:
-            return first_line.category.category_type
-        if self.recurring_id:
-            return self.recurring.category.category_type  # type: ignore[union-attr]
-        return ""
+        return first_line.category.category_type if first_line else ""
 
 
 class PaymentMethod(models.Model):
@@ -300,12 +337,14 @@ class PaymentMethod(models.Model):
     TYPE_DEBIT = "debit_card"
     TYPE_CASH = "cash"
     TYPE_BANK = "bank_transfer"
+    TYPE_DIRECT_DEPOSIT = "direct_deposit"
     TYPE_OTHER = "other"
     TYPE_CHOICES = [
         (TYPE_CREDIT, "Credit Card"),
         (TYPE_DEBIT, "Debit Card"),
         (TYPE_CASH, "Cash"),
         (TYPE_BANK, "Bank Transfer"),
+        (TYPE_DIRECT_DEPOSIT, "Direct Deposit"),
         (TYPE_OTHER, "Other"),
     ]
 
