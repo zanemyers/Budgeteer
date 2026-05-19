@@ -245,7 +245,10 @@ export default function Dashboard({ budget_pk, month, overview, categories, paym
   }
 
   const sfMonthlySpending = parseFloat(overview.sf_monthly_spending);
-  const totalSpent = expense.reduce((sum, c) => sum + parseFloat(c.activity), 0) + sfMonthlySpending;
+  // Monthly Spent is the budget-side flow only: non-SF expense category activity.
+  // SF spending is shown on its own line and excluded from Kept, since it draws
+  // from previously-saved funds, not this month's budget.
+  const totalSpent = expense.reduce((sum, c) => sum + parseFloat(c.activity), 0);
   const sfSaved = parseFloat(overview.transfers_total);
   const incomeTotal = parseFloat(overview.income_total);
   const netAmount = incomeTotal - totalSpent - sfSaved;
@@ -405,20 +408,21 @@ export default function Dashboard({ budget_pk, month, overview, categories, paym
                     </div>
                     <div className="flex justify-between items-baseline">
                       <dt className="text-sm text-ink-quiet">Spent</dt>
-                      <dd className="text-expense tabular-nums text-right">
-                        {fmt(totalSpent, symbol)}
-                        {sfMonthlySpending > 0 && (
-                          <div className="text-[0.7rem] text-ink-quiet font-normal not-tabular-nums">
-                            incl. {fmt(sfMonthlySpending, symbol)} from goals
-                          </div>
-                        )}
-                      </dd>
+                      <dd className="text-expense tabular-nums">{fmt(totalSpent, symbol)}</dd>
                     </div>
                     <div className="flex justify-between items-baseline">
                       <dt className="text-sm text-ink-quiet">Saved to goals</dt>
                       <dd className="text-fund tabular-nums">{fmt(sfSaved, symbol)}</dd>
                     </div>
                     <hr className="border-rule my-1.5" />
+                    {sfMonthlySpending > 0 && (
+                      <div className="flex justify-between items-baseline">
+                        <dt className="text-sm text-ink-quiet" title="Drawn from previously-saved goal balances, not this month's budget">
+                          Paid from goals
+                        </dt>
+                        <dd className="text-fund tabular-nums">{fmt(sfMonthlySpending, symbol)}</dd>
+                      </div>
+                    )}
                     <div className="flex justify-between items-baseline">
                       <dt className="text-sm font-medium">Kept</dt>
                       <dd className={`text-xl font-semibold tracking-tight tabular-nums ${netPositive ? "text-moss" : "text-expense"}`}>
