@@ -87,7 +87,7 @@ def _system_totals(now):
     real_expense_lines = (
         TransactionLine.objects.filter(
             category__category_type="expense",
-            category__sinking_fund__isnull=True,
+            category__goal__isnull=True,
             transaction__paid_date__isnull=False,
         )
         .exclude(transaction__transaction_type="transfer")
@@ -122,7 +122,7 @@ def _spend_trend(now, months=6):
     rows = (
         TransactionLine.objects.filter(
             category__category_type="expense",
-            category__sinking_fund__isnull=True,
+            category__goal__isnull=True,
             transaction__paid_date__isnull=False,
         )
         .exclude(transaction__transaction_type="transfer")
@@ -163,7 +163,7 @@ def _spend_by_category(now, top_n=7):
     rows = list(
         TransactionLine.objects.filter(
             category__category_type="expense",
-            category__sinking_fund__isnull=True,
+            category__goal__isnull=True,
             transaction__paid_date__isnull=False,
         )
         .exclude(transaction__transaction_type="transfer")

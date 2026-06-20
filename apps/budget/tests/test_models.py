@@ -36,8 +36,8 @@ class TestTransactionTotal(BaseTest):
             description="Groceries",
             due_date=datetime.date.today(),
         )
-        TransactionLine.objects.create(transaction=t, category=self.cat, amount="50.00")
-        TransactionLine.objects.create(transaction=t, category=self.cat, amount="30.00")
+        TransactionLine.objects.create(transaction=t, category=self.cat, amount="50.00", amount_usd="50.00")
+        TransactionLine.objects.create(transaction=t, category=self.cat, amount="30.00", amount_usd="30.00")
         self.assertEqual(t.total_amount, 80)
 
     def test_transaction_type_from_category(self):
@@ -47,7 +47,7 @@ class TestTransactionTotal(BaseTest):
             description="Groceries",
             due_date=datetime.date.today(),
         )
-        TransactionLine.objects.create(transaction=t, category=self.cat, amount="50.00")
+        TransactionLine.objects.create(transaction=t, category=self.cat, amount="50.00", amount_usd="50.00")
         self.assertEqual(t.transaction_type, Category.TYPE_EXPENSE)
 
 

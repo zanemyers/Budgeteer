@@ -11,31 +11,27 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { getCsrfToken } from "@/lib/api";
 
-export interface SinkingFundCategory {
+export interface GoalCategory {
   id: number;
   name: string;
   category_type: "income" | "expense";
   parent_id: number | null;
   monthly_budget: string;
-  is_sinking_fund: boolean;
-  sinking_fund_target: string | null;
-  sinking_fund_due_date: string | null;
-  sinking_fund_ongoing: boolean;
-  sinking_fund_monthly_goal: string | null;
+  is_goal: boolean;
+  goal_target: string | null;
+  goal_due_date: string | null;
+  goal_ongoing: boolean;
+  goal_monthly: string | null;
   total_saved?: string;
 }
 
 interface Props {
   budgetPk: number;
-  fund?: SinkingFundCategory | null;
+  goal?: GoalCategory | null;
   onClose: () => void;
-  onSaved: (category: SinkingFundCategory) => void;
-}
-
-function getCsrfToken(): string {
-  const match = document.cookie.match(/csrftoken=([^;]+)/);
-  return match ? match[1] : "";
+  onSaved: (category: GoalCategory) => void;
 }
 
 function CurrencyInput({
@@ -67,13 +63,13 @@ function CurrencyInput({
   );
 }
 
-export default function SinkingFundModal({ budgetPk, fund, onClose, onSaved }: Props) {
-  const isEdit = !!fund;
-  const [name, setName] = useState(fund?.name ?? "");
-  const [target, setTarget] = useState(fund?.sinking_fund_target ?? "");
-  const [dueDate, setDueDate] = useState(fund?.sinking_fund_due_date ?? "");
-  const [ongoing, setOngoing] = useState(fund?.sinking_fund_ongoing ?? false);
-  const [monthlyGoal, setMonthlyGoal] = useState(fund?.sinking_fund_monthly_goal ?? "");
+export default function GoalModal({ budgetPk, goal, onClose, onSaved }: Props) {
+  const isEdit = !!goal;
+  const [name, setName] = useState(goal?.name ?? "");
+  const [target, setTarget] = useState(goal?.goal_target ?? "");
+  const [dueDate, setDueDate] = useState(goal?.goal_due_date ?? "");
+  const [ongoing, setOngoing] = useState(goal?.goal_ongoing ?? false);
+  const [monthlyGoal, setMonthlyGoal] = useState(goal?.goal_monthly ?? "");
   const [initialBalance, setInitialBalance] = useState("");
   const [addAmount, setAddAmount] = useState("");
   const [addDescription, setAddDescription] = useState("");
@@ -87,22 +83,22 @@ export default function SinkingFundModal({ budgetPk, fund, onClose, onSaved }: P
 
     const body: Record<string, unknown> = {
       name,
-      sinking_fund_target: target,
-      sinking_fund_due_date: ongoing ? null : dueDate,
-      sinking_fund_ongoing: ongoing,
-      sinking_fund_monthly_goal: ongoing ? monthlyGoal : null,
+      goal_target: target,
+      goal_due_date: ongoing ? null : dueDate,
+      goal_ongoing: ongoing,
+      goal_monthly: ongoing ? monthlyGoal : null,
     };
     if (isEdit) {
       body.add_amount = addAmount || "0";
       body.add_description = addDescription;
     } else {
       body.category_type = "expense";
-      body.is_sinking_fund = true;
-      body.sinking_fund_initial_balance = initialBalance || "0";
+      body.is_goal = true;
+      body.goal_initial_balance = initialBalance || "0";
     }
 
     const url = isEdit
-      ? `/budgets/${budgetPk}/categories/${fund!.id}/edit/`
+      ? `/budgets/${budgetPk}/categories/${goal!.id}/edit/`
       : `/budgets/${budgetPk}/categories/create/`;
     const method = isEdit ? "PATCH" : "POST";
 
@@ -119,7 +115,7 @@ export default function SinkingFundModal({ budgetPk, fund, onClose, onSaved }: P
         setSaving(false);
         return;
       }
-      const cat = await res.json() as SinkingFundCategory;
+      const cat = await res.json() as GoalCategory;
       onSaved(cat);
     } catch {
       setError("Network error.");
@@ -137,9 +133,9 @@ export default function SinkingFundModal({ budgetPk, fund, onClose, onSaved }: P
 
           <div className="py-4 grid grid-cols-12 gap-3">
             <div className="col-span-12 md:col-span-7 flex flex-col gap-2">
-              <Label htmlFor="sf-name">Name</Label>
+              <Label htmlFor="goal-name">Name</Label>
               <Input
-                id="sf-name"
+                id="goal-name"
                 placeholder="e.g. Vacation, New Car"
                 value={name}
                 autoFocus
@@ -149,9 +145,9 @@ export default function SinkingFundModal({ budgetPk, fund, onClose, onSaved }: P
             </div>
 
             <div className="col-span-12 md:col-span-5 flex flex-col gap-2">
-              <Label htmlFor="sf-target">Target amount</Label>
+              <Label htmlFor="goal-target">Target amount</Label>
               <CurrencyInput
-                id="sf-target"
+                id="goal-target"
                 min="0.01"
                 placeholder="5000"
                 value={target}
@@ -161,17 +157,17 @@ export default function SinkingFundModal({ budgetPk, fund, onClose, onSaved }: P
             </div>
 
             <div className="col-span-12 flex items-center gap-2">
-              <Switch id="sf-ongoing" checked={ongoing} onCheckedChange={setOngoing} />
-              <Label htmlFor="sf-ongoing" className="font-normal">
+              <Switch id="goal-ongoing" checked={ongoing} onCheckedChange={setOngoing} />
+              <Label htmlFor="goal-ongoing" className="font-normal">
                 Ongoing fund (monthly goal instead of due date)
               </Label>
             </div>
 
             {ongoing ? (
               <div className="col-span-12 md:col-span-6 flex flex-col gap-2">
-                <Label htmlFor="sf-monthly">Monthly goal</Label>
+                <Label htmlFor="goal-monthly">Monthly goal</Label>
                 <CurrencyInput
-                  id="sf-monthly"
+                  id="goal-monthly"
                   placeholder="100"
                   value={monthlyGoal}
                   onChange={setMonthlyGoal}
@@ -180,9 +176,9 @@ export default function SinkingFundModal({ budgetPk, fund, onClose, onSaved }: P
               </div>
             ) : (
               <div className="col-span-12 md:col-span-6 flex flex-col gap-2">
-                <Label htmlFor="sf-due">Due date</Label>
+                <Label htmlFor="goal-due">Due date</Label>
                 <Input
-                  id="sf-due"
+                  id="goal-due"
                   type="date"
                   value={dueDate}
                   onChange={(e) => setDueDate(e.target.value)}
@@ -193,11 +189,11 @@ export default function SinkingFundModal({ budgetPk, fund, onClose, onSaved }: P
 
             {!isEdit && (
               <div className="col-span-12 md:col-span-6 flex flex-col gap-2">
-                <Label htmlFor="sf-initial">
+                <Label htmlFor="goal-initial">
                   Already saved <span className="text-muted-foreground font-normal">(optional)</span>
                 </Label>
                 <CurrencyInput
-                  id="sf-initial"
+                  id="goal-initial"
                   placeholder="0"
                   value={initialBalance}
                   onChange={setInitialBalance}
@@ -208,11 +204,11 @@ export default function SinkingFundModal({ budgetPk, fund, onClose, onSaved }: P
             {isEdit && (
               <>
                 <div className="col-span-12 md:col-span-5 flex flex-col gap-2">
-                  <Label htmlFor="sf-add">
+                  <Label htmlFor="goal-add">
                     Add to balance <span className="text-muted-foreground font-normal">(optional)</span>
                   </Label>
                   <CurrencyInput
-                    id="sf-add"
+                    id="goal-add"
                     min="0.01"
                     placeholder="0.00"
                     value={addAmount}
@@ -221,9 +217,9 @@ export default function SinkingFundModal({ budgetPk, fund, onClose, onSaved }: P
                 </div>
                 {addAmount && parseFloat(addAmount) > 0 && (
                   <div className="col-span-12 md:col-span-7 flex flex-col gap-2">
-                    <Label htmlFor="sf-add-desc">Description</Label>
+                    <Label htmlFor="goal-add-desc">Description</Label>
                     <Input
-                      id="sf-add-desc"
+                      id="goal-add-desc"
                       placeholder="e.g. Initial deposit"
                       value={addDescription}
                       onChange={(e) => setAddDescription(e.target.value)}

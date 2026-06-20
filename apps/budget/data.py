@@ -16,19 +16,19 @@ def serialize_category(cat, total_saved: "Decimal | None" = None) -> dict:
         "category_type": cat.category_type,
         "parent_id": cat.parent_id,
         "monthly_budget": str(cat.monthly_budget),
-        "is_sinking_fund": cat.is_sinking_fund,
-        "sinking_fund_target": str(cat.sinking_fund_target) if cat.sinking_fund_target is not None else None,
-        "sinking_fund_due_date": str(cat.sinking_fund_due_date) if cat.sinking_fund_due_date else None,
-        "sinking_fund_ongoing": cat.sinking_fund_ongoing,
-        "sinking_fund_monthly_goal": str(cat.sinking_fund_monthly_goal) if cat.sinking_fund_monthly_goal is not None else None,
+        "is_goal": cat.is_goal,
+        "goal_target": str(cat.goal_target) if cat.goal_target is not None else None,
+        "goal_due_date": str(cat.goal_due_date) if cat.goal_due_date else None,
+        "goal_ongoing": cat.goal_ongoing,
+        "goal_monthly": str(cat.goal_monthly) if cat.goal_monthly is not None else None,
     }
-    if cat.is_sinking_fund:
+    if cat.is_goal:
         d["total_saved"] = str(total_saved) if total_saved is not None else "0.00"
     return d
 
 
-def get_sf_total_saved(budget, category_id: int, user_rate: "Decimal" = Decimal("1")) -> "Decimal":
-    """Compute all-time net saved for a sinking fund category, converted to user's currency."""
+def get_goal_total_saved(budget, category_id: int, user_rate: "Decimal" = Decimal("1")) -> "Decimal":
+    """Compute all-time net saved for a goal category, converted to user's currency."""
     credits = (
         TransactionLine.objects.filter(
             transaction__budget=budget,
@@ -68,14 +68,23 @@ def serialize_transaction_line(line) -> dict:
     }
 
 
-def serialize_linked_bank_transaction(bt) -> dict:
+def serialize_bank_transaction(bt) -> dict:
+    """Canonical serializer for a BankTransaction. Used everywhere the frontend
+    needs bank-row data — linked-display in modals, the Pending/Ignored tabs on
+    the Transactions page, and the Banking page."""
     return {
         "id": bt.pk,
+        "simplefin_id": bt.simplefin_id,
+        "posted_at": bt.posted_at.isoformat(),
         "posted_date": bt.posted_at.date().isoformat(),
         "amount": str(bt.amount),
         "description": bt.description,
         "payee": bt.payee,
         "memo": bt.memo,
+        "status": bt.status,
+        "ignore_reason": bt.ignore_reason,
+        "transaction_id": bt.transaction_id,
+        "bank_account_id": bt.bank_account_id,
         "bank_account_name": bt.bank_account.name,
         "org_name": bt.bank_account.org_name,
     }
@@ -102,7 +111,7 @@ def serialize_transaction(txn) -> dict:
         "exchange_rate_to_usd": str(txn.exchange_rate_to_usd),
         "created_at": txn.created_at.isoformat(),
         "bank_linked": bool(linked),
-        "linked_bank_transactions": [serialize_linked_bank_transaction(bt) for bt in linked],
+        "linked_bank_transactions": [serialize_bank_transaction(bt) for bt in linked],
     }
 
 
@@ -156,44 +165,45 @@ def get_budget_overview(budget, month_str: str | None, user_rate: "Decimal" = De
     period_start = selected
     period_end = selected.replace(day=last_day)
 
-    # Activity for regular (non-SF) categories: all transactions except transfers.
+    # Activity for regular (non-SF) categories: only paid transactions count.
     # Amounts stored as amount_usd (USD equivalent at transaction time); scaled to user currency below.
     regular_activity_qs = (
         TransactionLine.objects.filter(
             transaction__budget=budget,
-            category__sinking_fund__isnull=True,
+            category__goal__isnull=True,
+            transaction__paid_date__range=(period_start, period_end),
         )
         .exclude(transaction__transaction_type="transfer")
-        .annotate(effective_date=Coalesce("transaction__paid_date", "transaction__due_date"))
-        .filter(effective_date__range=(period_start, period_end))
         .values("category_id")
         .annotate(total=Sum("amount_usd"))
     )
     activity_map: dict[int, Decimal] = {row["category_id"]: row["total"] * user_rate for row in regular_activity_qs}
 
-    # Activity for sinking fund categories: all-time expense total (no date filter).
-    sf_activity_qs = (
+    # Activity for goal categories: all-time paid expenses (no date filter).
+    goal_activity_qs = (
         TransactionLine.objects.filter(
             transaction__budget=budget,
-            category__sinking_fund__isnull=False,
+            category__goal__isnull=False,
             transaction__transaction_type="expense",
+            transaction__paid_date__isnull=False,
         )
         .values("category_id")
         .annotate(total=Sum("amount_usd"))
     )
-    for row in sf_activity_qs:
+    for row in goal_activity_qs:
         activity_map[row["category_id"]] = row["total"] * user_rate
 
     # Assigned amounts
     assigned_qs = CategoryBudget.objects.filter(budget=budget, month=period_start).values("category_id", "assigned")
     assigned_map: dict[int, Decimal] = {row["category_id"]: row["assigned"] for row in assigned_qs}
 
-    # All-time net balance per sinking fund category: transfers/income add, expense lines subtract
+    # All-time net balance per goal category (paid only): transfers/income add, expense lines subtract
     saved_credits_qs = (
         TransactionLine.objects.filter(
             transaction__budget=budget,
-            category__sinking_fund__isnull=False,
+            category__goal__isnull=False,
             transaction__transaction_type__in=("income", "transfer"),
+            transaction__paid_date__isnull=False,
         )
         .values("category_id")
         .annotate(total=Sum("amount_usd"))
@@ -201,8 +211,9 @@ def get_budget_overview(budget, month_str: str | None, user_rate: "Decimal" = De
     saved_expense_qs = (
         TransactionLine.objects.filter(
             transaction__budget=budget,
-            category__sinking_fund__isnull=False,
+            category__goal__isnull=False,
             transaction__transaction_type="expense",
+            transaction__paid_date__isnull=False,
         )
         .values("category_id")
         .annotate(total=Sum("amount_usd"))
@@ -215,36 +226,48 @@ def get_budget_overview(budget, month_str: str | None, user_rate: "Decimal" = De
     for row in saved_expense_qs:
         saved_map[row["category_id"]] = saved_map.get(row["category_id"], Decimal("0.00")) - row["total"] * user_rate
 
-    # Monthly SF spending (expenses only, date-filtered) for dashboard totals
-    sf_monthly_expense_qs = (
+    # Monthly SF spending (paid expenses only) for dashboard totals
+    goal_monthly_expense_qs = (
         TransactionLine.objects.filter(
             transaction__budget=budget,
-            category__sinking_fund__isnull=False,
+            category__goal__isnull=False,
             transaction__transaction_type="expense",
+            transaction__paid_date__range=(period_start, period_end),
         )
-        .annotate(effective_date=Coalesce("transaction__paid_date", "transaction__due_date"))
-        .filter(effective_date__range=(period_start, period_end))
         .aggregate(total=Sum("amount_usd"))
     )
-    sf_monthly_spending = (sf_monthly_expense_qs["total"] or Decimal("0.00")) * user_rate
+    goal_monthly_spending = (goal_monthly_expense_qs["total"] or Decimal("0.00")) * user_rate
 
-    # Transfers to sinking funds this month — subtracted from RTA
-    sf_transfers_qs = (
+    # Saved to goals this month — any income or transfer line landing in a goal (paid only).
+    # Income-to-goal counts here so the dashboard reflects it; net effect on RTA is zero because
+    # income-type lines also appear in income_total below.
+    goal_transfers_qs = (
         TransactionLine.objects.filter(
             transaction__budget=budget,
-            transaction__transaction_type="transfer",
-            category__sinking_fund__isnull=False,
+            transaction__transaction_type__in=("transfer", "income"),
+            category__goal__isnull=False,
+            transaction__paid_date__range=(period_start, period_end),
         )
-        .annotate(effective_date=Coalesce("transaction__paid_date", "transaction__due_date"))
-        .filter(effective_date__range=(period_start, period_end))
         .aggregate(total=Sum("amount_usd"))
     )
-    sf_transfers_month = (sf_transfers_qs["total"] or Decimal("0.00")) * user_rate
+    goal_transfers_month = (goal_transfers_qs["total"] or Decimal("0.00")) * user_rate
+
+    # Total income this month — any income-type line, regardless of which category it lands in.
+    # An income line to a goal category counts here AND in goal_transfers_month, so net RTA = 0
+    # for income that went straight to a goal.
+    income_qs = (
+        TransactionLine.objects.filter(
+            transaction__budget=budget,
+            transaction__transaction_type="income",
+            transaction__paid_date__range=(period_start, period_end),
+        )
+        .aggregate(total=Sum("amount_usd"))
+    )
+    income_total = (income_qs["total"] or Decimal("0.00")) * user_rate
 
     categories = Category.objects.filter(budget=budget).order_by("category_type", "name")
 
     rows = []
-    income_total = Decimal("0.00")
     expense_assigned = Decimal("0.00")
 
     today = datetime.date.today()
@@ -253,22 +276,21 @@ def get_budget_overview(budget, month_str: str | None, user_rate: "Decimal" = De
         activity = activity_map.get(cat.pk, Decimal("0.00"))
         assigned = assigned_map.get(cat.pk, Decimal("0.00"))
 
-        # Compute sinking fund monthly needed
-        sinking_fund_monthly = None
+        # Compute goal monthly needed
+        goal_monthly_needed = None
         months_remaining = None
         total_saved = None
-        if cat.is_sinking_fund and cat.sinking_fund_target:
+        if cat.is_goal and cat.goal_target:
             total_saved = saved_map.get(cat.pk, Decimal("0.00"))
-            if cat.sinking_fund_ongoing and cat.sinking_fund_monthly_goal:
-                sinking_fund_monthly = cat.sinking_fund_monthly_goal
-            elif cat.sinking_fund_due_date:
-                remaining_amount = max(cat.sinking_fund_target - total_saved, Decimal("0.00"))
-                due = cat.sinking_fund_due_date
+            if cat.goal_ongoing and cat.goal_monthly:
+                goal_monthly_needed = cat.goal_monthly
+            elif cat.goal_due_date:
+                remaining_amount = max(cat.goal_target - total_saved, Decimal("0.00"))
+                due = cat.goal_due_date
                 months_remaining = max((due.year - today.year) * 12 + (due.month - today.month), 1)
-                sinking_fund_monthly = (remaining_amount / months_remaining).quantize(Decimal("0.01"))
+                goal_monthly_needed = (remaining_amount / months_remaining).quantize(Decimal("0.01"))
 
         if cat.category_type == Category.TYPE_INCOME:
-            income_total += activity
             available = activity
         else:
             expense_assigned += assigned
@@ -283,24 +305,24 @@ def get_budget_overview(budget, month_str: str | None, user_rate: "Decimal" = De
             "assigned": str(assigned),
             "activity": str(activity),
             "available": str(available),
-            "is_sinking_fund": cat.is_sinking_fund,
-            "sinking_fund_target": str(cat.sinking_fund_target) if cat.sinking_fund_target is not None else None,
-            "sinking_fund_due_date": str(cat.sinking_fund_due_date) if cat.sinking_fund_due_date else None,
-            "sinking_fund_ongoing": cat.sinking_fund_ongoing,
-            "sinking_fund_monthly": str(sinking_fund_monthly) if sinking_fund_monthly is not None else None,
-            "sinking_fund_monthly_goal": str(cat.sinking_fund_monthly_goal) if cat.sinking_fund_monthly_goal is not None else None,
-            "sinking_fund_months_remaining": months_remaining,
-            "sinking_fund_total_saved": str(total_saved) if total_saved is not None else None,
-            "sinking_fund_total_credited": str(credits_map.get(cat.pk, Decimal("0.00"))) if cat.is_sinking_fund else None,
+            "is_goal": cat.is_goal,
+            "goal_target": str(cat.goal_target) if cat.goal_target is not None else None,
+            "goal_due_date": str(cat.goal_due_date) if cat.goal_due_date else None,
+            "goal_ongoing": cat.goal_ongoing,
+            "goal_monthly_needed": str(goal_monthly_needed) if goal_monthly_needed is not None else None,
+            "goal_monthly": str(cat.goal_monthly) if cat.goal_monthly is not None else None,
+            "goal_months_remaining": months_remaining,
+            "goal_total_saved": str(total_saved) if total_saved is not None else None,
+            "goal_total_credited": str(credits_map.get(cat.pk, Decimal("0.00"))) if cat.is_goal else None,
         }
         rows.append(row)
 
     return {
         "income_total": str(income_total),
         "expense_assigned": str(expense_assigned),
-        "transfers_total": str(sf_transfers_month),
-        "sf_monthly_spending": str(sf_monthly_spending),
-        "ready_to_assign": str(income_total - expense_assigned - sf_transfers_month),
+        "saved_to_goals_total": str(goal_transfers_month),
+        "goal_monthly_spending": str(goal_monthly_spending),
+        "ready_to_assign": str(income_total - expense_assigned - goal_transfers_month),
         "categories": rows,
     }
 

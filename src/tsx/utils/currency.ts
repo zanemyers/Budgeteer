@@ -23,6 +23,13 @@ export function fmt(val: string | number, symbol = "$"): string {
   return `${symbol}${parseFloat(String(val)).toFixed(2)}`;
 }
 
+/** Format an amount with a leading sign and the user's currency symbol. */
+export function fmtSigned(val: string | number, symbol = "$"): string {
+  const n = parseFloat(String(val));
+  const sign = n < 0 ? "−" : "+";
+  return `${sign}${symbol}${Math.abs(n).toFixed(2)}`;
+}
+
 export function fmtConverted(
   amount: string | number,
   txnRate: string | number,

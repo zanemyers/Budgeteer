@@ -1,5 +1,3 @@
-import json
-
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Count
 from django.http import JsonResponse
@@ -10,29 +8,8 @@ from django.views.decorators.http import require_POST
 from inertia import render as inertia_render
 
 from apps.banking.models import BankAccount, BankTransaction, SimpleFINConnection
-
-
-def _parse_json_body(request) -> dict:
-    try:
-        return json.loads(request.body)
-    except (json.JSONDecodeError, AttributeError):
-        return {}
-
-
-def _serialize_bank_transaction(bt: BankTransaction) -> dict:
-    return {
-        "id": bt.pk,
-        "simplefin_id": bt.simplefin_id,
-        "posted_at": bt.posted_at.isoformat(),
-        "posted_date": bt.posted_at.date().isoformat(),
-        "amount": str(bt.amount),
-        "description": bt.description,
-        "payee": bt.payee,
-        "memo": bt.memo,
-        "status": bt.status,
-        "transaction_id": bt.transaction_id,
-        "bank_account_id": bt.bank_account_id,
-    }
+from apps.base.http import parse_json_body
+from apps.budget.data import serialize_bank_transaction
 
 
 def _serialize_bank_account(acct: BankAccount, *, include_transactions: bool = True) -> dict:
@@ -51,7 +28,7 @@ def _serialize_bank_account(acct: BankAccount, *, include_transactions: bool = T
     }
     if include_transactions:
         txns = acct.bank_transactions.all().order_by("-posted_at")[:200]
-        data["transactions"] = [_serialize_bank_transaction(t) for t in txns]
+        data["transactions"] = [serialize_bank_transaction(t) for t in txns]
     return data
 
 
@@ -114,7 +91,7 @@ def banking_sync(request):
         return JsonResponse({"error": "Not authenticated."}, status=401)
     from apps.banking.tasks import sync_simplefin
 
-    data = _parse_json_body(request)
+    data = parse_json_body(request)
     conn_id = data.get("connection_id")
     if conn_id:
         try:
@@ -132,7 +109,7 @@ class BankAccountUpdateView(LoginRequiredMixin, View):
 
     def patch(self, request, pk):
         acct = get_object_or_404(BankAccount, pk=pk, connection__user=request.user)
-        data = _parse_json_body(request)
+        data = parse_json_body(request)
         if "payment_method_id" in data:
             pm_id = data["payment_method_id"]
             if pm_id is None:

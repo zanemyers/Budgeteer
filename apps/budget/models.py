@@ -126,40 +126,40 @@ class Category(models.Model):
         super().save(*args, **kwargs)
 
     @property
-    def is_sinking_fund(self) -> bool:
+    def is_goal(self) -> bool:
         try:
-            return self.sinking_fund is not None
-        except SinkingFund.DoesNotExist:
+            return self.goal is not None
+        except Goal.DoesNotExist:
             return False
 
     @property
-    def sinking_fund_target(self):
-        sf = getattr(self, "sinking_fund", None)
-        return sf.target if sf else None
+    def goal_target(self):
+        g = getattr(self, "goal", None)
+        return g.target if g else None
 
     @property
-    def sinking_fund_due_date(self):
-        sf = getattr(self, "sinking_fund", None)
-        return sf.due_date if sf else None
+    def goal_due_date(self):
+        g = getattr(self, "goal", None)
+        return g.due_date if g else None
 
     @property
-    def sinking_fund_ongoing(self) -> bool:
-        sf = getattr(self, "sinking_fund", None)
-        return bool(sf and sf.ongoing)
+    def goal_ongoing(self) -> bool:
+        g = getattr(self, "goal", None)
+        return bool(g and g.ongoing)
 
     @property
-    def sinking_fund_monthly_goal(self):
-        sf = getattr(self, "sinking_fund", None)
-        return sf.monthly_goal if sf else None
+    def goal_monthly(self):
+        g = getattr(self, "goal", None)
+        return g.monthly_goal if g else None
 
 
-class SinkingFund(models.Model):
-    """Optional details for a Category that's a sinking fund (savings target)."""
+class Goal(models.Model):
+    """Optional details for a Category that's a savings goal."""
 
     category = models.OneToOneField(
         Category,
         on_delete=models.CASCADE,
-        related_name="sinking_fund",
+        related_name="goal",
         primary_key=True,
     )
     target = models.DecimalField(max_digits=12, decimal_places=2)
@@ -168,7 +168,7 @@ class SinkingFund(models.Model):
     monthly_goal = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
 
     def __str__(self) -> str:
-        return f"{self.category.name} fund — target {self.target}"
+        return f"{self.category.name} goal — target {self.target}"
 
 
 class RecurringTransaction(models.Model):
@@ -242,6 +242,7 @@ class RecurringTransaction(models.Model):
         Returns new instances created. Existing instances without lines have a line backfilled
         so every Transaction in the system has a canonical line structure.
         """
+        from apps.base.models import Currency as CurrencyModel
         from apps.budget.models import Transaction, TransactionLine
 
         start = self.generated_through if self.generated_through else self.start_date - datetime.timedelta(days=1)
@@ -254,6 +255,14 @@ class RecurringTransaction(models.Model):
                     due_dates.append(candidate)
             candidate = self._advance(candidate)
 
+        # RecurringTransaction.amount is stored in the creator's currency. Resolve once.
+        currency_code = getattr(self.created_by, "currency", None) or "USD"
+        try:
+            exchange_rate = CurrencyModel.objects.get(code=currency_code).rate_to_usd
+        except CurrencyModel.DoesNotExist:
+            exchange_rate = Decimal("1")
+        amount = Decimal(str(self.amount))
+
         created: list[Transaction] = []
         for due_date in due_dates:
             transaction, is_new = Transaction.objects.get_or_create(
@@ -264,6 +273,8 @@ class RecurringTransaction(models.Model):
                     "created_by": self.created_by,
                     "description": self.name,
                     "payment_method": self.payment_method,
+                    "currency": currency_code,
+                    "exchange_rate_to_usd": exchange_rate,
                 },
             )
             if is_new:
@@ -272,8 +283,8 @@ class RecurringTransaction(models.Model):
                 TransactionLine.objects.create(
                     transaction=transaction,
                     category=self.category,
-                    amount=self.amount,
-                    amount_usd=self.amount,
+                    amount=amount,
+                    amount_usd=amount / exchange_rate if exchange_rate else amount,
                 )
 
         if due_dates:
@@ -386,7 +397,7 @@ class TransactionLine(models.Model):
     transaction = models.ForeignKey(Transaction, on_delete=models.CASCADE, related_name="lines")
     category = models.ForeignKey(Category, on_delete=models.PROTECT, related_name="transaction_lines")
     amount = models.DecimalField(max_digits=12, decimal_places=2)
-    amount_usd = models.DecimalField(max_digits=14, decimal_places=6, default=Decimal("0"))
+    amount_usd = models.DecimalField(max_digits=14, decimal_places=6)
     description = models.CharField(max_length=200, blank=True)
 
     class Meta:

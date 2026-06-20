@@ -1,7 +1,7 @@
 import { router } from "@inertiajs/react";
 import { useState } from "react";
 import { Check, ChevronLeft, ChevronRight, Pencil, RotateCcw } from "lucide-react";
-import SinkingFundModal, { type SinkingFundCategory } from "../components/SinkingFundModal";
+import GoalModal, { type GoalCategory } from "../components/GoalModal";
 import TransactionModal from "../components/TransactionModal";
 import type { BudgetOverview, BudgetOverviewCategory, Category, CurrencyOption, PaymentMethod, Transaction } from "../types";
 import { fmt, useCurrencySymbol } from "../utils/currency";
@@ -23,26 +23,26 @@ interface Props {
   user_currency: string;
 }
 
-// Convert an overview-shaped fund row into the shape SinkingFundModal expects.
-function toSFCategory(cat: BudgetOverviewCategory): SinkingFundCategory {
+// Convert an overview-shaped goal row into the shape GoalModal expects.
+function toGoalCategory(cat: BudgetOverviewCategory): GoalCategory {
   return {
     id: cat.id,
     name: cat.name,
     category_type: cat.category_type,
     parent_id: cat.parent_id,
     monthly_budget: cat.budgeted,
-    is_sinking_fund: cat.is_sinking_fund,
-    sinking_fund_target: cat.sinking_fund_target,
-    sinking_fund_due_date: cat.sinking_fund_due_date,
-    sinking_fund_ongoing: cat.sinking_fund_ongoing,
-    sinking_fund_monthly_goal: cat.sinking_fund_monthly_goal,
-    total_saved: cat.sinking_fund_total_saved ?? "0",
+    is_goal: cat.is_goal,
+    goal_target: cat.goal_target,
+    goal_due_date: cat.goal_due_date,
+    goal_ongoing: cat.goal_ongoing,
+    goal_monthly: cat.goal_monthly,
+    total_saved: cat.goal_total_saved ?? "0",
   };
 }
 
-export default function SinkingFunds({ budget_pk, month, overview, categories, payment_methods, currencies, user_currency }: Props) {
+export default function Goals({ budget_pk, month, overview, categories, payment_methods, currencies, user_currency }: Props) {
   const symbol = useCurrencySymbol();
-  const [addTransactionType, setAddTransactionType] = useState<"income" | "expense" | null>(null);
+  const [addTransactionType, setAddTransactionType] = useState<"deposit" | "expense" | null>(null);
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<BudgetOverviewCategory | null>(null);
   const [deleteError, setDeleteError] = useState<Record<number, string>>({});
@@ -50,7 +50,7 @@ export default function SinkingFunds({ budget_pk, month, overview, categories, p
   const isCurrentMonth = month === getDefaultMonth();
 
   function navigateMonth(m: string) {
-    router.get(`/budgets/${budget_pk}/sinking-funds/`, { month: m }, { preserveState: false });
+    router.get(`/budgets/${budget_pk}/goals/`, { month: m }, { preserveState: false });
   }
 
   async function createTransaction(data: Partial<Transaction>) {
@@ -78,19 +78,19 @@ export default function SinkingFunds({ budget_pk, month, overview, categories, p
     }
   }
 
-  function renderSinkingFundCard(cat: BudgetOverviewCategory) {
-    const target = parseFloat(cat.sinking_fund_target ?? "0");
-    const saved = parseFloat(cat.sinking_fund_total_saved ?? "0");
-    const credited = parseFloat(cat.sinking_fund_total_credited ?? "0");
-    const monthly = parseFloat(cat.sinking_fund_monthly ?? "0");
-    const isOngoing = cat.sinking_fund_ongoing;
+  function renderGoalCard(cat: BudgetOverviewCategory) {
+    const target = parseFloat(cat.goal_target ?? "0");
+    const saved = parseFloat(cat.goal_total_saved ?? "0");
+    const credited = parseFloat(cat.goal_total_credited ?? "0");
+    const monthly = parseFloat(cat.goal_monthly_needed ?? "0");
+    const isOngoing = cat.goal_ongoing;
     const isComplete = isOngoing ? saved >= target : credited >= target;
     const pct = isComplete ? 100 : target > 0 ? Math.min((saved / target) * 100, 100) : 0;
 
     const activity = parseFloat(cat.activity);
-    const dueDate = !isOngoing && cat.sinking_fund_due_date ? new Date(cat.sinking_fund_due_date + "T00:00:00") : null;
+    const dueDate = !isOngoing && cat.goal_due_date ? new Date(cat.goal_due_date + "T00:00:00") : null;
     const dueMeta = !isOngoing && dueDate
-      ? (isComplete ? "" : `due ${dueDate.toLocaleDateString("en-US", { month: "short", year: "numeric" })} · ${cat.sinking_fund_months_remaining}mo left`)
+      ? (isComplete ? "" : `due ${dueDate.toLocaleDateString("en-US", { month: "short", year: "numeric" })} · ${cat.goal_months_remaining}mo left`)
       : isOngoing ? "↺ ongoing" : "";
 
     const showMonthly = monthly > 0 && !isComplete;
@@ -137,9 +137,9 @@ export default function SinkingFunds({ budget_pk, month, overview, categories, p
     );
   }
 
-  const sinkingFunds = overview.categories.filter((c) => c.is_sinking_fund);
-  const totalSaved = sinkingFunds.reduce((sum, c) => sum + parseFloat(c.sinking_fund_total_saved ?? "0"), 0);
-  const totalTarget = sinkingFunds.reduce((sum, c) => sum + parseFloat(c.sinking_fund_target ?? "0"), 0);
+  const goals = overview.categories.filter((c) => c.is_goal);
+  const totalSaved = goals.reduce((sum, c) => sum + parseFloat(c.goal_total_saved ?? "0"), 0);
+  const totalTarget = goals.reduce((sum, c) => sum + parseFloat(c.goal_target ?? "0"), 0);
 
   return (
     <div className="max-w-[1200px]">
@@ -157,7 +157,7 @@ export default function SinkingFunds({ budget_pk, month, overview, categories, p
         </div>
       </header>
 
-      {sinkingFunds.length === 0 ? (
+      {goals.length === 0 ? (
         <div className="text-ink-quiet text-center py-16">
           <p className="mb-4">No goals yet. Start saving toward something.</p>
           <Button onClick={() => setAdding(true)}>Add a goal</Button>
@@ -168,11 +168,11 @@ export default function SinkingFunds({ budget_pk, month, overview, categories, p
             <div className="bg-fund-soft px-4 py-2 flex justify-between items-center">
               <span className={`${SECTION_LABEL_CLASS} text-ink`}>All Goals</span>
               <div className="flex gap-2">
-                <Button variant="ghost" size="xs" onClick={() => setAddTransactionType("income")}>+ Deposit</Button>
+                <Button variant="ghost" size="xs" onClick={() => setAddTransactionType("deposit")}>+ Deposit</Button>
                 <Button variant="ghost" size="xs" onClick={() => setAddTransactionType("expense")}>− Spend</Button>
               </div>
             </div>
-            <div>{sinkingFunds.map((cat) => renderSinkingFundCard(cat))}</div>
+            <div>{goals.map((cat) => renderGoalCard(cat))}</div>
           </Card>
           <Card className="md:col-span-4 p-0 border-rule shadow-none h-fit">
             <div className="px-5 py-4 flex flex-col gap-2">
@@ -188,7 +188,7 @@ export default function SinkingFunds({ budget_pk, month, overview, categories, p
               <hr className="my-1.5 border-rule" />
               <div className="flex justify-between items-baseline">
                 <span className="text-sm text-ink-quiet">{formatMonth(month)}</span>
-                <span className="font-medium text-fund tabular-nums">{fmt(overview.transfers_total, symbol)}</span>
+                <span className="font-medium text-fund tabular-nums">{fmt(overview.saved_to_goals_total, symbol)}</span>
               </div>
             </div>
           </Card>
@@ -203,16 +203,17 @@ export default function SinkingFunds({ budget_pk, month, overview, categories, p
           userCurrency={user_currency}
           budgetPk={budget_pk}
           transaction={null}
-          defaultCategoryType={addTransactionType}
+          defaultCategoryType="expense"
+          forceTransactionType={addTransactionType === "deposit" ? "transfer" : undefined}
           onSave={createTransaction}
           onClose={() => setAddTransactionType(null)}
         />
       )}
 
       {(adding || editing) && (
-        <SinkingFundModal
+        <GoalModal
           budgetPk={budget_pk}
-          fund={editing ? toSFCategory(editing) : null}
+          goal={editing ? toGoalCategory(editing) : null}
           onClose={() => { setAdding(false); setEditing(null); }}
           onSaved={() => {
             setAdding(false);

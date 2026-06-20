@@ -11,18 +11,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { fmtDate } from "../utils/date";
+import { fmt, useCurrencySymbol } from "../utils/currency";
 
 interface Props {
   budget_pk: number;
   transaction: Transaction;
 }
 
-function fmtDate(iso: string | null): string {
-  if (!iso) return "—";
-  return new Date(iso + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
-
 export default function TransactionDetail({ budget_pk, transaction: txn }: Props) {
+  const symbol = useCurrencySymbol();
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
@@ -103,7 +101,7 @@ export default function TransactionDetail({ budget_pk, transaction: txn }: Props
                     </a>
                   </TableCell>
                   <TableCell className={`text-right font-semibold ${line.category_type === "income" ? "text-primary" : "text-destructive"}`}>
-                    ${parseFloat(line.amount).toFixed(2)}
+                    {fmt(line.amount, symbol)}
                   </TableCell>
                   <TableCell className="text-muted-foreground text-sm">{line.description}</TableCell>
                 </TableRow>
@@ -111,7 +109,7 @@ export default function TransactionDetail({ budget_pk, transaction: txn }: Props
               <TableRow className="bg-muted/50 hover:bg-muted/50 font-semibold">
                 <TableCell>Total</TableCell>
                 <TableCell className={`text-right ${txn.transaction_type === "income" ? "text-primary" : "text-destructive"}`}>
-                  ${parseFloat(txn.total_amount).toFixed(2)}
+                  {fmt(txn.total_amount, symbol)}
                 </TableCell>
                 <TableCell></TableCell>
               </TableRow>

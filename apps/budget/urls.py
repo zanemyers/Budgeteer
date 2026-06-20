@@ -14,7 +14,7 @@ urlpatterns = [
     path("<int:budget_pk>/set-default/", views.BudgetSetDefaultView.as_view(), name="set-default"),
     path("<int:budget_pk>/", views.BudgetDetailView.as_view(), name="detail"),
     path("<int:budget_pk>/edit/", views.BudgetUpdateView.as_view(), name="edit"),
-    path("<int:budget_pk>/sinking-funds/", views.SinkingFundsView.as_view(), name="sinking-funds"),
+    path("<int:budget_pk>/goals/", views.GoalsView.as_view(), name="goals"),
     path("<int:budget_pk>/delete/", views.BudgetDeleteView.as_view(), name="delete"),
     path("<int:budget_pk>/settings/", views.BudgetSettingsView.as_view(), name="settings"),
     # Members

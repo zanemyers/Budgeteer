@@ -3,11 +3,11 @@ export interface Category {
   name: string;
   category_type: "income" | "expense";
   monthly_budget: string;
-  is_sinking_fund: boolean;
-  sinking_fund_target: string | null;
-  sinking_fund_due_date: string | null;
-  sinking_fund_ongoing: boolean;
-  sinking_fund_monthly_goal: string | null;
+  is_goal: boolean;
+  goal_target: string | null;
+  goal_due_date: string | null;
+  goal_ongoing: boolean;
+  goal_monthly: string | null;
 }
 
 export interface TransactionLine {
@@ -141,23 +141,23 @@ export interface BudgetOverviewCategory {
   assigned: string;
   activity: string;
   available: string;
-  is_sinking_fund: boolean;
-  sinking_fund_target: string | null;
-  sinking_fund_due_date: string | null;
-  sinking_fund_ongoing: boolean;
-  sinking_fund_monthly: string | null;
-  sinking_fund_monthly_goal: string | null;
-  sinking_fund_months_remaining: number | null;
-  sinking_fund_total_saved: string | null;
-  sinking_fund_total_credited: string | null;
+  is_goal: boolean;
+  goal_target: string | null;
+  goal_due_date: string | null;
+  goal_ongoing: boolean;
+  goal_monthly_needed: string | null;
+  goal_monthly: string | null;
+  goal_months_remaining: number | null;
+  goal_total_saved: string | null;
+  goal_total_credited: string | null;
 }
 
 export interface BudgetOverview {
   ready_to_assign: string;
   income_total: string;
   expense_assigned: string;
-  transfers_total: string;
-  sf_monthly_spending: string;
+  saved_to_goals_total: string;
+  goal_monthly_spending: string;
   categories: BudgetOverviewCategory[];
 }
 

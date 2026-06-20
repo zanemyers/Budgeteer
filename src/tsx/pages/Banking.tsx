@@ -14,7 +14,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { getCsrfToken } from "../lib/api";
+import { jsonFetch } from "../lib/api";
+import { fmtDate, fmtDateTime } from "../utils/date";
 
 interface BankTransactionLite {
   id: number;
@@ -78,29 +79,6 @@ function fmtMoney(amount: string | null, currency: string): string {
   }
 }
 
-function fmtDateTime(iso: string | null): string {
-  if (!iso) return "never";
-  return new Date(iso).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
-}
-
-function fmtDate(iso: string): string {
-  return new Date(iso + "T00:00:00").toLocaleDateString();
-}
-
-async function jsonFetch(url: string, method: string, body?: object) {
-  const res = await fetch(url, {
-    method,
-    headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
-  if (!res.ok && res.status !== 204) {
-    const data = await res.json().catch(() => ({}));
-    throw data;
-  }
-  if (res.status === 204) return null;
-  return res.json();
-}
-
 function AccountCard({
   account,
   paymentMethods,
@@ -126,10 +104,10 @@ function AccountCard({
   async function setPaymentMethod(value: string) {
     setSaving(true);
     try {
-      const updated = await jsonFetch(`/banking/accounts/${account.id}/`, "PATCH", {
+      const updated = await jsonFetch<{ payment_method_id: number | null }>(`/banking/accounts/${account.id}/`, "PATCH", {
         payment_method_id: value === "none" ? null : Number(value),
       });
-      onUpdate({ ...account, payment_method_id: updated.payment_method_id });
+      if (updated) onUpdate({ ...account, payment_method_id: updated.payment_method_id });
     } finally {
       setSaving(false);
     }
