@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { getCsrfToken } from "@/lib/api";
+import { toast } from "sonner";
 
 interface EmailAddress {
   id: number;
@@ -328,32 +329,51 @@ function EmailTab({ addresses, setAddresses }: { addresses: EmailAddress[]; setA
   const [addError, setAddError] = useState("");
   const [adding, setAdding] = useState(false);
 
-  async function patch(body: object) {
+  async function patch(body: object): Promise<{ ok: boolean; status: number; data: Record<string, unknown> }> {
     const res = await fetch("/accounts/settings/", {
       method: "PATCH",
       headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() },
       body: JSON.stringify(body),
     });
-    return res.json() as Promise<Record<string, unknown>>;
+    const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    return { ok: res.ok, status: res.status, data };
   }
 
   async function resend(addr: EmailAddress) {
     setBusy(addr.id);
-    try { await patch({ action: "resend_verification", email: addr.email }); }
-    finally { setBusy(null); }
+    try {
+      const { ok, status, data } = await patch({ action: "resend_verification", email: addr.email });
+      if (ok) {
+        toast.success(`Verification email sent to ${addr.email}.`);
+      } else if (status === 429) {
+        toast.error((data.error as string) ?? "Please wait a moment before requesting another verification email.");
+      } else {
+        toast.error((data.error as string) ?? "Couldn't send the verification email.");
+      }
+    } finally { setBusy(null); }
   }
 
   async function makePrimary(addr: EmailAddress) {
     setBusy(addr.id);
     try {
-      const data = await patch({ action: "make_primary", email: addr.email });
-      if (data.email_addresses) setAddresses(data.email_addresses as EmailAddress[]);
+      const { ok, data } = await patch({ action: "make_primary", email: addr.email });
+      if (ok) {
+        if (data.email_addresses) setAddresses(data.email_addresses as EmailAddress[]);
+        toast.success(`${addr.email} is now your primary email.`);
+      } else {
+        toast.error((data.error as string) ?? "Couldn't update primary email.");
+      }
     } finally { setBusy(null); }
   }
 
   async function remove(addr: EmailAddress) {
-    await patch({ action: "remove_email", email: addr.email });
-    setAddresses((prev) => prev.filter((a) => a.id !== addr.id));
+    const { ok, data } = await patch({ action: "remove_email", email: addr.email });
+    if (ok) {
+      setAddresses((prev) => prev.filter((a) => a.id !== addr.id));
+      toast.success(`Removed ${addr.email}.`);
+    } else {
+      toast.error((data.error as string) ?? "Couldn't remove that email.");
+    }
   }
 
   async function addEmail(e: React.FormEvent) {

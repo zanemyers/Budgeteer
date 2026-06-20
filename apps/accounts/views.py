@@ -9,6 +9,7 @@ from django.views import View
 from django.views.decorators.csrf import ensure_csrf_cookie
 
 from allauth.account.models import EmailAddress
+from allauth.core import ratelimit
 from allauth.account.views import (
     ConfirmEmailView as AllAuthConfirmEmailView,
     LoginView,
@@ -169,10 +170,18 @@ class AccountSettingsView(LoginRequiredMixin, View):
             email_str = data.get("email", "")
             try:
                 ea = EmailAddress.objects.get(user=user, email=email_str)
-                ea.send_confirmation(request)
-                return JsonResponse({"ok": True})
             except EmailAddress.DoesNotExist:
                 return JsonResponse({"error": "Email not found."}, status=404)
+            # allauth's confirm_email rate limit (default 1/180s/key) keyed by
+            # the email address — keeps us from spamming an inbox even though
+            # we're bypassing allauth's own confirm-email view.
+            if not ratelimit.consume(request, action="confirm_email", key=email_str.lower()):
+                return JsonResponse(
+                    {"error": "Please wait a moment before requesting another verification email."},
+                    status=429,
+                )
+            ea.send_confirmation(request)
+            return JsonResponse({"ok": True})
 
         if action == "make_primary":
             email_str = data.get("email", "")

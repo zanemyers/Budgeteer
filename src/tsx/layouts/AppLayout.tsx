@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Menu } from "lucide-react";
 import ThemeToggle from "../components/ThemeToggle";
 import { Button } from "@/components/ui/button";
+import { Toaster } from "@/components/ui/sonner";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -116,6 +117,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen">
+      <Toaster position="bottom-right" richColors closeButton />
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
