@@ -1,12 +1,13 @@
 import { Fragment, useMemo, useState } from "react";
 import { router } from "@inertiajs/react";
-import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Landmark, Pencil, Undo2 } from "lucide-react";
+import { Archive, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Landmark, Pencil, Undo2 } from "lucide-react";
 import TransactionModal from "../components/TransactionModal";
 import BankTransactionConfirmModal from "../components/BankTransactionConfirmModal";
-import type { BankTransaction, Category, CurrencyOption, PaymentMethod, Transaction } from "../types";
-import { fmt, fmtConverted, useCurrencyCode, useCurrencyRate, useCurrencySymbol } from "../utils/currency";
+import type { BankTransaction, Category, CurrencyOption, LinkedBankTransaction, PaymentMethod, Transaction } from "../types";
+import { fmt, fmtConverted, fmtSigned, useCurrencyCode, useCurrencyRate, useCurrencySymbol } from "../utils/currency";
 import { formatMonth, getDefaultMonth, isAtBackLimit, nextMonth, prevMonth } from "../utils/month";
-import { getCsrfToken } from "../lib/api";
+import { jsonFetch } from "../lib/api";
+import { fmtDate } from "../utils/date";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,6 +22,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
 import {
   Table,
   TableBody,
@@ -41,25 +48,6 @@ interface Props {
   payment_methods: PaymentMethod[];
   currencies: CurrencyOption[];
   user_currency: string;
-}
-
-async function apiFetch(url: string, method: string, body?: object) {
-  const res = await fetch(url, {
-    method,
-    headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
-  if (!res.ok && res.status !== 204) {
-    const data = await res.json() as { errors?: Record<string, string[]> };
-    throw data.errors ?? data;
-  }
-  if (res.status === 204) return null;
-  return res.json();
-}
-
-function fmtDate(iso: string | null): string {
-  if (!iso) return "—";
-  return new Date(iso + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
 type SortKey = "description" | "paid_date" | "category" | "amount" | "payment_method";
@@ -96,11 +84,8 @@ export default function Transactions({ budget_pk, month, category_filter, transa
   const [bankTxns, setBankTxns] = useState<BankTransaction[]>(initialBankTxns ?? []);
   const [ignoredBankTxns, setIgnoredBankTxns] = useState<BankTransaction[]>(initialIgnoredBankTxns ?? []);
   const [bankTxnToConfirm, setBankTxnToConfirm] = useState<BankTransaction | null>(null);
-  const [pendingOpen, setPendingOpen] = useState(true);
-  const [ignoredOpen, setIgnoredOpen] = useState(false);
-  const [restOpen, setRestOpen] = useState(true);
   const [editReason, setEditReason] = useState<Record<number, string>>({});
-  const [sortOrder, setSortOrder] = useState<SortEntry[]>([{ key: "paid_date", dir: "asc" }]);
+  const [sortOrder, setSortOrder] = useState<SortEntry[]>([{ key: "paid_date", dir: "desc" }]);
   const [editDesc, setEditDesc] = useState<Record<number, string>>({});
   const [editDate, setEditDate] = useState<Record<number, string>>({});
   const [editPM, setEditPM] = useState<number | null>(null);
@@ -156,7 +141,7 @@ export default function Transactions({ budget_pk, month, category_filter, transa
   }
 
   async function patchTxn(id: number, data: Record<string, unknown>) {
-    const updated = await apiFetch(`/budgets/${budget_pk}/transactions/${id}/edit/`, "PATCH", data) as Transaction;
+    const updated = await jsonFetch(`/budgets/${budget_pk}/transactions/${id}/edit/`, "PATCH", data) as Transaction;
     setTransactions((prev) => prev.map((t) => t.id === id ? updated : t));
     return updated;
   }
@@ -183,7 +168,7 @@ export default function Transactions({ budget_pk, month, category_filter, transa
   async function markPaid(txn: Transaction) {
     setMarkingPaid((prev) => new Set(prev).add(txn.id));
     try {
-      const updated = await apiFetch(`/budgets/${budget_pk}/transactions/${txn.id}/mark-paid/`, "POST") as Transaction;
+      const updated = await jsonFetch(`/budgets/${budget_pk}/transactions/${txn.id}/mark-paid/`, "POST") as Transaction;
       setTransactions((prev) => prev.map((t) => t.id === txn.id ? updated : t));
     } finally {
       setMarkingPaid((prev) => { const n = new Set(prev); n.delete(txn.id); return n; });
@@ -191,48 +176,49 @@ export default function Transactions({ budget_pk, month, category_filter, transa
   }
 
   async function createTransaction(data: Partial<Transaction>) {
-    const res = await fetch(`/budgets/${budget_pk}/transactions/create/`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() },
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) {
-      const json = await res.json() as { errors?: Record<string, string[]> };
-      throw json.errors ?? json;
-    }
-    const txn = await res.json() as Transaction;
-    setTransactions((prev) => [...prev, txn]);
+    const txn = await jsonFetch<Transaction>(`/budgets/${budget_pk}/transactions/create/`, "POST", data);
+    if (txn) setTransactions((prev) => [...prev, txn]);
   }
 
   async function updateTransaction(data: Partial<Transaction>) {
     if (!editTxn) return;
-    const res = await fetch(`/budgets/${budget_pk}/transactions/${editTxn.id}/edit/`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() },
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) {
-      const json = await res.json() as { errors?: Record<string, string[]> };
-      throw json.errors ?? json;
-    }
-    const updated = await res.json() as Transaction;
-    setTransactions((prev) => prev.map((t) => t.id === editTxn.id ? updated : t));
+    const updated = await jsonFetch<Transaction>(`/budgets/${budget_pk}/transactions/${editTxn.id}/edit/`, "PATCH", data);
+    if (updated) setTransactions((prev) => prev.map((t) => t.id === editTxn.id ? updated : t));
   }
 
   async function deleteTxn(txn: Transaction) {
-    await apiFetch(`/budgets/${budget_pk}/transactions/${txn.id}/delete/`, "DELETE");
+    await jsonFetch(`/budgets/${budget_pk}/transactions/${txn.id}/delete/`, "DELETE");
     setTransactions((prev) => prev.filter((t) => t.id !== txn.id));
   }
 
   async function restoreBankTxn(bt: BankTransaction) {
-    const data = await apiFetch(`/budgets/${budget_pk}/bank-transactions/${bt.id}/unlink/`, "POST") as { bank_transaction: BankTransaction };
+    const data = await jsonFetch(`/budgets/${budget_pk}/bank-transactions/${bt.id}/unlink/`, "POST") as { bank_transaction: BankTransaction };
     setIgnoredBankTxns((prev) => prev.filter((b) => b.id !== bt.id));
     setBankTxns((prev) => [data.bank_transaction, ...prev]);
   }
 
+  async function ignoreBankTxn(bt: BankTransaction) {
+    const data = await jsonFetch(`/budgets/${budget_pk}/bank-transactions/${bt.id}/ignore/`, "POST", { reason: "" }) as { bank_transaction: BankTransaction };
+    setBankTxns((prev) => prev.filter((b) => b.id !== bt.id));
+    setIgnoredBankTxns((prev) => [data.bank_transaction, ...prev]);
+  }
+
+  async function ignoreLinkedBankTxn(bt: LinkedBankTransaction) {
+    const data = await jsonFetch(`/budgets/${budget_pk}/bank-transactions/${bt.id}/ignore/`, "POST", { reason: "" }) as { bank_transaction: BankTransaction };
+    setTransactions((prev) =>
+      prev.map((t) => {
+        if (!t.linked_bank_transactions?.some((b) => b.id === bt.id)) return t;
+        const remaining = t.linked_bank_transactions.filter((b) => b.id !== bt.id);
+        return { ...t, linked_bank_transactions: remaining, bank_linked: remaining.length > 0 };
+      })
+    );
+    setIgnoredBankTxns((prev) => [data.bank_transaction, ...prev]);
+    setEditTxn(null);
+  }
+
   async function saveIgnoreReason(bt: BankTransaction, reason: string) {
     if ((bt.ignore_reason ?? "") === reason.trim()) return;
-    const data = await apiFetch(`/budgets/${budget_pk}/bank-transactions/${bt.id}/ignore/`, "POST", { reason: reason.trim() }) as { bank_transaction: BankTransaction };
+    const data = await jsonFetch(`/budgets/${budget_pk}/bank-transactions/${bt.id}/ignore/`, "POST", { reason: reason.trim() }) as { bank_transaction: BankTransaction };
     setIgnoredBankTxns((prev) => prev.map((b) => (b.id === bt.id ? data.bank_transaction : b)));
   }
 
@@ -318,11 +304,7 @@ export default function Transactions({ budget_pk, month, category_filter, transa
           )}
 
           <TableCell>
-            {txn.bank_linked ? (
-              <span className="tabular-nums" title="Locked to the bank's posted date">
-                {fmtDate(txn.paid_date)}
-              </span>
-            ) : isEditingDate ? (
+            {isEditingDate ? (
               <Input
                 className="h-8"
                 type="date"
@@ -397,20 +379,19 @@ export default function Transactions({ budget_pk, month, category_filter, transa
               <Button
                 variant="ghost"
                 size="icon-sm"
-                disabled={isMarking || txn.bank_linked}
+                disabled={isMarking}
                 onClick={() => void markPaid(txn)}
                 aria-label={
                   isMarking ? "Updating" :
-                  txn.bank_linked ? "Locked to bank's posted date" :
                   txn.is_paid ? "Mark unpaid" :
                   isIncome ? "Mark received" :
                   isTransfer ? "Confirm transfer" :
                   "Mark paid"
                 }
                 title={
-                  txn.bank_linked ? "Locked to the bank's posted date" :
                   txn.is_paid ? "Mark unpaid" :
                   isIncome ? "Mark received" :
+                  isTransfer ? "Confirm transfer" :
                   "Mark paid"
                 }
               >
@@ -509,20 +490,20 @@ export default function Transactions({ budget_pk, month, category_filter, transa
             <SelectItem value="all">All categories</SelectItem>
             <SelectGroup>
               <SelectLabel>Expense</SelectLabel>
-              {categories.filter((c) => c.category_type === "expense" && !c.is_sinking_fund).map((c) => (
+              {categories.filter((c) => c.category_type === "expense" && !c.is_goal).map((c) => (
                 <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
               ))}
             </SelectGroup>
             <SelectGroup>
               <SelectLabel>Income</SelectLabel>
-              {categories.filter((c) => c.category_type === "income" && !c.is_sinking_fund).map((c) => (
+              {categories.filter((c) => c.category_type === "income" && !c.is_goal).map((c) => (
                 <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
               ))}
             </SelectGroup>
-            {categories.some((c) => c.is_sinking_fund) && (
+            {categories.some((c) => c.is_goal) && (
               <SelectGroup>
-                <SelectLabel>Goals (sinking funds)</SelectLabel>
-                {categories.filter((c) => c.is_sinking_fund).map((c) => (
+                <SelectLabel>Goals</SelectLabel>
+                {categories.filter((c) => c.is_goal).map((c) => (
                   <SelectItem key={c.id} value={String(c.id)}>◎ {c.name}</SelectItem>
                 ))}
               </SelectGroup>
@@ -544,25 +525,26 @@ export default function Transactions({ budget_pk, month, category_filter, transa
         <Card className="border-rule shadow-none">
           <CardContent className="text-muted-foreground py-12 text-center">Nothing logged for this period.</CardContent>
         </Card>
-      ) : (
-        <div className="flex flex-col gap-6">
-          {(pending.length > 0 || bankTxns.length > 0) && (
-            <Card className="overflow-hidden p-0 border-rule shadow-none">
-              <button
-                type="button"
-                className="w-full bg-fund-soft px-4 py-2 flex justify-between items-center text-left cursor-pointer hover:bg-fund-soft/80"
-                onClick={() => setPendingOpen((o) => !o)}
-                aria-expanded={pendingOpen}
-              >
-                <span className="text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-ink flex items-center gap-2">
-                  {pendingOpen ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
-                  Pending ({pending.length + bankTxns.length})
-                </span>
-                <span className="text-xs text-ink-quiet italic">
-                  {bankTxns.length > 0 ? "Awaiting payment · confirm bank rows to record them" : "Awaiting payment"}
-                </span>
-              </button>
-              {pendingOpen && (
+      ) : (() => {
+        const pendingCount = pending.length + bankTxns.length;
+        const ignoredCount = ignoredBankTxns.length;
+        const defaultTab = pendingCount > 0 ? "pending" : "logged";
+        return (
+          <Tabs defaultValue={defaultTab} className="gap-4">
+            <TabsList>
+              <TabsTrigger value="pending" disabled={pendingCount === 0}>
+                Pending {pendingCount > 0 && `(${pendingCount})`}
+              </TabsTrigger>
+              <TabsTrigger value="logged">
+                Logged ({rest.length})
+              </TabsTrigger>
+              <TabsTrigger value="ignored" disabled={ignoredCount === 0}>
+                Ignored {ignoredCount > 0 && `(${ignoredCount})`}
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="pending">
+              <Card className="overflow-hidden p-0 border-rule shadow-none">
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
@@ -604,7 +586,7 @@ export default function Transactions({ budget_pk, month, category_filter, transa
                           <TableCell className="tabular-nums">{fmtDate(bt.posted_date)}</TableCell>
                           <TableCell className="text-sm text-muted-foreground italic">Unassigned</TableCell>
                           <TableCell className={`text-right font-medium tabular-nums ${negative ? "text-expense" : "text-income"}`}>
-                            {negative ? "−" : "+"}${Math.abs(amt).toFixed(2)}
+                            {fmtSigned(amt, symbol)}
                           </TableCell>
                           <TableCell><span className="text-muted-foreground italic">—</span></TableCell>
                           <TableCell className="text-right whitespace-nowrap">
@@ -618,6 +600,15 @@ export default function Transactions({ budget_pk, month, category_filter, transa
                               >
                                 <Check />
                               </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                onClick={() => void ignoreBankTxn(bt)}
+                                aria-label="Ignore bank transaction"
+                                title="Ignore — already recorded in budget"
+                              >
+                                <Archive />
+                              </Button>
                             </div>
                           </TableCell>
                         </TableRow>
@@ -627,25 +618,11 @@ export default function Transactions({ budget_pk, month, category_filter, transa
                   </TableBody>
                 </Table>
               </div>
-              )}
-            </Card>
-          )}
+              </Card>
+            </TabsContent>
 
-          {ignoredBankTxns.length > 0 && (
-            <Card className="overflow-hidden p-0 border-rule shadow-none">
-              <button
-                type="button"
-                className="w-full bg-muted/40 px-4 py-2 flex justify-between items-center text-left cursor-pointer hover:bg-muted/60"
-                onClick={() => setIgnoredOpen((o) => !o)}
-                aria-expanded={ignoredOpen}
-              >
-                <span className="text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-ink-quiet flex items-center gap-2">
-                  {ignoredOpen ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
-                  Ignored ({ignoredBankTxns.length})
-                </span>
-                <span className="text-xs text-ink-quiet italic">Click any row to restore</span>
-              </button>
-              {ignoredOpen && (
+            <TabsContent value="ignored">
+              <Card className="overflow-hidden p-0 border-rule shadow-none">
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
@@ -717,7 +694,7 @@ export default function Transactions({ budget_pk, month, category_filter, transa
                               )}
                             </TableCell>
                             <TableCell className={`text-right font-medium tabular-nums ${negative ? "text-expense/70" : "text-income/70"}`}>
-                              {negative ? "−" : "+"}${Math.abs(amt).toFixed(2)}
+                              {fmtSigned(amt, symbol)}
                             </TableCell>
                             <TableCell className="text-right whitespace-nowrap">
                               <div className="inline-flex items-center gap-1 opacity-60 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
@@ -738,47 +715,37 @@ export default function Transactions({ budget_pk, month, category_filter, transa
                     </TableBody>
                   </Table>
                 </div>
-              )}
-            </Card>
-          )}
+              </Card>
+            </TabsContent>
 
-          {rest.length > 0 && (
-            <Card className="overflow-hidden p-0 border-rule shadow-none">
-              <button
-                type="button"
-                className="w-full bg-muted/30 px-4 py-2 flex justify-between items-center text-left cursor-pointer hover:bg-muted/50"
-                onClick={() => setRestOpen((o) => !o)}
-                aria-expanded={restOpen}
-              >
-                <span className="text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-ink flex items-center gap-2">
-                  {restOpen ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
-                  Logged ({rest.length})
-                </span>
-                <span className="text-xs text-ink-quiet italic">Recorded transactions</span>
-              </button>
-              {restOpen && (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <SortHeader label="Description" sortKey="description" />
-                        <SortHeader label="Date" sortKey="paid_date" />
-                        <SortHeader label="Category" sortKey="category" />
-                        <SortHeader label="Amount" sortKey="amount" className="text-right" />
-                        <SortHeader label="Method" sortKey="payment_method" />
-                        <TableHead className="text-right">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {sortedRest.map((txn) => renderRow(txn))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </Card>
-          )}
-        </div>
-      )}
+            <TabsContent value="logged">
+              <Card className="overflow-hidden p-0 border-rule shadow-none">
+                {rest.length === 0 ? (
+                  <CardContent className="text-muted-foreground py-12 text-center">Nothing recorded yet for this period.</CardContent>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <SortHeader label="Description" sortKey="description" />
+                          <SortHeader label="Date" sortKey="paid_date" />
+                          <SortHeader label="Category" sortKey="category" />
+                          <SortHeader label="Amount" sortKey="amount" className="text-right" />
+                          <SortHeader label="Method" sortKey="payment_method" />
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {sortedRest.map((txn) => renderRow(txn))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </Card>
+            </TabsContent>
+          </Tabs>
+        );
+      })()}
 
       {/* Add / Edit Transaction Modal */}
       {(addType !== null || editTxn !== null) && (
@@ -792,6 +759,7 @@ export default function Transactions({ budget_pk, month, category_filter, transa
           defaultCategoryType={editTxn ? undefined : addType ?? undefined}
           onSave={editTxn ? updateTransaction : createTransaction}
           onClose={() => { setAddType(null); setEditTxn(null); }}
+          onIgnoreLinkedBankTxn={ignoreLinkedBankTxn}
         />
       )}
 
