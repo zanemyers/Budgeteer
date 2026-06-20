@@ -3,6 +3,7 @@ from django.contrib.messages import get_messages
 from inertia import share
 
 from apps.base.models import Currency
+from apps.investments.models import Holding
 
 
 def _resolve_sidebar_budget(user):
@@ -42,6 +43,8 @@ class InertiaShareMiddleware:
                 else None
             )
 
+            has_investments = Holding.objects.filter(bank_account__connection__user=user).exists()
+
             share(
                 request,
                 auth={
@@ -57,6 +60,7 @@ class InertiaShareMiddleware:
                     }
                 },
                 current_budget=current_budget,
+                has_investments=has_investments,
             )
 
         response = self.get_response(request)

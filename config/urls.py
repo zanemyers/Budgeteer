@@ -16,6 +16,7 @@ from apps.accounts.views import (
 from apps.banking.views import BankAccountUpdateView, BankingView, banking_sync
 from apps.base.views import http_404, http_500, refresh_exchange_rates
 from apps.budget.views import BudgetHistoryView, BudgetHomeView
+from apps.investments.views import InvestmentsView
 
 # Includes
 urlpatterns: list[URLResolver | URLPattern] = [
@@ -44,6 +45,7 @@ urlpatterns += [
     path("banking/", BankingView.as_view(), name="banking"),
     path("banking/sync/", banking_sync, name="banking_sync"),
     path("banking/accounts/<int:pk>/", BankAccountUpdateView.as_view(), name="banking_account"),
+    path("investments/", InvestmentsView.as_view(), name="investments"),
     path("budgets/", include("apps.budget.urls", namespace="budget")),
 ]
 

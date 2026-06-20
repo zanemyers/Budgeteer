@@ -66,6 +66,7 @@ INSTALLED_APPS = [
     "apps.accounts",
     "apps.budget",
     "apps.banking",
+    "apps.investments",
     "inertia",
     "maintenance_mode",
     "allauth",
