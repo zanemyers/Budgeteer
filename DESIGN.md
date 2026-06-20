@@ -30,9 +30,9 @@ All values OKLCH. All neutrals tinted toward the moss hue (`130`) at low chroma 
 | `--income` | `oklch(52% 0.06 145)` | Income data only |
 | `--expense` | `oklch(50% 0.10 25)` | Expense data only |
 | `--expense-soft` | `oklch(90% 0.045 25)` | Expense header band |
-| `--fund` | `oklch(60% 0.08 70)` | Sinking-fund accent (warm earth) |
-| `--fund-soft` | `oklch(90% 0.06 70)` | Fund header band |
-| `--ongoing` | `oklch(55% 0.07 250)` | Ongoing-fund accent (slate-blue) |
+| `--fund` | `oklch(60% 0.08 70)` | Goal accent (warm earth) |
+| `--fund-soft` | `oklch(90% 0.06 70)` | Goal header band |
+| `--ongoing` | `oklch(55% 0.07 250)` | Ongoing-goal accent (slate-blue) |
 | `--alarm` | `oklch(45% 0.13 25)` | True destructive only (delete confirm) |
 
 ### Dark tokens

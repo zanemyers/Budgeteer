@@ -19,7 +19,7 @@ erDiagram
     Category ||--o{ TransactionLine : ""
     Category ||--o{ RecurringTransaction : ""
     Category ||--o{ CategoryBudget : ""
-    Category ||--o| SinkingFund : "1:1 optional"
+    Category ||--o| Goal : "1:1 optional"
 
     RecurringTransaction ||--o{ Transaction : "instances"
     RecurringTransaction }o--|| PaymentMethod : ""
@@ -32,6 +32,7 @@ erDiagram
 
     SimpleFINConnection ||--o{ BankAccount : ""
     BankAccount ||--o{ BankTransaction : ""
+    BankAccount ||--o{ Holding : ""
 
     Currency ||--o{ Transaction : "by code"
     Currency ||--o{ BankAccount : "by code"
@@ -74,7 +75,7 @@ erDiagram
         bigint created_by_id FK
     }
 
-    SinkingFund {
+    Goal {
         bigint category_id PK "1:1 with Category"
         decimal target
         date due_date "null when ongoing"
@@ -185,4 +186,18 @@ erDiagram
         bool is_pending_at_bank
         json raw
         string status "pending, linked, ignored"
+    }
+
+    Holding {
+        bigint id PK
+        bigint bank_account_id FK
+        string simplefin_id "unique with bank_account"
+        string symbol
+        string description
+        decimal shares
+        decimal cost_basis
+        decimal market_value
+        decimal purchase_price
+        string currency
+        json raw
     }

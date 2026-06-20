@@ -134,8 +134,8 @@ Confirmed by reading `/Users/zane/Sites/Budgeteer/apps/budget/models.py` and `/U
 | 5 | Cash-flow forecast | Partial | `get_upcoming_transactions` shows next 7 days; no projected balance curve |
 | 6 | Recurring + bill reminders | Partial | `RecurringTransaction` + `generate_recurring_instances` cron exists; no notifications/email/push |
 | 7 | Custom reports | Missing | `data.py` has a single `get_budget_overview`; no report builder |
-| 8 | Goals / sinking funds | Have | `Category.is_sinking_fund` + target/due/ongoing fields, all-time `total_saved` math |
-| 9 | Investment tracking | Missing | No `Holding`/`Security` model |
+| 8 | Goals / sinking funds | Have | `Category.is_goal` + related `Goal` row (target/due/ongoing/monthly_goal), all-time `total_saved` math |
+| 9 | Investment tracking | Have | `apps/investments.Holding` populated from SimpleFIN; Investments page shows positions, gain $/%, weights per account |
 | 10 | Mobile parity | Partial | Inertia/React SPA is responsive but no native app, no PWA manifest confirmed |
 | 11 | Transfer detection | Partial | `transaction_type="transfer"` exists; no two-leg link or auto-detection |
 | 12 | Debt payoff simulator | Missing | No loan model |

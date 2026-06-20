@@ -15,7 +15,7 @@ User (accounts)
 Budget
  ├── BudgetMembership   (role: owner | member)
  ├── Category           (income | expense)
- │    └── SinkingFund   (1:1, optional — target / due_date / ongoing / monthly_goal)
+ │    └── Goal          (1:1, optional — target / due_date / ongoing / monthly_goal)
  ├── CategoryBudget     (monthly assigned amount per category)
  ├── PaymentMethod      (per-budget cards/accounts)
  ├── RecurringTransaction
@@ -43,10 +43,10 @@ Through table for `Budget.members`. Roles: `owner` or `member`. Owners can renam
 ### Category
 Belongs to a budget. `category_type` is `income` or `expense`. `monthly_budget` is a default target that can be overridden per-month via `CategoryBudget`. Self-FK `parent` allows 2-level nesting (parent + subcategory). `(budget, name, category_type)` is unique for root categories; `(parent, name)` is unique for subcategories.
 
-Backwards-compat properties (`is_sinking_fund`, `sinking_fund_target`, `sinking_fund_due_date`, `sinking_fund_ongoing`, `sinking_fund_monthly_goal`) read through to the optional related `SinkingFund` row so existing serializer/template code keeps working.
+Convenience properties (`is_goal`, `goal_target`, `goal_due_date`, `goal_ongoing`, `goal_monthly`) read through to the optional related `Goal` row.
 
-### SinkingFund
-1:1 with `Category`. Present only for categories that are sinking funds — `hasattr(cat, "sinking_fund")` is the canonical check, or `cat.is_sinking_fund` (the property).
+### Goal
+1:1 with `Category`. Present only for categories that are savings goals — `hasattr(cat, "goal")` is the canonical check, or `cat.is_goal` (the property).
 
 Fields: `target` (required), `due_date` (used when not ongoing), `ongoing` (boolean), `monthly_goal` (used when ongoing).
 
@@ -70,7 +70,7 @@ A single financial event. Belongs to a `Budget`. May reference a `RecurringTrans
 
 - `paid_date` is the single source of truth for paid/unpaid status. `paid_date IS NULL` ⇒ pending/unpaid; otherwise paid.
 - `total_amount` is the sum of all `TransactionLine` amounts.
-- `transaction_type` is `income`, `expense`, or `transfer`. Stored explicitly because `transfer` (a deposit to a sinking fund from elsewhere in the budget) can't be derived from lines alone.
+- `transaction_type` is `income`, `expense`, or `transfer`. Stored explicitly because `transfer` (a deposit to a goal from elsewhere in the budget) can't be derived from lines alone.
 - `currency` is an ISO code; `exchange_rate_to_usd` snapshots the rate at the time of entry.
 
 ### TransactionLine
@@ -91,6 +91,13 @@ An account at a financial institution surfaced by a connection. `(connection, si
 A single posted transaction from a bank. `(bank_account, simplefin_id)` is unique. Stores the full raw SimpleFIN payload in `raw`. Has a **OneToOne** FK to `Transaction` (`transaction`) — at most one BankTransaction can be linked to a given Transaction, and vice versa. Reverse accessor is the singular `txn.bank_transaction`.
 
 `status` is `pending` (default, awaiting confirm), `linked` (matched to a Transaction), or `ignored` (user dismissed it). `is_pending_at_bank` reflects whether the bank still considers the transaction pending; the sync command currently skips pending-at-bank rows to avoid storing them under ids that may change once they post.
+
+## Investments models (apps/investments)
+
+### Holding
+A position inside an investment-capable `BankAccount`. `(bank_account, simplefin_id)` is unique. Holdings are upserted on each SimpleFIN sync (via `apps/investments/ingest.py::persist_holdings`); positions absent from the latest payload are deleted, so the table reflects what the brokerage currently reports.
+
+Fields: `symbol`, `description`, `shares`, `cost_basis`, `market_value`, `purchase_price`, `currency`, plus the full SimpleFIN payload in `raw`. `unrealized_gain` is a property: `market_value - cost_basis`.
 
 ## Key Invariants
 
