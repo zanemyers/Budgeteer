@@ -226,7 +226,7 @@ export default function Dashboard({ budget_pk, month, overview, categories, paym
   }
 
   const income = overview.categories.filter((c) => c.category_type === "income");
-  const expense = overview.categories.filter((c) => c.category_type === "expense" && !c.is_sinking_fund);
+  const expense = overview.categories.filter((c) => c.category_type === "expense" && !c.is_goal);
 
   function renderHierarchical(cats: BudgetOverviewCategory[]) {
     const roots = cats.filter((c) => c.parent_id === null);
@@ -244,12 +244,12 @@ export default function Dashboard({ budget_pk, month, overview, categories, paym
     ]);
   }
 
-  const sfMonthlySpending = parseFloat(overview.sf_monthly_spending);
+  const sfMonthlySpending = parseFloat(overview.goal_monthly_spending);
   // Monthly Spent is the budget-side flow only: non-SF expense category activity.
   // SF spending is shown on its own line and excluded from Kept, since it draws
   // from previously-saved funds, not this month's budget.
   const totalSpent = expense.reduce((sum, c) => sum + parseFloat(c.activity), 0);
-  const sfSaved = parseFloat(overview.transfers_total);
+  const sfSaved = parseFloat(overview.saved_to_goals_total);
   const incomeTotal = parseFloat(overview.income_total);
   const netAmount = incomeTotal - totalSpent - sfSaved;
   const netPositive = netAmount >= 0;
@@ -281,7 +281,7 @@ export default function Dashboard({ budget_pk, month, overview, categories, paym
       </header>
 
       {/* Ready to Assign */}
-      {(incomeTotal > 0 || parseFloat(overview.expense_assigned) > 0) && (
+      {(incomeTotal > 0 || parseFloat(overview.expense_assigned) > 0) && Math.abs(rta) >= 0.005 && (
         <Alert variant={rta >= 0 ? "success" : "destructive"} className={isCurrentMonth && pending_count > 0 ? "mb-4" : "mb-8"}>
           <AlertDescription>
             <div className="flex justify-between items-center w-full gap-4 flex-wrap">
@@ -290,7 +290,7 @@ export default function Dashboard({ budget_pk, month, overview, categories, paym
                 <div className="text-sm text-muted-foreground">
                   Income {fmt(overview.income_total, symbol)}
                   {" "}&minus; Assigned {fmt(overview.expense_assigned, symbol)}
-                  {parseFloat(overview.transfers_total) > 0 && <> &minus; Saved {fmt(overview.transfers_total, symbol)}</>}
+                  {parseFloat(overview.saved_to_goals_total) > 0 && <> &minus; Saved {fmt(overview.saved_to_goals_total, symbol)}</>}
                 </div>
               </div>
               <div className="flex items-center gap-3">
@@ -366,7 +366,7 @@ export default function Dashboard({ budget_pk, month, overview, categories, paym
                   <TableHeader>
                     <TableRow>
                       <TableHead>Category</TableHead>
-                      <TableHead className="text-right">Activity</TableHead>
+                      <TableHead className="text-right">Spent</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -403,7 +403,7 @@ export default function Dashboard({ budget_pk, month, overview, categories, paym
                   <span className={`${SECTION_LABEL_CLASS} text-ink-quiet`}>This month</span>
                   <dl className="flex flex-col gap-1.5">
                     <div className="flex justify-between items-baseline">
-                      <dt className="text-sm text-ink-quiet">Earned</dt>
+                      <dt className="text-sm text-ink-quiet">Total Income</dt>
                       <dd className="text-income tabular-nums">{fmt(overview.income_total, symbol)}</dd>
                     </div>
                     <div className="flex justify-between items-baseline">
@@ -457,7 +457,7 @@ export default function Dashboard({ budget_pk, month, overview, categories, paym
                       <TableHead>Category</TableHead>
                       <TableHead className="text-right">Budgeted</TableHead>
                       <TableHead className="text-right">Assigned</TableHead>
-                      <TableHead className="text-right">Activity</TableHead>
+                      <TableHead className="text-right">Spent</TableHead>
                       <TableHead className="text-right">Available</TableHead>
                     </TableRow>
                   </TableHeader>
