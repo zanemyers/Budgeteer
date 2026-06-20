@@ -26,6 +26,7 @@ interface PageProps {
   current_budget?: { pk: number; name: string } | null;
   budget_pk?: number;
   month?: string;
+  has_investments?: boolean;
 }
 
 function NavLink({
@@ -77,11 +78,15 @@ function UserMenu({ user }: { user: AuthUser }) {
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="start" className="w-56">
-        <DropdownMenuItem onClick={() => router.visit("/accounts/settings/")}>
-          Account Settings
+        <DropdownMenuItem onClick={() => router.visit("/budgets/")}>
+          My Budgets
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => router.visit("/accounts/history/")}>
           Budget History
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => router.visit("/accounts/settings/")}>
+          Account Settings
         </DropdownMenuItem>
         {user.is_staff && (
           <DropdownMenuItem asChild>
@@ -108,7 +113,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const path = url.includes("://") ? new URL(url).pathname : url.split("?")[0];
   const isAt = (prefix: string) => path.startsWith(prefix);
   const txnHref = `/budgets/${sidebarBudgetPk}/transactions/?month=${month ?? ""}`;
-  const onCurrentBudget = props.budget_pk != null;
 
   return (
     <div className="flex min-h-screen">
@@ -158,21 +162,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <nav className="sidebar-nav">
           {user ? (
             <>
-              <div className="sidebar-group">
-                <span className="sidebar-group-label">Budgets</span>
-                <NavLink href="/budgets/" active={isAt("/budgets/") && !onCurrentBudget}>
-                  My Budgets
-                </NavLink>
-                <NavLink href="/banking/" active={isAt("/banking")}>
-                  Banking
-                </NavLink>
-              </div>
-
-              {sidebarBudgetPk && (
+              {sidebarBudgetPk ? (
                 <div className="sidebar-group">
-                  <span className="sidebar-group-label" title={sidebarBudget?.name ?? undefined}>
-                    {sidebarBudget?.name || "Current Budget"}
-                  </span>
+                  <span className="sidebar-group-label">Budgets</span>
+                  <a
+                    href="/budgets/"
+                    onClick={(e) => { e.preventDefault(); router.visit("/budgets/"); }}
+                    className="flex items-center justify-between gap-2 px-3 py-1.5 mb-1 rounded-md text-sm font-medium text-ink hover:bg-muted/60 focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
+                    title={`${sidebarBudget?.name ?? "Budget"} — switch budget`}
+                  >
+                    <span className="truncate">{sidebarBudget?.name || "Current Budget"}</span>
+                    <span aria-hidden className="text-ink-quiet text-xs shrink-0">▾</span>
+                  </a>
                   <NavLink
                     href={`/budgets/${sidebarBudgetPk}/`}
                     active={path === `/budgets/${sidebarBudgetPk}/` || path === `/budgets/${sidebarBudgetPk}`}
@@ -182,14 +183,26 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   <NavLink href={txnHref} active={isAt(`/budgets/${sidebarBudgetPk}/transactions`)}>
                     Transactions
                   </NavLink>
-                  <NavLink href={`/budgets/${sidebarBudgetPk}/sinking-funds/`} active={isAt(`/budgets/${sidebarBudgetPk}/sinking-funds`)}>
+                  <NavLink href={`/budgets/${sidebarBudgetPk}/goals/`} active={isAt(`/budgets/${sidebarBudgetPk}/goals`)}>
                     Goals
                   </NavLink>
                   <NavLink href={`/budgets/${sidebarBudgetPk}/settings/`} active={isAt(`/budgets/${sidebarBudgetPk}/settings`)}>
                     Settings
                   </NavLink>
                 </div>
+              ) : (
+                <div className="sidebar-group">
+                  <span className="sidebar-group-label">Budgets</span>
+                  <NavLink href="/budgets/" active>My Budgets</NavLink>
+                </div>
               )}
+              <div className="sidebar-group">
+                <span className="sidebar-group-label">Accounts</span>
+                <NavLink href="/banking/" active={isAt("/banking")}>Banking</NavLink>
+                {props.has_investments && (
+                  <NavLink href="/investments/" active={isAt("/investments")}>Investments</NavLink>
+                )}
+              </div>
             </>
           ) : (
             <div className="sidebar-group">
