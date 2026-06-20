@@ -1,5 +1,22 @@
 # CHANGELOG
 
+## 2026-06-20
+
+### Changed
+
+* Moved the epicenv schema out of `pyproject.toml` into `.env.toml` at the repo root. Each variable is now a readable `[variables.NAME]` TOML table. Pinned `epicenv[django]~=1.6`.
+* Added the **Investments** page and an `apps/investments/` app that persists SimpleFIN holdings.
+* Set up [Zensical](https://zensical.org/) for these docs. Serve locally via `just docs` (also starts as a Docker service alongside `just start`).
+* Moved Banking and Investments into the sidebar; relabeled the budget section as **Budgets**.
+* Transactions list now defaults to newest-first; tabs reordered to Pending → Logged → Ignored.
+* Dashboard "Ready to Assign" banner is hidden once every dollar is assigned.
+* Surface 429 rate limits and other errors as toasts when resending verification emails or changing the primary email. Backend rate-limit added to the resend endpoint.
+
+### Added
+
+* `Goal` model (replaces `SinkingFund`) with its own page and modal.
+
+
 ## 2026-03-05
 
 ### Added

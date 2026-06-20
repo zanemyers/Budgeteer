@@ -1,0 +1,83 @@
+# Zensical configuration for Budgeteer docs.
+
+[project]
+site_name = "Budgeteer"
+repo_url = "https://github.com/zanemyers/Budgeteer"
+repo_name = "zanemyers/Budgeteer"
+docs_dir = "docs"
+site_dir = "docs_site"
+
+# Pick an address that won't collide with Django's runserver (8000) or Vite.
+dev_addr = "localhost:4000"
+
+copyright = "Copyright &copy; 2026 Zane Myers"
+
+# ----------------------------------------------------------------------------
+# Theme
+# ----------------------------------------------------------------------------
+[project.theme]
+features = [
+  "content.code.annotate",
+  "content.code.copy",
+  "content.code.select",
+  "navigation.footer",
+  "navigation.indexes",
+  "navigation.path",
+  "navigation.sections",
+  "navigation.top",
+  "navigation.tracking",
+  "toc.follow",
+  "search.highlight",
+  "search.suggest",
+]
+
+[[project.theme.palette]]
+scheme = "default"
+primary = "green"
+accent = "amber"
+toggle.icon = "lucide/sun"
+toggle.name = "Switch to dark mode"
+
+[[project.theme.palette]]
+scheme = "slate"
+primary = "green"
+accent = "amber"
+toggle.icon = "lucide/moon"
+toggle.name = "Switch to light mode"
+
+# ----------------------------------------------------------------------------
+# Navigation
+# ----------------------------------------------------------------------------
+[[project.nav]]
+Home = "index.md"
+
+[[project.nav]]
+Architecture = "architecture.md"
+
+[[project.nav]]
+Models = "models.md"
+
+[[project.nav]]
+Database = "database.md"
+
+[[project.nav]]
+"Feature Roadmap" = "feature_roadmap.md"
+
+[[project.nav]]
+Debugging = "debugging.md"
+
+[[project.nav]]
+Changelog = "changelog.md"
+
+# ----------------------------------------------------------------------------
+# Markdown extensions
+# ----------------------------------------------------------------------------
+[project.markdown_extensions.admonition]
+
+[project.markdown_extensions.pymdownx.details]
+
+[project.markdown_extensions.pymdownx.superfences]
+
+[project.markdown_extensions.pymdownx.snippets]
+base_path = "."
+check_paths = true

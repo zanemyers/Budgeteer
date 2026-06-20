@@ -27,3 +27,11 @@ project_slug := 'budgeteer'
 
 @migrate *args:
     {{ python_cmd_prefix }} ./manage.py migrate {{ args }}
+
+# Serve docs locally with Zensical at http://localhost:4000
+@docs:
+    uv run zensical serve -f zensical.toml
+
+# Build the static docs site into docs_site/
+@docs_build:
+    uv run zensical build -f zensical.toml --clean

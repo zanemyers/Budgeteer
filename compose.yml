@@ -176,21 +176,13 @@ services:
     image: budgeteer:python
     init: true
 
-    command: sh -c "mkdocs serve -f config/mkdocs.yml --dev-addr 0.0.0.0:4000"
+    command: sh -c "zensical serve -f zensical.toml --dev-addr 0.0.0.0:4000"
 
     volumes:
       - .:/srv/app:cached
 
     ports:
       - "4000:4000"
-
-    environment:
-      LIVE_RELOAD_SUPPORT: 'true'
-      FAST_MODE: 'true'
-
-    profiles:
-      - full
-      - docs
 
     depends_on:
       web:
