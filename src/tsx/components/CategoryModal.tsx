@@ -18,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { getCsrfToken } from "@/lib/api";
 
 interface CategoryShape {
   id: number;
@@ -25,11 +26,11 @@ interface CategoryShape {
   category_type: "income" | "expense";
   parent_id: number | null;
   monthly_budget: string;
-  is_sinking_fund: boolean;
-  sinking_fund_target: string | null;
-  sinking_fund_due_date: string | null;
-  sinking_fund_ongoing: boolean;
-  sinking_fund_monthly_goal: string | null;
+  is_goal: boolean;
+  goal_target: string | null;
+  goal_due_date: string | null;
+  goal_ongoing: boolean;
+  goal_monthly: string | null;
 }
 
 interface Props {
@@ -42,11 +43,6 @@ interface Props {
   onSaved: (category: CategoryShape) => void;
   onChildSaved?: (child: CategoryShape) => void;
   onChildDeleted?: (childId: number) => void;
-}
-
-function getCsrfToken(): string {
-  const match = document.cookie.match(/csrftoken=([^;]+)/);
-  return match ? match[1] : "";
 }
 
 export default function CategoryModal({
@@ -68,7 +64,7 @@ export default function CategoryModal({
   const [error, setError] = useState("");
 
   // Inline child management — only meaningful when editing a top-level category.
-  const isTopLevel = isEdit && category!.parent_id === null && !category!.is_sinking_fund;
+  const isTopLevel = isEdit && category!.parent_id === null && !category!.is_goal;
   const children = isTopLevel
     ? categories.filter((c) => c.parent_id === category!.id)
     : [];
@@ -81,7 +77,7 @@ export default function CategoryModal({
 
   const eligibleParents = categories.filter((c) =>
     c.category_type === type
-    && !c.is_sinking_fund
+    && !c.is_goal
     && c.parent_id === null
     && (!isEdit || c.id !== category!.id)
   );

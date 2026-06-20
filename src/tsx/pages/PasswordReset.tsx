@@ -6,15 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { getCsrfToken } from "@/lib/api";
 
 interface Props {
   done: boolean;
   errors: Record<string, string>;
-}
-
-function getCsrfToken(): string {
-  const match = document.cookie.match(/csrftoken=([^;]+)/);
-  return match ? match[1] : "";
 }
 
 export default function PasswordReset({ done: initialDone, errors: initialErrors }: Props) {

@@ -2,6 +2,7 @@ import { Fragment, useState } from "react";
 import { router } from "@inertiajs/react";
 import { Pause, Pencil, RotateCcw } from "lucide-react";
 import { fmt, useCurrencySymbol } from "@/utils/currency";
+import { fmtDate } from "@/utils/date";
 import { getCsrfToken } from "@/lib/api";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { Button } from "@/components/ui/button";
@@ -42,10 +43,6 @@ function freqLabel(rt: RecurringPanelItem): string {
   const labels: Record<string, string> = { monthly: "Monthly", every_n_months: "Every N Months", annually: "Annually" };
   const base = labels[rt.frequency] ?? rt.frequency;
   return rt.frequency === "every_n_months" ? `${base} (${rt.interval}mo)` : base;
-}
-
-function fmtDate(iso: string): string {
-  return new Date(iso + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
 function groupByCategory(items: RecurringPanelItem[]) {

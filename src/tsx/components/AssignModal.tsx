@@ -28,9 +28,9 @@ export default function AssignModal({ budgetPk, month, categories, readyToAssign
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Only assignable expense categories (excluding sinking funds — they have their own contribution model).
+  // Only assignable expense categories (excluding goals — they have their own contribution model).
   const assignable = useMemo(
-    () => categories.filter((c) => c.category_type === "expense" && !c.is_sinking_fund),
+    () => categories.filter((c) => c.category_type === "expense" && !c.is_goal),
     [categories],
   );
 

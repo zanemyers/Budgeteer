@@ -5,6 +5,7 @@ import { SettingsRow } from "@/components/settings/SettingsRow";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { getCsrfToken } from "@/lib/api";
 
 export interface BudgetSummary {
   pk: number;
@@ -16,11 +17,6 @@ export interface BudgetSummary {
 interface Props {
   budget: BudgetSummary;
   onChange: (next: BudgetSummary) => void;
-}
-
-function getCsrfToken(): string {
-  const match = document.cookie.match(/csrftoken=([^;]+)/);
-  return match ? match[1] : "";
 }
 
 export function BudgetPanel({ budget, onChange }: Props) {

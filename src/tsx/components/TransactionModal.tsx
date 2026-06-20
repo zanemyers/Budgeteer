@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
-import type { Category, CurrencyOption, PaymentMethod, Transaction, TransactionLine } from "../types";
+import type { Category, CurrencyOption, LinkedBankTransaction, PaymentMethod, Transaction, TransactionLine } from "../types";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -23,8 +22,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { fmtDate } from "../utils/date";
+import { fmtSigned, useCurrencySymbol } from "../utils/currency";
 
-type CategoryWithSF = Category & { is_sinking_fund?: boolean };
+type CategoryWithGoal = Category & { is_goal?: boolean };
 
 interface Props {
   categories: Category[];
@@ -36,6 +37,8 @@ interface Props {
   transaction?: Transaction | null;
   onClose: () => void;
   defaultCategoryType?: "income" | "expense";
+  forceTransactionType?: "transfer";
+  onIgnoreLinkedBankTxn?: (bt: LinkedBankTransaction) => Promise<void>;
 }
 
 interface LineState {
@@ -95,7 +98,10 @@ export default function TransactionModal({
   transaction,
   onClose,
   defaultCategoryType,
+  forceTransactionType,
+  onIgnoreLinkedBankTxn,
 }: Props) {
+  const symbol = useCurrencySymbol();
   const [form, setForm] = useState<FormState>(() => buildInitial(transaction, defaultCategoryType, categories, userCurrency));
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string[]>>({});
@@ -106,14 +112,13 @@ export default function TransactionModal({
 
   const isEdit = Boolean(transaction);
   const isRecurring = Boolean(transaction?.recurring);
-  const isBankLinked = Boolean(transaction?.bank_linked);
   const isForeignCurrency = form.currency !== userCurrency;
-  const visibleCategories = (categories as CategoryWithSF[]).filter(
-    (c) => c.category_type === form.categoryType || c.is_sinking_fund
+  const visibleCategories = (categories as CategoryWithGoal[]).filter(
+    (c) => c.category_type === form.categoryType || c.is_goal
   );
   const allLinesSF = form.lines.length > 0 && form.lines.every((l) => {
-    const cat = (categories as CategoryWithSF[]).find((c) => String(c.id) === l.category);
-    return cat?.is_sinking_fund === true;
+    const cat = (categories as CategoryWithGoal[]).find((c) => String(c.id) === l.category);
+    return cat?.is_goal === true;
   });
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
@@ -148,7 +153,7 @@ export default function TransactionModal({
       due_date: form.due_date,
       paid_date: form.paid_date || null,
       notes: form.notes,
-      transaction_type: form.categoryType,
+      transaction_type: forceTransactionType ?? form.categoryType,
       payment_method: form.payment_method ? parseInt(form.payment_method, 10) : null,
       currency: form.currency,
       lines: form.lines.map((l) => ({
@@ -171,9 +176,11 @@ export default function TransactionModal({
 
   const title = isEdit
     ? "Edit Transaction"
-    : form.categoryType === "income"
-      ? (allLinesSF ? "Deposit to Fund" : "Add Income")
-      : "Add Expense";
+    : forceTransactionType === "transfer"
+      ? "Transfer to Goal"
+      : form.categoryType === "income"
+        ? "Add Income"
+        : "Add Expense";
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -233,14 +240,28 @@ export default function TransactionModal({
                         <div className="font-medium truncate">{bt.payee || bt.description || "—"}</div>
                         <div className="text-ink-quiet text-xs">
                           {bt.org_name && <span>{bt.org_name} · </span>}
-                          {bt.bank_account_name} · {new Date(`${bt.posted_date}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                          {bt.bank_account_name} · {fmtDate(bt.posted_date)}
                         </div>
                         {bt.payee && bt.description && bt.payee !== bt.description && (
                           <div className="text-ink-quiet text-xs truncate">{bt.description}</div>
                         )}
                       </div>
-                      <div className={`tabular-nums whitespace-nowrap ${negative ? "text-expense" : "text-income"}`}>
-                        {negative ? "−" : "+"}${Math.abs(amt).toFixed(2)}
+                      <div className="flex flex-col items-end gap-1">
+                        <div className={`tabular-nums whitespace-nowrap ${negative ? "text-expense" : "text-income"}`}>
+                          {fmtSigned(amt, symbol)}
+                        </div>
+                        {onIgnoreLinkedBankTxn && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="text-xs h-auto py-0.5 px-1.5 text-ink-quiet hover:text-ink"
+                            onClick={() => void onIgnoreLinkedBankTxn(bt)}
+                            title="Unlink and move this bank row to Ignored"
+                          >
+                            Ignore
+                          </Button>
+                        )}
                       </div>
                     </div>
                   );
@@ -282,25 +303,9 @@ export default function TransactionModal({
                   type="date"
                   value={form.paid_date}
                   onChange={(e) => update("paid_date", e.target.value)}
-                  disabled={isBankLinked}
-                  title={isBankLinked ? "Locked to the bank's posted date" : undefined}
                 />
-                {isBankLinked && (
-                  <p className="text-xs text-ink-quiet">Locked to the bank's posted date.</p>
-                )}
               </div>
             </div>
-
-            {isRecurring && form.categoryType !== "income" && !isBankLinked && (
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="modal-is-paid"
-                  checked={Boolean(form.paid_date)}
-                  onCheckedChange={(c) => update("paid_date", c === true ? (form.paid_date || new Date().toISOString().split("T")[0]) : "")}
-                />
-                <Label htmlFor="modal-is-paid" className="font-normal">Mark as Paid</Label>
-              </div>
-            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="flex flex-col gap-2">
@@ -354,8 +359,8 @@ export default function TransactionModal({
                     <SelectTrigger className="w-full"><SelectValue placeholder="-- Select --" /></SelectTrigger>
                     <SelectContent>
                       {(() => {
-                        const regular = visibleCategories.filter((c) => !(c as CategoryWithSF).is_sinking_fund);
-                        const goals = visibleCategories.filter((c) => (c as CategoryWithSF).is_sinking_fund);
+                        const regular = visibleCategories.filter((c) => !(c as CategoryWithGoal).is_goal);
+                        const goals = visibleCategories.filter((c) => (c as CategoryWithGoal).is_goal);
                         const groupLabel = form.categoryType === "income" ? "Income" : "Expense";
                         return (
                           <>
@@ -370,7 +375,7 @@ export default function TransactionModal({
                             {regular.length > 0 && goals.length > 0 && <SelectSeparator />}
                             {goals.length > 0 && (
                               <SelectGroup>
-                                <SelectLabel>Goals (sinking funds)</SelectLabel>
+                                <SelectLabel>Goals</SelectLabel>
                                 {goals.map((c) => (
                                   <SelectItem key={c.id} value={String(c.id)}>◎ {c.name}</SelectItem>
                                 ))}

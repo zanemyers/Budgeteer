@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { Pencil } from "lucide-react";
 import CategoryModal from "@/components/CategoryModal";
-import type { SinkingFundCategory } from "@/components/SinkingFundModal";
+import type { GoalCategory } from "@/components/GoalModal";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { jsonFetch } from "@/lib/api";
 
-export interface CategoryType extends SinkingFundCategory {
+export interface CategoryType extends GoalCategory {
   parent_id: number | null;
 }
 
@@ -17,31 +18,12 @@ interface Props {
   onCategoriesChange: (next: CategoryType[]) => void;
 }
 
-function getCsrfToken(): string {
-  const match = document.cookie.match(/csrftoken=([^;]+)/);
-  return match ? match[1] : "";
-}
-
-async function apiFetch(url: string, method: string, body?: object) {
-  const res = await fetch(url, {
-    method,
-    headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
-  if (!res.ok && res.status !== 204) {
-    const data = await res.json() as { errors?: Record<string, string[]> };
-    throw data.errors ?? data;
-  }
-  if (res.status === 204) return null;
-  return res.json();
-}
-
 export function CategoriesPanel({ budgetPk, type, categories, onCategoriesChange }: Props) {
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<CategoryType | null>(null);
   const [deleteError, setDeleteError] = useState<Record<number, string>>({});
 
-  const visible = categories.filter((c) => c.category_type === type && !c.is_sinking_fund);
+  const visible = categories.filter((c) => c.category_type === type && !c.is_goal);
   const title = type === "income" ? "Income categories" : "Expense categories";
 
   function upsert(cat: CategoryType) {
@@ -53,7 +35,7 @@ export function CategoriesPanel({ budgetPk, type, categories, onCategoriesChange
 
   async function handleDelete(cat: CategoryType) {
     try {
-      await apiFetch(`/budgets/${budgetPk}/categories/${cat.id}/delete/`, "DELETE");
+      await jsonFetch(`/budgets/${budgetPk}/categories/${cat.id}/delete/`, "DELETE");
       onCategoriesChange(categories.filter((c) => c.id !== cat.id));
     } catch {
       setDeleteError((prev) => ({ ...prev, [cat.id]: "Cannot delete — category has transactions." }));

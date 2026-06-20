@@ -7,6 +7,7 @@ interface Props {
   label?: string;
   confirmLabel?: string;
   cancelLabel?: string;
+  busyLabel?: string;
   size?: "xs" | "sm" | "default" | "lg";
   className?: string;
   disabled?: boolean;
@@ -19,6 +20,7 @@ export function ConfirmButton({
   label = "Remove",
   confirmLabel = "Confirm",
   cancelLabel = "Cancel",
+  busyLabel = "Working…",
   size = "sm",
   className,
   disabled,
@@ -100,7 +102,7 @@ export function ConfirmButton({
           tabIndex={confirming ? 0 : -1}
           onClick={() => void handleConfirm()}
         >
-          {busy ? "Removing…" : confirmLabel}
+          {busy ? busyLabel : confirmLabel}
         </Button>
         <Button
           type="button"

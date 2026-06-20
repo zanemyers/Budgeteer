@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { jsonFetch } from "@/lib/api";
 
 export interface Membership {
   id: number;
@@ -34,25 +35,6 @@ interface Props {
   onChange: (next: Membership[]) => void;
 }
 
-function getCsrfToken(): string {
-  const match = document.cookie.match(/csrftoken=([^;]+)/);
-  return match ? match[1] : "";
-}
-
-async function apiFetch(url: string, method: string, body?: object) {
-  const res = await fetch(url, {
-    method,
-    headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
-  if (!res.ok && res.status !== 204) {
-    const data = await res.json() as { errors?: Record<string, string[]> };
-    throw data.errors ?? data;
-  }
-  if (res.status === 204) return null;
-  return res.json();
-}
-
 export function MembersPanel({ budgetPk, memberships, roleChoices, onChange }: Props) {
   const [showForm, setShowForm] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -66,11 +48,11 @@ export function MembersPanel({ budgetPk, memberships, roleChoices, onChange }: P
     setSaving(true);
     setFormError("");
     try {
-      const m = await apiFetch(`/budgets/${budgetPk}/members/invite/`, "POST", {
+      const m = await jsonFetch<Membership>(`/budgets/${budgetPk}/members/invite/`, "POST", {
         email: inviteEmail,
         role: inviteRole,
-      }) as Membership;
-      onChange([...memberships, m]);
+      });
+      if (m) onChange([...memberships, m]);
       setInviteEmail("");
       setShowForm(false);
     } catch (err) {
@@ -83,7 +65,7 @@ export function MembersPanel({ budgetPk, memberships, roleChoices, onChange }: P
 
   async function handleRemove(m: Membership) {
     try {
-      await apiFetch(`/budgets/${budgetPk}/members/${m.id}/remove/`, "DELETE");
+      await jsonFetch(`/budgets/${budgetPk}/members/${m.id}/remove/`, "DELETE");
       onChange(memberships.filter((x) => x.id !== m.id));
     } catch (err) {
       const e = err as Record<string, string | string[]>;

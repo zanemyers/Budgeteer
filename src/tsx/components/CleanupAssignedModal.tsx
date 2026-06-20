@@ -31,7 +31,7 @@ export default function CleanupAssignedModal({ budgetPk, month, categories, over
   const assigned = useMemo(
     () =>
       categories
-        .filter((c) => c.category_type === "expense" && !c.is_sinking_fund && Number.parseFloat(c.assigned) > 0)
+        .filter((c) => c.category_type === "expense" && !c.is_goal && Number.parseFloat(c.assigned) > 0)
         .sort((a, b) => Number.parseFloat(b.assigned) - Number.parseFloat(a.assigned)),
     [categories],
   );

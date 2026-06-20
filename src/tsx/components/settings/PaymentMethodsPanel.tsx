@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { PaymentMethodModal } from "./PaymentMethodModal";
+import { getCsrfToken } from "@/lib/api";
 
 export interface PaymentMethod {
   id: number;
@@ -25,11 +26,6 @@ interface Props {
   paymentMethods: PaymentMethod[];
   typeChoices: TypeChoice[];
   onChange: (next: PaymentMethod[]) => void;
-}
-
-function getCsrfToken(): string {
-  const match = document.cookie.match(/csrftoken=([^;]+)/);
-  return match ? match[1] : "";
 }
 
 export function PaymentMethodsPanel({ budgetPk, paymentMethods, typeChoices, onChange }: Props) {

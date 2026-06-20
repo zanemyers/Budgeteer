@@ -3,15 +3,11 @@ import { router } from "@inertiajs/react";
 import AuthLayout from "../layouts/AuthLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { getCsrfToken } from "@/lib/api";
 
 interface Props {
   email: string;
   invalid: boolean;
-}
-
-function getCsrfToken(): string {
-  const match = document.cookie.match(/csrftoken=([^;]+)/);
-  return match ? match[1] : "";
 }
 
 export default function EmailConfirm({ email, invalid }: Props) {

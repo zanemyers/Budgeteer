@@ -1,5 +1,5 @@
 import { Plus, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -15,7 +15,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { getCsrfToken } from "../lib/api";
+import { jsonFetch } from "../lib/api";
+import { fmtDate } from "../utils/date";
+import { fmt, fmtSigned, useCurrencySymbol } from "../utils/currency";
 import type { BankMatchSuggestion, BankTransaction, Category, Transaction } from "../types";
 
 interface NewLine {
@@ -32,25 +34,8 @@ interface Props {
   onClose: () => void;
 }
 
-async function jsonFetch(url: string, method: string, body?: object) {
-  const res = await fetch(url, {
-    method,
-    headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
-  if (!res.ok && res.status !== 204) {
-    const data = await res.json().catch(() => ({}));
-    throw data;
-  }
-  if (res.status === 204) return null;
-  return res.json();
-}
-
-function fmtDate(iso: string): string {
-  return new Date(iso + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
-
 export default function BankTransactionConfirmModal({ bankTxn, budgetPk, categories, onResolved, onClose }: Props) {
+  const symbol = useCurrencySymbol();
   const [suggestions, setSuggestions] = useState<BankMatchSuggestion[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -58,7 +43,7 @@ export default function BankTransactionConfirmModal({ bankTxn, budgetPk, categor
   const [ignoreMode, setIgnoreMode] = useState(false);
   const [ignoreReason, setIgnoreReason] = useState("");
   const [newDescription, setNewDescription] = useState(bankTxn.payee || bankTxn.description);
-  const bankAmount = useMemo(() => Math.abs(Number.parseFloat(bankTxn.amount)), [bankTxn.amount]);
+  const bankAmount = Math.abs(Number.parseFloat(bankTxn.amount));
   const [newLines, setNewLines] = useState<NewLine[]>(() => [
     { category: "", amount: bankAmount.toFixed(2), description: "" },
   ]);
@@ -74,9 +59,9 @@ export default function BankTransactionConfirmModal({ bankTxn, budgetPk, categor
 
   useEffect(() => {
     let cancelled = false;
-    jsonFetch(`/budgets/${budgetPk}/bank-transactions/${bankTxn.id}/suggestions/`, "GET")
+    jsonFetch<{ suggestions: BankMatchSuggestion[] }>(`/budgets/${budgetPk}/bank-transactions/${bankTxn.id}/suggestions/`, "GET")
       .then((data) => {
-        if (!cancelled) setSuggestions(data.suggestions);
+        if (!cancelled && data) setSuggestions(data.suggestions);
       })
       .catch(() => {
         if (!cancelled) setLoadError("Could not load suggestions.");
@@ -90,19 +75,19 @@ export default function BankTransactionConfirmModal({ bankTxn, budgetPk, categor
     setBusy(true);
     try {
       if (s.kind === "merchant_rule" && s.category_id !== null) {
-        const data = await jsonFetch(
+        const data = await jsonFetch<{ bank_transaction: BankTransaction; transaction: Transaction }>(
           `/budgets/${budgetPk}/bank-transactions/${bankTxn.id}/create-transaction/`,
           "POST",
           { category_id: s.category_id, description: bankTxn.payee || bankTxn.description },
         );
-        onResolved({ bankTxn: data.bank_transaction, transaction: data.transaction });
+        if (data) onResolved({ bankTxn: data.bank_transaction, transaction: data.transaction });
         return;
       }
       if (s.transaction_id !== null) {
-        const data = await jsonFetch(`/budgets/${budgetPk}/bank-transactions/${bankTxn.id}/link/`, "POST", {
+        const data = await jsonFetch<{ bank_transaction: BankTransaction; transaction: Transaction }>(`/budgets/${budgetPk}/bank-transactions/${bankTxn.id}/link/`, "POST", {
           transaction_id: s.transaction_id,
         });
-        onResolved({ bankTxn: data.bank_transaction, transaction: data.transaction });
+        if (data) onResolved({ bankTxn: data.bank_transaction, transaction: data.transaction });
         return;
       }
     } finally {
@@ -126,7 +111,7 @@ export default function BankTransactionConfirmModal({ bankTxn, budgetPk, categor
     setBusy(true);
     setCreateError(null);
     try {
-      const data = await jsonFetch(`/budgets/${budgetPk}/bank-transactions/${bankTxn.id}/create-transaction/`, "POST", {
+      const data = await jsonFetch<{ bank_transaction: BankTransaction; transaction: Transaction }>(`/budgets/${budgetPk}/bank-transactions/${bankTxn.id}/create-transaction/`, "POST", {
         description: newDescription,
         lines: newLines.map((l) => ({
           category_id: Number(l.category),
@@ -134,11 +119,11 @@ export default function BankTransactionConfirmModal({ bankTxn, budgetPk, categor
           description: l.description,
         })),
       });
-      onResolved({ bankTxn: data.bank_transaction, transaction: data.transaction });
+      if (data) onResolved({ bankTxn: data.bank_transaction, transaction: data.transaction });
     } catch (err: unknown) {
-      const e = err as { errors?: Record<string, string[]> };
-      const msg = e.errors ? Object.values(e.errors).flat().join(" ") : "Could not create transaction.";
-      setCreateError(msg);
+      const errs = err as Record<string, string[]>;
+      const msg = errs && typeof errs === "object" ? Object.values(errs).flat().join(" ") : "Could not create transaction.";
+      setCreateError(msg || "Could not create transaction.");
     } finally {
       setBusy(false);
     }
@@ -147,10 +132,10 @@ export default function BankTransactionConfirmModal({ bankTxn, budgetPk, categor
   async function ignore() {
     setBusy(true);
     try {
-      const data = await jsonFetch(`/budgets/${budgetPk}/bank-transactions/${bankTxn.id}/ignore/`, "POST", {
+      const data = await jsonFetch<{ bank_transaction: BankTransaction }>(`/budgets/${budgetPk}/bank-transactions/${bankTxn.id}/ignore/`, "POST", {
         reason: ignoreReason.trim(),
       });
-      onResolved({ bankTxn: data.bank_transaction });
+      if (data) onResolved({ bankTxn: data.bank_transaction });
     } finally {
       setBusy(false);
     }
@@ -184,7 +169,7 @@ export default function BankTransactionConfirmModal({ bankTxn, budgetPk, categor
               )}
             </div>
             <div className={`text-xl font-semibold tabular-nums ${negative ? "text-expense" : "text-income"}`}>
-              {negative ? "−" : "+"}${Math.abs(amount).toFixed(2)}
+              {fmtSigned(amount, symbol)}
             </div>
           </div>
         </div>
@@ -258,10 +243,10 @@ export default function BankTransactionConfirmModal({ bankTxn, budgetPk, categor
               <div className="flex items-baseline justify-between">
                 <Label>Split across categories</Label>
                 <span className="text-xs text-ink-quiet tabular-nums">
-                  Total ${linesTotal.toFixed(2)} / ${bankAmount.toFixed(2)}
+                  Total {fmt(linesTotal, symbol)} / {fmt(bankAmount, symbol)}
                   {!totalMatches && (
                     <span className="ml-2 text-destructive">
-                      ({linesTotalDelta > 0 ? "over" : "remaining"}: ${Math.abs(linesTotalDelta).toFixed(2)})
+                      ({linesTotalDelta > 0 ? "over" : "remaining"}: {fmt(Math.abs(linesTotalDelta), symbol)})
                     </span>
                   )}
                 </span>
@@ -275,22 +260,22 @@ export default function BankTransactionConfirmModal({ bankTxn, budgetPk, categor
                       <SelectContent>
                         <SelectGroup>
                           <SelectLabel>Expense</SelectLabel>
-                          {categories.filter((c) => c.category_type === "expense" && !c.is_sinking_fund).map((c) => (
+                          {categories.filter((c) => c.category_type === "expense" && !c.is_goal).map((c) => (
                             <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
                           ))}
                         </SelectGroup>
                         <SelectGroup>
                           <SelectLabel>Income</SelectLabel>
-                          {categories.filter((c) => c.category_type === "income" && !c.is_sinking_fund).map((c) => (
+                          {categories.filter((c) => c.category_type === "income" && !c.is_goal).map((c) => (
                             <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
                           ))}
                         </SelectGroup>
-                        {categories.some((c) => c.is_sinking_fund) && (
+                        {categories.some((c) => c.is_goal) && (
                           <>
                             <SelectSeparator />
                             <SelectGroup>
-                              <SelectLabel>Goals (sinking funds)</SelectLabel>
-                              {categories.filter((c) => c.is_sinking_fund).map((c) => (
+                              <SelectLabel>Goals</SelectLabel>
+                              {categories.filter((c) => c.is_goal).map((c) => (
                                 <SelectItem key={c.id} value={String(c.id)}>◎ {c.name}</SelectItem>
                               ))}
                             </SelectGroup>

@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { PaymentMethod } from "./PaymentMethodsPanel";
+import { getCsrfToken } from "@/lib/api";
 
 interface TypeChoice {
   value: string;
@@ -31,11 +32,6 @@ interface Props {
   paymentMethod?: PaymentMethod | null;
   onClose: () => void;
   onSaved: (pm: PaymentMethod) => void;
-}
-
-function getCsrfToken(): string {
-  const match = document.cookie.match(/csrftoken=([^;]+)/);
-  return match ? match[1] : "";
 }
 
 export function PaymentMethodModal({ budgetPk, typeChoices, paymentMethod, onClose, onSaved }: Props) {

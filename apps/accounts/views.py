@@ -4,7 +4,9 @@ from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import JsonResponse
 from django.shortcuts import redirect
+from django.utils.decorators import method_decorator
 from django.views import View
+from django.views.decorators.csrf import ensure_csrf_cookie
 
 from allauth.account.models import EmailAddress
 from allauth.account.views import (
@@ -28,7 +30,12 @@ from apps.banking.simplefin import SimpleFINError, claim_setup_token
 
 
 class InertiaAllauthMixin:
-    """Intercept allauth's render_to_response to return Inertia or JSON."""
+    """Intercept allauth's render_to_response to return Inertia or JSON.
+
+    Each concrete subclass is wrapped with @ensure_csrf_cookie so every GET to
+    an auth page seeds the csrftoken cookie — the SPA reads it via JS to set
+    X-CSRFToken on its POST, and Django only sets the cookie on demand.
+    """
 
     inertia_component: str
 
@@ -54,6 +61,7 @@ class InertiaAllauthMixin:
 # ---------------------------------------------------------------------------
 
 
+@method_decorator(ensure_csrf_cookie, name="dispatch")
 class SignInView(InertiaAllauthMixin, LoginView):
     form_class = SignInForm
     inertia_component = "Login"
@@ -62,6 +70,7 @@ class SignInView(InertiaAllauthMixin, LoginView):
         return {"next": self.request.GET.get("next") or self.request.POST.get("next") or ""}  # type: ignore[attr-defined]
 
 
+@method_decorator(ensure_csrf_cookie, name="dispatch")
 class PasswordResetView(InertiaAllauthMixin, AllAuthPasswordResetView):
     inertia_component = "PasswordReset"
 
@@ -69,6 +78,7 @@ class PasswordResetView(InertiaAllauthMixin, AllAuthPasswordResetView):
         return {"done": False}
 
 
+@method_decorator(ensure_csrf_cookie, name="dispatch")
 class PasswordResetDoneView(InertiaAllauthMixin, AllAuthPasswordResetDoneView):
     inertia_component = "PasswordReset"
 
@@ -76,6 +86,7 @@ class PasswordResetDoneView(InertiaAllauthMixin, AllAuthPasswordResetDoneView):
         return inertia_render(self.request, "PasswordReset", {"done": True, "errors": {}})  # type: ignore[attr-defined]
 
 
+@method_decorator(ensure_csrf_cookie, name="dispatch")
 class PasswordResetFromKeyView(InertiaAllauthMixin, AllAuthPasswordResetFromKeyView):
     inertia_component = "PasswordResetConfirm"
 
@@ -83,6 +94,7 @@ class PasswordResetFromKeyView(InertiaAllauthMixin, AllAuthPasswordResetFromKeyV
         return {"token_fail": context.get("token_fail", False), "done": False}
 
 
+@method_decorator(ensure_csrf_cookie, name="dispatch")
 class PasswordResetFromKeyDoneView(InertiaAllauthMixin, AllAuthPasswordResetFromKeyDoneView):
     inertia_component = "PasswordResetConfirm"
 
@@ -90,6 +102,7 @@ class PasswordResetFromKeyDoneView(InertiaAllauthMixin, AllAuthPasswordResetFrom
         return inertia_render(self.request, "PasswordResetConfirm", {"done": True, "token_fail": False, "errors": {}})  # type: ignore[attr-defined]
 
 
+@method_decorator(ensure_csrf_cookie, name="dispatch")
 class ConfirmEmailView(InertiaAllauthMixin, AllAuthConfirmEmailView):
     inertia_component = "EmailConfirm"
 

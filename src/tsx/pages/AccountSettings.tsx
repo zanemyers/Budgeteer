@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { getCsrfToken } from "@/lib/api";
 
 interface EmailAddress {
   id: number;
@@ -46,11 +47,6 @@ interface Props {
   currency: string;
   currencies: CurrencyOption[];
   simplefin_connections: SimpleFINConnection[];
-}
-
-function getCsrfToken(): string {
-  const match = document.cookie.match(/csrftoken=([^;]+)/);
-  return match ? match[1] : "";
 }
 
 const COMMON_TIMEZONES = [
