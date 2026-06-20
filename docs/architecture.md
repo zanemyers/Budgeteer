@@ -130,4 +130,4 @@ Settings are split across `config/settings/`:
 - `production.py` — production overrides
 - `test_runner.py` — test overrides
 
-Environment variables are declared in `pyproject.toml` under `[tool.epicenv.variables]` and loaded from `.env` via epicenv.
+Environment variables are declared in `.env.toml` at the repo root (each var is a `[variables.NAME]` TOML table) and loaded from `.env` via epicenv. Regenerate `.env` with `just create_env`.

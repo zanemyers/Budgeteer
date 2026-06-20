@@ -125,7 +125,7 @@ Dark mode is class-based: an inline script in `apps/base/templates/layouts/base.
 
 ### Configuration
 
-Settings are split in `config/settings/` (base, local, production, test_runner). Environment variables are defined in `pyproject.toml` under `[tool.epicenv.variables]` and loaded from `.env` via epicenv. Generate a fresh `.env` with `just create_env`.
+Settings are split in `config/settings/` (base, local, production, test_runner). Environment variables are declared in `.env.toml` at the repo root (epicenv schema; each var is a `[variables.NAME]` block) and loaded from `.env` via epicenv. Generate a fresh `.env` with `just create_env`.
 
 ## Testing
 

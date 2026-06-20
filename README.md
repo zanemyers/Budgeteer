@@ -16,7 +16,7 @@ A personal budgeting app built with Django, Inertia.js, and React. Track transac
 ## Getting Started
 
 ```bash
-# 1. Generate the .env file from the schema in pyproject.toml
+# 1. Generate the .env file from .env.toml
 just create_env
 
 # 2. Start the stack (the web container auto-runs migrations on boot)
