@@ -1,5 +1,25 @@
 # CHANGELOG
 
+## 2026-07-23
+
+### Added
+
+* **Transfers** — first-class account-to-account movements. A new `transfer_partner` 1:1 self-FK on `Transaction` links two legs; both are excluded from headline income/expense totals. A hidden per-budget "Transfers" category (`Category.is_system=True`, `Category.get_or_create_transfers()`) holds the placeholder line. New `BankTransactionConfirmAsTransferView` lets you confirm a bank row against another pending bank row or an existing transaction, creating and linking the pair. Transactions page adds a **Transfers** tab; frontend uses a computed `is_transfer` serializer flag that folds in three signals (`transaction_type == "transfer"`, `transfer_partner` set, or any line in a system category) so orphan/legacy transfers no longer leak into the Logged tab.
+* `jsonFetch` now surfaces expired-session redirects (`/accounts/login/`) as a structured `{ error, status: 401 }` throw instead of a confusing `SyntaxError`.
+
+### Fixed
+
+* `AssignModal` batch-assign now uses `jsonFetch` (throws on non-2xx) instead of raw `Promise.all(fetch(...))`, which silently accepted 4xx/5xx as success and left partial assignments unsaved.
+* Every mutation in `Transactions.tsx` (`saveDesc`, `saveDate`, `savePM`, `markPaid`, `deleteTxn`, `restoreBankTxn`, `ignoreBankTxn`, `ignoreLinkedBankTxn`, `saveIgnoreReason`) is now wrapped in `try/catch` with a `sonner` toast on failure. Previously errors were silently swallowed.
+* Confirming a bank row as a transfer against another pending bank row now removes **both** rows from the Pending list immediately (was leaving the partner behind until page refresh).
+
+### Changed
+
+* Retired the leftover MkDocs stack (`config/mkdocs.yml`, `lint_docs` recipe, four direct + ~20 transitive deps). Zensical is now the sole docs generator.
+* Deleted four empty scaffold apps (`apps/billing/`, `apps/notifications/`, `apps/organizations/`, `apps/teams/`) — never in `INSTALLED_APPS`, never imported.
+* CLAUDE.md, README.md, and the docs site now correctly reflect the current apps list (`accounts, base, budget, banking, investments`), settings modules (`_base.py`, `test_runner.py`), and toolchain (Biome for JS/TS/CSS, not ESLint/Stylelint).
+
+
 ## 2026-06-20
 
 ### Changed

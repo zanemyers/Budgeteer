@@ -1,9 +1,5 @@
 # Product
 
-## Register
-
-product
-
 ## Users
 
 Solo self-hoster (one user, the owner). Personal use only, not multi-tenant SaaS. Primary context: desktop in the evening for budget review and category adjustments. Secondary context: phone in bed for opportunistic transaction logging when the thought hits. Occasional: Sunday morning at the kitchen table for the weekly pass. Both light and dark themes are first-class because the contexts of use span both.

@@ -134,8 +134,8 @@ Shadcn/ui is the substrate. Components inherit the new tokens automatically thro
 
 ### Custom patterns
 
-- **`<EditableCell>`** (to be extracted): wraps inline-edit affordance as a real `<button>`. Replaces all `<span onClick>` editor patterns in tables.
-- **Sidebar:** `--moss` background in both themes, white text, active item gets a `--paper` strip on the left edge or a `--moss-soft`-on-`--moss` lift. No hard-coded `#15803d` or `#141414`.
+- **Inline-edit cells:** wrap the affordance in a real `<button>` (keyboard-reachable). Never `<span onClick>`. Focus ring uses `--ring` (mapped to `--moss`).
+- **Sidebar:** `--moss` background in both themes, white text, active item gets a `--paper` strip on the left edge or a `--moss-soft`-on-`--moss` lift. All colors come from tokens — no hex literals.
 - **Status pills** (Active, Inactive, Paid, etc.): replaced wherever possible by typographic micro-labels in `--ink-quiet`. Reserve Badge component for genuinely state-bearing labels (Recurring, Transfer).
 
 ## Numeric & data conventions

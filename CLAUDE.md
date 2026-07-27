@@ -17,7 +17,7 @@ All commands run inside Docker containers by default. Override with `PYTHON_CMD_
 - `just clean` - Remove build artifacts, caches, coverage data
 
 **Code Quality:**
-- `just format` - Format all code (Python with Ruff, JS/TS with ESLint, CSS with Stylelint, HTML with djLint)
+- `just format` - Format all code (Python with Ruff, JS/TS/CSS with Biome, HTML with djLint)
 - `just lint` - Lint everything (includes type checking with ty)
 - `just pre_commit` - Run format, lint, and test pipeline
 
@@ -118,14 +118,16 @@ Dark mode is class-based: an inline script in `apps/base/templates/layouts/base.
 ### Apps Structure
 
 - **`apps/accounts/`** — custom user model, Allauth adapter, auth views, account settings
-- **`apps/base/`** — `InertiaShareMiddleware`, Vite template tags, base views, storage backend
+- **`apps/base/`** — `InertiaShareMiddleware`, Vite template tags, base views, storage backend, `EncryptedTextField`
 - **`apps/budget/`** — all budget domain logic: models, views, data serializers, migrations
+- **`apps/banking/`** — SimpleFIN integration: `SimpleFINConnection` + `BankAccount` + `BankTransaction` models, `simplefin.py` client, `sync_simplefin` management command (scheduled), Celery `tasks.py` wrapper. Access URLs stored encrypted via `EncryptedTextField`.
+- **`apps/investments/`** — `Holding` model + `ingest.py` for investment positions pulled from SimpleFIN-capable accounts.
 
 `apps/budget/data.py` contains all serializer functions (`serialize_transaction`, `serialize_payment_method`, etc.) used by views to build Inertia props.
 
 ### Configuration
 
-Settings are split in `config/settings/` (base, local, production, test_runner). Environment variables are declared in `.env.toml` at the repo root (epicenv schema; each var is a `[variables.NAME]` block) and loaded from `.env` via epicenv. Generate a fresh `.env` with `just create_env`.
+Settings live in `config/settings/`: `_base.py` (all shared config, environment-driven) and `test_runner.py` (test-only overrides). Environment variables are declared in `.env.toml` at the repo root (epicenv schema; each var is a `[variables.NAME]` block) and loaded from `.env` via epicenv. Generate a fresh `.env` with `just create_env`.
 
 ## Testing
 

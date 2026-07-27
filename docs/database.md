@@ -1,18 +1,34 @@
-# Database Schema
+# Database
 
-Entity-relationship diagram of the Budgeteer database. Source lives in [`database.mmd`](database.mmd); regenerate the rendered images with:
+Full ER diagram for the Budgeteer schema. For per-model descriptions and invariants, see [Models](models.md).
 
-```sh
-bunx @mermaid-js/mermaid-cli -i docs/database.mmd -o docs/database.svg
-bunx @mermaid-js/mermaid-cli -i docs/database.mmd -o docs/database.png -w 2400 -H 1800 -b transparent
+The source of truth is [`database.mmd`](database.mmd) — a Mermaid `erDiagram`. Static renderings (`database.svg`, `database.png`) live alongside it and should be regenerated after schema changes via:
+
+```bash
+npx -y @mermaid-js/mermaid-cli -i docs/database.mmd -o docs/database.svg
+npx -y @mermaid-js/mermaid-cli -i docs/database.mmd -o docs/database.png
 ```
 
-![Budgeteer database schema](./database.svg)
+## Diagram
 
-## Domain groupings
+```mermaid
+--8<-- "docs/database.mmd"
+```
 
-- **Identity & ownership** — `User` owns `Budget`s through `BudgetMembership` (which carries `role`). The user also pins a `default_budget` and `last_viewed_budget`.
-- **Budget contents** — A `Budget` contains `Category` (self-FK, 2 levels), `PaymentMethod`, and per-month `CategoryBudget` rows that hold assigned amounts.
-- **Transactions** — `Transaction` belongs to a budget and is split into one or more `TransactionLine` rows by category. It optionally references a `RecurringTransaction` template; instances are auto-generated from the template into concrete `Transaction`s.
-- **Banking integration** — `SimpleFINConnection` → many `BankAccount` → many `BankTransaction`. A `BankAccount` optionally maps to a `PaymentMethod` (the bridge into a budget). A `BankTransaction` optionally links to a `Transaction` once confirmed.
-- **Currency** — `Currency` is a code table joined by string code from `Transaction.currency`, `BankAccount.currency`, and `User.currency`.
+If the diagram doesn't render in your viewer, open [`database.svg`](database.svg) directly.
+
+## Table map
+
+| Table | App | Notes |
+| --- | --- | --- |
+| `User` | accounts | Custom `AbstractUser`; login by email |
+| `Budget`, `BudgetMembership` | budget | Multi-member budget container |
+| `Category` | budget | Income/expense; `is_system=True` for hidden system categories (Transfers) |
+| `Goal` | budget | 1:1 with Category; savings target with optional due-date or ongoing monthly |
+| `CategoryBudget` | budget | Per-month assigned amount for a category |
+| `PaymentMethod` | budget | Per-budget cards/accounts; maps into a `BankAccount` when SimpleFIN-linked |
+| `RecurringTransaction` | budget | Schedule template; generates `Transaction` instances via cron |
+| `Transaction`, `TransactionLine` | budget | The ledger. `transfer_partner_id` links two legs of a movement between accounts. |
+| `Currency` | base | ISO-4217 lookup; `rate_to_usd` refreshed daily |
+| `SimpleFINConnection`, `BankAccount`, `BankTransaction` | banking | SimpleFIN sync. `access_url` stored encrypted. |
+| `Holding` | investments | Investment positions inside SimpleFIN-capable `BankAccount`s |

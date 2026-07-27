@@ -47,12 +47,18 @@ Run a single test:
 docker compose exec web pytest --ds=config.settings.test_runner path/to/test.py::TestClass::test_method
 ```
 
+Budgeteer is a personal, self-hosted app — one owner managing their own money — not a multi-tenant SaaS.
+
 ## Features
 
 - **Budgets** — create multiple budgets, invite members, assign owner/member roles
-- **Transactions** — log income and expense transactions with line-item categorization
+- **Transactions** — log income, expense, and transfer transactions with line-item categorization
 - **Categories** — define income/expense categories with monthly spend targets
+- **Goals** — save toward one-time or ongoing targets, with monthly-needed math and progress tracking
 - **Recurring transactions** — schedule monthly, every-N-months, or annual transactions that auto-generate instances
+- **SimpleFIN bank sync** — pull posted bank transactions from linked accounts, reconcile them against your ledger with suggested matches
+- **Investments** — track holdings pulled from SimpleFIN-capable accounts (shares, cost basis, market value)
+- **Multi-currency** — per-transaction currency with USD conversion at transaction time; per-user display currency
 - **Payment methods** — track cards and accounts per budget
 - **Budget history** — browse past months across all budgets
 - **Account settings** — name, password, and email management (add, verify, set primary)

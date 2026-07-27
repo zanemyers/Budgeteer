@@ -100,11 +100,16 @@ src/
       AppLayout.tsx         # Persistent sidebar, user dropdown, SPA logout
       AuthLayout.tsx        # Centered card for auth pages
     pages/                  # One file per Inertia page (name = component name)
-    components/
-      ThemeToggle.tsx       # Light/dark/auto cycle with spin animation
-      TransactionModal.tsx  # Shared create/edit transaction modal
-      LoadingSpinner.tsx
+    components/             # Shared: ThemeToggle, TransactionModal, LoadingSpinner, BankTransactionConfirmModal…
+      ui/                   # shadcn primitives (Button, Dialog, Table, Select, Badge…)
+    lib/
+      api.ts                # jsonFetch (throws on non-2xx), getCsrfToken
+      utils.ts              # cn(), etc.
+    utils/                  # currency, date, month formatters
+    types.ts                # Shared TS types matching apps/*/data.py serializers
 ```
+
+Mutations from non-page components (modals, inline edits) go through `jsonFetch` in `lib/api.ts` — never raw `fetch`. Errors surface as `sonner` toasts.
 
 Frontend tool configs (`vite.config.mjs`, `tsconfig.json`, `biome.json`) live at the repo root. Biome handles linting and formatting for JS/TS *and* CSS — its CSS parser has `tailwindDirectives: true` so Tailwind v4 at-rules (`@import "tailwindcss"`, `@custom-variant`, `@theme`, `@apply`, etc.) parse cleanly.
 
@@ -119,15 +124,15 @@ Frontend tool configs (`vite.config.mjs`, `tsconfig.json`, `biome.json`) live at
 | App | Responsibility |
 |-----|---------------|
 | `apps/accounts/` | Custom `User` model, Allauth adapter, auth views, account settings view |
-| `apps/base/` | `InertiaShareMiddleware`, Vite template tags (`{% vite_asset %}`), storage backend |
+| `apps/base/` | `InertiaShareMiddleware`, Vite template tags (`{% vite_asset %}`), storage backend, `EncryptedTextField`, shared `Currency` model |
 | `apps/budget/` | All budget domain: models, views, serializers (`data.py`), migrations |
+| `apps/banking/` | SimpleFIN integration: connection/account/transaction models, `simplefin.py` client, `sync_simplefin` command, Celery task wrapper |
+| `apps/investments/` | `Holding` model + `ingest.py` for investment positions pulled from SimpleFIN-capable accounts |
 
 ## Configuration
 
-Settings are split across `config/settings/`:
-- `_base.py` — shared settings
-- `local.py` — development overrides
-- `production.py` — production overrides
-- `test_runner.py` — test overrides
+Settings live in `config/settings/`:
+- `_base.py` — all shared config, environment-driven
+- `test_runner.py` — test-only overrides
 
 Environment variables are declared in `.env.toml` at the repo root (each var is a `[variables.NAME]` TOML table) and loaded from `.env` via epicenv. Regenerate `.env` with `just create_env`.

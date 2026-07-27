@@ -27,6 +27,7 @@ erDiagram
     Transaction ||--o{ TransactionLine : "lines"
     Transaction }o--|| PaymentMethod : ""
     Transaction ||--o| BankTransaction : "1:1 optional"
+    Transaction ||--o| Transaction : "transfer partner (1:1 self)"
 
     PaymentMethod ||--o{ BankAccount : "SimpleFIN mapping"
 
@@ -72,6 +73,7 @@ erDiagram
         string name
         string category_type "income or expense"
         decimal monthly_budget
+        bool is_system "hidden system category (e.g. Transfers)"
         bigint created_by_id FK
     }
 
@@ -121,6 +123,7 @@ erDiagram
         bigint budget_id FK
         bigint recurring_id FK "null when ad-hoc"
         bigint payment_method_id FK
+        bigint transfer_partner_id FK "self, 1:1, opposite leg of a transfer"
         bigint created_by_id FK
         string description
         date due_date
