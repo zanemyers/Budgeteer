@@ -1,13 +1,15 @@
-import json
+from io import BytesIO
+from zoneinfo import available_timezones
 
 from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.files.base import ContentFile
 from django.http import JsonResponse
-from django.shortcuts import redirect
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import ensure_csrf_cookie
 
+from allauth.account.forms import ChangePasswordForm
 from allauth.account.models import EmailAddress
 from allauth.core import ratelimit
 from allauth.account.views import (
@@ -19,10 +21,12 @@ from allauth.account.views import (
     PasswordResetView as AllAuthPasswordResetView,
 )
 from inertia import render as inertia_render
+from PIL import Image, ImageOps
 
-from apps.accounts.forms import SignInForm
 from apps.banking.models import SimpleFINConnection
 from apps.banking.simplefin import SimpleFINError, claim_setup_token
+from apps.base.http import parse_json_body
+from apps.base.models import Currency
 
 
 # ---------------------------------------------------------------------------
@@ -43,7 +47,7 @@ class InertiaAllauthMixin:
     def get_inertia_props(self, context: dict) -> dict:
         return {}
 
-    def render_to_response(self, context, **kwargs):
+    def render_to_response(self, context: dict) -> JsonResponse:
         form = context.get("form")
         errors: dict = {}
         if form and hasattr(form, "errors"):
@@ -51,9 +55,12 @@ class InertiaAllauthMixin:
 
         props = {"errors": errors, **self.get_inertia_props(context)}
 
-        if self.request.headers.get("X-Requested-With") == "XMLHttpRequest":  # type: ignore[attr-defined]
+        # Only explicit form-submit fetches (our Login/Signup/PasswordReset flows) get the JSON
+        # error shape — Inertia SPA navigations also set X-Requested-With, but they must receive
+        # an Inertia response or the client throws "expected valid Inertia response, got plain JSON".
+        headers = self.request.headers  # type: ignore[attr-defined]
+        if headers.get("X-Requested-With") == "XMLHttpRequest" and not headers.get("X-Inertia"):
             return JsonResponse(props, status=422 if errors else 200)
-
         return inertia_render(self.request, self.inertia_component, props)  # type: ignore[attr-defined]
 
 
@@ -64,7 +71,6 @@ class InertiaAllauthMixin:
 
 @method_decorator(ensure_csrf_cookie, name="dispatch")
 class SignInView(InertiaAllauthMixin, LoginView):
-    form_class = SignInForm
     inertia_component = "Login"
 
     def get_inertia_props(self, context: dict) -> dict:
@@ -83,8 +89,8 @@ class PasswordResetView(InertiaAllauthMixin, AllAuthPasswordResetView):
 class PasswordResetDoneView(InertiaAllauthMixin, AllAuthPasswordResetDoneView):
     inertia_component = "PasswordReset"
 
-    def render_to_response(self, context, **kwargs):
-        return inertia_render(self.request, "PasswordReset", {"done": True, "errors": {}})  # type: ignore[attr-defined]
+    def get_inertia_props(self, context: dict) -> dict:
+        return {"done": True}
 
 
 @method_decorator(ensure_csrf_cookie, name="dispatch")
@@ -99,8 +105,8 @@ class PasswordResetFromKeyView(InertiaAllauthMixin, AllAuthPasswordResetFromKeyV
 class PasswordResetFromKeyDoneView(InertiaAllauthMixin, AllAuthPasswordResetFromKeyDoneView):
     inertia_component = "PasswordResetConfirm"
 
-    def render_to_response(self, context, **kwargs):
-        return inertia_render(self.request, "PasswordResetConfirm", {"done": True, "token_fail": False, "errors": {}})  # type: ignore[attr-defined]
+    def get_inertia_props(self, context: dict) -> dict:
+        return {"done": True, "token_fail": False}
 
 
 @method_decorator(ensure_csrf_cookie, name="dispatch")
@@ -113,7 +119,7 @@ class ConfirmEmailView(InertiaAllauthMixin, AllAuthConfirmEmailView):
     def get_inertia_props(self, context: dict) -> dict:
         confirmation = context.get("confirmation")
         return {
-            "email": confirmation.email_address.email if confirmation else "",
+            "email": getattr(getattr(confirmation, "email_address", None), "email", ""),
             "invalid": confirmation is None,
         }
 
@@ -123,203 +129,151 @@ class ConfirmEmailView(InertiaAllauthMixin, AllAuthConfirmEmailView):
 # ---------------------------------------------------------------------------
 
 
-def _serialize_simplefin_connection(c: SimpleFINConnection) -> dict:
+def _serialize_simplefin_connection(conn: SimpleFINConnection) -> dict:
     return {
-        "id": c.pk,
-        "label": c.label,
-        "last_synced_at": c.last_synced_at.isoformat() if c.last_synced_at else None,
-        "last_sync_status": c.sync_status,
-        "last_sync_error": c.last_sync_error,
-        "created_at": c.created_at.isoformat(),
+        "id": conn.pk,
+        "label": conn.label,
+        "last_synced_at": conn.last_synced_at.isoformat() if conn.last_synced_at else None,
+        "last_sync_status": conn.sync_status,
+        "created_at": conn.created_at.isoformat(),
     }
 
 
 class AccountSettingsView(LoginRequiredMixin, View):
     def get(self, request):
         user = request.user
-        email_addresses = list(
-            EmailAddress.objects.filter(user=user).values("id", "email", "primary", "verified")
-        )
-        from apps.base.models import Currency
-        currencies = list(Currency.objects.values("code", "name", "symbol").order_by("code"))
-        connections = [
-            _serialize_simplefin_connection(c)
-            for c in SimpleFINConnection.objects.filter(user=user)
-        ]
+
         return inertia_render(request, "AccountSettings", {
             "first_name": user.first_name,
             "last_name": user.last_name,
-            "email": user.email,
-            "email_addresses": email_addresses,
+            "email_addresses": list(EmailAddress.objects.filter(user=user).values()),
             "timezone": user.timezone,
             "avatar_url": user.avatar_url,
             "currency": user.currency,
-            "currencies": currencies,
-            "simplefin_connections": connections,
+            "currencies": list(Currency.objects.values().order_by("code")),
+            "simplefin_connections": [
+                _serialize_simplefin_connection(c)
+                for c in SimpleFINConnection.objects.filter(user=user)
+            ],
         })
 
     def patch(self, request):
-        try:
-            data = json.loads(request.body)
-        except (json.JSONDecodeError, AttributeError):
-            return JsonResponse({"error": "Invalid JSON."}, status=400)
+        data = parse_json_body(request)
         action = data.get("action", "name")
         user = request.user
 
         if action == "resend_verification":
             email_str = data.get("email", "")
-            try:
-                ea = EmailAddress.objects.get(user=user, email=email_str)
-            except EmailAddress.DoesNotExist:
-                return JsonResponse({"error": "Email not found."}, status=404)
-            # allauth's confirm_email rate limit (default 1/180s/key) keyed by
-            # the email address — keeps us from spamming an inbox even though
-            # we're bypassing allauth's own confirm-email view.
+            # Rate-limit first (allauth's confirm_email limit, 1/180s per email) — we bypass
+            # allauth's own confirm-email view, so its rate-limit doesn't apply automatically.
             if not ratelimit.consume(request, action="confirm_email", key=email_str.lower()):
-                return JsonResponse(
-                    {"error": "Please wait a moment before requesting another verification email."},
-                    status=429,
-                )
+                return JsonResponse({"error": "Please wait a moment before requesting another verification email."}, status=429)
+            ea = EmailAddress.objects.filter(user=user, email=email_str).first()
+            if not ea:
+                return JsonResponse({"error": "Email not found."}, status=404)
             ea.send_confirmation(request)
             return JsonResponse({"ok": True})
 
         if action == "make_primary":
-            email_str = data.get("email", "")
-            try:
-                ea = EmailAddress.objects.get(user=user, email=email_str)
-            except EmailAddress.DoesNotExist:
+            ea = EmailAddress.objects.filter(user=user, email=data.get("email", "")).first()
+            if not ea:
                 return JsonResponse({"error": "Email not found."}, status=404)
-            EmailAddress.objects.filter(user=user).update(primary=False)
-            ea.primary = True
-            ea.save(update_fields=["primary"])
-            user.email = ea.email
-            user.save(update_fields=["email"])
-            addresses = list(EmailAddress.objects.filter(user=user).values("id", "email", "primary", "verified"))
-            return JsonResponse({"email_addresses": addresses})
+            ea.set_as_primary()
+            return JsonResponse({"email_addresses": list(EmailAddress.objects.filter(user=user).values())})
 
         if action == "remove_simplefin_connection":
-            try:
-                conn = SimpleFINConnection.objects.get(user=user, pk=data.get("id"))
-            except SimpleFINConnection.DoesNotExist:
+            deleted, _ = SimpleFINConnection.objects.filter(user=user, pk=data.get("id")).delete()
+            if not deleted:
                 return JsonResponse({"error": "Connection not found."}, status=404)
-            conn.delete()
             return JsonResponse({"ok": True})
 
         if action == "remove_email":
-            email_str = data.get("email", "")
-            try:
-                ea = EmailAddress.objects.get(user=user, email=email_str, primary=False)
-            except EmailAddress.DoesNotExist:
+            deleted, _ = EmailAddress.objects.filter(user=user, email=data.get("email", ""), primary=False).delete()
+            if not deleted:
                 return JsonResponse({"error": "Cannot remove this email."}, status=400)
-            ea.delete()
             return JsonResponse({"ok": True})
 
         if action == "update_timezone":
             tz = data.get("timezone", "").strip()
-            if not tz:
-                return JsonResponse({"error": "Timezone is required."}, status=400)
+            if tz not in available_timezones():
+                return JsonResponse({"error": "Invalid timezone."}, status=400)
             user.timezone = tz
             user.save(update_fields=["timezone"])
-            return JsonResponse({"timezone": user.timezone})
+            return JsonResponse({"timezone": tz})
 
         if action == "update_currency":
-            from apps.base.models import Currency
             code = data.get("currency", "").strip().upper()
-            if not Currency.objects.filter(code=code).exists():
+            currency = Currency.objects.filter(code=code).first()
+            if not currency:
                 return JsonResponse({"error": "Invalid currency code."}, status=400)
             user.currency = code
             user.save(update_fields=["currency"])
-            currency = Currency.objects.get(code=code)
             return JsonResponse({"currency": code, "currency_symbol": currency.symbol})
 
-        # Default: update name
-        user.first_name = data.get("first_name", user.first_name).strip()
-        user.last_name = data.get("last_name", user.last_name).strip()
-        user.save(update_fields=["first_name", "last_name"])
-        return JsonResponse({"first_name": user.first_name, "last_name": user.last_name})
+        if action == "update_name":
+            user.first_name = (data.get("first_name") or user.first_name).strip()
+            user.last_name = (data.get("last_name") or user.last_name).strip()
+            user.save(update_fields=["first_name", "last_name"])
+            return JsonResponse({"first_name": user.first_name, "last_name": user.last_name})
+
+        return JsonResponse({"error": "Unknown action."}, status=400)
 
     def post(self, request):
-        try:
-            data = json.loads(request.body)
-        except (json.JSONDecodeError, AttributeError):
-            return JsonResponse({"error": "Invalid JSON."}, status=400)
+        data = parse_json_body(request)
         action = data.get("action")
+        user = request.user
 
         if action == "add_email":
-            user = request.user
-            email_str = data.get("email", "").strip().lower()
+            email_str = (data.get("email") or "").strip().lower()
             if not email_str:
                 return JsonResponse({"error": "Email is required."}, status=400)
             if EmailAddress.objects.filter(email=email_str).exists():
                 return JsonResponse({"error": "This email is already in use."}, status=400)
-            ea = EmailAddress.objects.create(user=user, email=email_str, verified=False, primary=False)
-            ea.send_confirmation(request)
-            return JsonResponse({"id": ea.pk, "email": ea.email, "primary": False, "verified": False}, status=201)
+            ea = EmailAddress.objects.add_email(request, user, email_str, confirm=True)
+            return JsonResponse({"id": ea.pk, "email": ea.email, "primary": ea.primary, "verified": ea.verified}, status=201)
 
         if action == "claim_simplefin_token":
-            user = request.user
-            setup_token = data.get("setup_token", "")
-            label = data.get("label", "").strip()[:100]
             try:
-                access_url = claim_setup_token(setup_token)
+                access_url = claim_setup_token(data.get("setup_token", ""))
             except SimpleFINError as e:
                 return JsonResponse({"error": str(e)}, status=400)
             conn = SimpleFINConnection.objects.create(
                 user=user,
-                label=label,
+                label=(data.get("label") or "").strip()[:100],
                 access_url=access_url,
             )
             return JsonResponse(_serialize_simplefin_connection(conn), status=201)
 
         if action == "change_password":
-            user = request.user
-            old = data.get("old_password", "")
-            new = data.get("new_password", "")
-            confirm = data.get("confirm_password", "")
-            if not user.check_password(old):
-                return JsonResponse({"error": "Current password is incorrect."}, status=400)
-            if len(new) < 8:
-                return JsonResponse({"error": "New password must be at least 8 characters."}, status=400)
-            if new != confirm:
-                return JsonResponse({"error": "Passwords do not match."}, status=400)
-            user.set_password(new)
-            user.save()
+            form = ChangePasswordForm(user=user, data={
+                "oldpassword": data.get("old_password", ""),
+                "password1": data.get("new_password", ""),
+                "password2": data.get("confirm_password", ""),
+            })
+            if not form.is_valid():
+                return JsonResponse({"error": next(iter(form.errors.values()))[0]}, status=400)
+            form.save()
             update_session_auth_hash(request, user)
             return JsonResponse({"ok": True})
+
         return JsonResponse({"error": "Unknown action."}, status=400)
 
 
 class AvatarUploadView(LoginRequiredMixin, View):
     def post(self, request):
-        from io import BytesIO
-
-        from PIL import Image
-
         file = request.FILES.get("avatar")
         if not file:
             return JsonResponse({"error": "No file provided."}, status=400)
         if file.size > 5 * 1024 * 1024:
             return JsonResponse({"error": "File must be under 5 MB."}, status=400)
         try:
-            img = Image.open(file)
-            img.verify()
-        except Exception:
+            img = ImageOps.fit(Image.open(file).convert("RGB"), (256, 256), Image.Resampling.LANCZOS)
+        except OSError:
             return JsonResponse({"error": "Invalid image file."}, status=400)
-
-        file.seek(0)
-        img = Image.open(file)
-        img = img.convert("RGB")
-        size = min(img.width, img.height)
-        left = (img.width - size) // 2
-        top = (img.height - size) // 2
-        img = img.crop((left, top, left + size, top + size))
-        img.thumbnail((256, 256), Image.LANCZOS)
 
         buf = BytesIO()
         img.save(buf, format="JPEG", quality=85)
-        buf.seek(0)
 
         user = request.user
-        from django.core.files.base import ContentFile
-        user.avatar_thumbnail.save(f"{user.pk}_thumb.jpg", ContentFile(buf.read()), save=True)
+        user.avatar_thumbnail.save(f"{user.pk}_thumb.jpg", ContentFile(buf.getvalue()))
         return JsonResponse({"avatar_url": user.avatar_url})
