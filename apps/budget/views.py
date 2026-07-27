@@ -17,6 +17,9 @@ from django.views import generic
 from inertia import render as inertia_render
 
 from apps.budget.data import (
+    find_pending_bank_transfer_candidates,
+    find_transfer_candidates,
+    find_transfer_candidates_for_bank_txn,
     get_budget_overview,
     get_goal_total_saved,
     get_pending_count,
@@ -309,7 +312,7 @@ class BudgetDetailView(BudgetMemberMixin, View):
             "overview": lambda: get_budget_overview(budget, month_str, user_rate),
             "categories": lambda: [
                 serialize_category(c)
-                for c in Category.objects.filter(budget=budget).order_by("category_type", "name")
+                for c in Category.objects.filter(budget=budget, is_system=False).order_by("category_type", "name")
             ],
             "payment_methods": lambda: [
                 serialize_payment_method(pm)
@@ -332,7 +335,7 @@ class GoalsView(BudgetMemberMixin, View):
             "overview": lambda: get_budget_overview(budget, month_str, user_rate),
             "categories": lambda: [
                 serialize_category(c)
-                for c in Category.objects.filter(budget=budget).order_by("category_type", "name")
+                for c in Category.objects.filter(budget=budget, is_system=False).order_by("category_type", "name")
             ],
             "payment_methods": lambda: [
                 serialize_payment_method(pm)
@@ -371,7 +374,7 @@ class BudgetSettingsView(BudgetMemberMixin, View):
 
         # Categories — include goal total_saved like CategoryListView did,
         # so the modal can present accurate balances when editing.
-        categories = list(Category.objects.filter(budget=budget).order_by("category_type", "name"))
+        categories = list(Category.objects.filter(budget=budget, is_system=False).order_by("category_type", "name"))
         goal_ids = [c.pk for c in categories if c.is_goal]
         income_saved = {
             row["category_id"]: row["total"]
@@ -731,7 +734,7 @@ class TransactionListView(BudgetMemberMixin, View):
             "ignored_bank_transactions": _ignored_bank_txns,
             "categories": lambda: [
                 serialize_category(c)
-                for c in Category.objects.filter(budget=budget).order_by("category_type", "name")
+                for c in Category.objects.filter(budget=budget, is_system=False).order_by("category_type", "name")
             ],
             "payment_methods": lambda: [
                 serialize_payment_method(pm)
@@ -912,6 +915,48 @@ class TransactionMarkPaidView(BudgetMemberMixin, View):
             return redirect(next_url)
         return JsonResponse(serialize_transaction(
             Transaction.objects.select_related("recurring__category", "payment_method").prefetch_related("lines__category", "bank_transaction__bank_account").get(pk=pk)
+        ))
+
+
+class TransferCandidatesView(BudgetMemberMixin, View):
+    """List likely transfer-partner Transactions for the given transaction."""
+
+    def get(self, request, budget_pk, pk):
+        txn = get_object_or_404(
+            Transaction.objects.select_related("payment_method").prefetch_related("lines__category"),
+            pk=pk,
+            budget=self.budget,
+        )
+        candidates = find_transfer_candidates(txn)
+        return JsonResponse({
+            "candidates": [serialize_transaction(c) for c in candidates],
+        })
+
+
+class TransferLinkView(BudgetMemberMixin, View):
+    """Link or unlink a transaction's transfer partner.
+
+    PATCH body: `{"partner_id": <int>}` to link, `{"partner_id": null}` to unlink.
+    """
+
+    def patch(self, request, budget_pk, pk):
+        txn = get_object_or_404(Transaction, pk=pk, budget=self.budget)
+        data = parse_json_body(request)
+        partner_id = data.get("partner_id")
+        if partner_id is None:
+            txn.unlink_transfer()
+        else:
+            partner = get_object_or_404(Transaction, pk=partner_id, budget=self.budget)
+            try:
+                txn.link_transfer(partner)
+            except ValueError as exc:
+                return JsonResponse({"error": str(exc)}, status=400)
+        txn.refresh_from_db()
+        return JsonResponse(serialize_transaction(
+            Transaction.objects
+            .select_related("recurring__category", "payment_method")
+            .prefetch_related("lines__category", "bank_transaction__bank_account")
+            .get(pk=txn.pk)
         ))
 
 
@@ -1110,9 +1155,13 @@ class BankTransactionSuggestionsView(BudgetMemberMixin, View):
         from apps.budget.bank_matching import suggest_matches
 
         bt = _bank_txn_for_budget(request, self.budget, pk)
+        transfer_candidates = find_transfer_candidates_for_bank_txn(bt, self.budget)
+        pending_bank_pairs = find_pending_bank_transfer_candidates(bt, self.budget)
         return JsonResponse({
             "bank_transaction": serialize_bank_transaction(bt),
             "suggestions": suggest_matches(bt, self.budget),
+            "transfer_candidates": [serialize_transaction(t) for t in transfer_candidates],
+            "transfer_candidates_bank": [serialize_bank_transaction(b) for b in pending_bank_pairs],
         })
 
 
@@ -1252,9 +1301,125 @@ class BankTransactionCreateTxnView(BudgetMemberMixin, View):
             .prefetch_related("lines__category", "bank_transaction__bank_account")
             .get(pk=txn.pk)
         )
+        transfer_candidates = [serialize_transaction(c) for c in find_transfer_candidates(txn)]
         return JsonResponse({
             "bank_transaction": serialize_bank_transaction(bt),
             "transaction": serialize_transaction(txn),
+            "transfer_candidates": transfer_candidates,
+        }, status=201)
+
+
+class BankTransactionConfirmAsTransferView(BudgetMemberMixin, View):
+    """Confirm a BankTransaction as one leg of a transfer.
+
+    Body accepts either:
+      - `partner_id` — an existing budget Transaction. Creates one new
+        Transaction for this bank row, links it to the existing partner.
+      - `partner_bank_txn_id` — another still-pending BankTransaction (the
+        opposite leg). Creates two Transactions (one per bank row), links
+        them, marks both bank rows linked. Used when both halves were just
+        synced and neither has been confirmed yet.
+
+    All resulting Transactions get `type="transfer"` with a line in the
+    budget's system Transfers category.
+    """
+
+    def _make_transfer_txn(self, request, bt):
+        """Build a transfer Transaction + line for a given bank row."""
+        transfers_cat = Category.get_or_create_transfers(self.budget)
+        amount = abs(bt.amount)
+        pm_id = bt.bank_account.payment_method_id
+        payment_method = PaymentMethod.objects.filter(pk=pm_id, budget=self.budget).first() if pm_id else None
+        currency = bt.bank_account.currency or request.user.currency or "USD"
+        try:
+            exchange_rate = CurrencyModel.objects.get(code=currency).rate_to_usd
+        except CurrencyModel.DoesNotExist:
+            exchange_rate = Decimal("1")
+        description = (bt.payee or bt.description or "Transfer").strip()[:200]
+        txn = Transaction.objects.create(
+            budget=self.budget,
+            created_by=request.user,
+            description=description,
+            due_date=bt.posted_at.date(),
+            paid_date=bt.posted_at.date(),
+            transaction_type="transfer",
+            payment_method=payment_method,
+            currency=currency,
+            exchange_rate_to_usd=exchange_rate,
+        )
+        TransactionLine.objects.create(
+            transaction=txn,
+            category=transfers_cat,
+            amount=amount,
+            amount_usd=amount / exchange_rate if exchange_rate else amount,
+            description="",
+        )
+        bt.transaction = txn
+        bt.status = BankTransaction.Status.LINKED
+        bt.save(update_fields=["transaction", "status", "last_seen_at"])
+        return txn
+
+    def post(self, request, budget_pk, pk):
+        bt = _bank_txn_for_budget(request, self.budget, pk)
+        data = parse_json_body(request)
+        partner_id = data.get("partner_id")
+        partner_bank_txn_id = data.get("partner_bank_txn_id")
+        if not partner_id and not partner_bank_txn_id:
+            return JsonResponse({"errors": {"partner_id": ["partner_id or partner_bank_txn_id required."]}}, status=400)
+
+        if partner_bank_txn_id:
+            try:
+                partner_bt = _bank_txn_for_budget(request, self.budget, partner_bank_txn_id)
+            except Http404:
+                return JsonResponse({"errors": {"partner_bank_txn_id": ["Not found."]}}, status=404)
+            if partner_bt.status != BankTransaction.Status.PENDING:
+                return JsonResponse({"errors": {"partner_bank_txn_id": ["No longer pending."]}}, status=400)
+            with db_transaction.atomic():
+                txn = self._make_transfer_txn(request, bt)
+                partner_txn = self._make_transfer_txn(request, partner_bt)
+                txn.link_transfer(partner_txn)
+            return JsonResponse({
+                "bank_transaction": serialize_bank_transaction(bt),
+                "transaction": serialize_transaction(
+                    Transaction.objects
+                    .select_related("recurring__category", "payment_method")
+                    .prefetch_related("lines__category", "bank_transaction__bank_account")
+                    .get(pk=txn.pk)
+                ),
+                "partner_bank_transaction": serialize_bank_transaction(partner_bt),
+                "partner": serialize_transaction(
+                    Transaction.objects
+                    .select_related("recurring__category", "payment_method")
+                    .prefetch_related("lines__category", "bank_transaction__bank_account")
+                    .get(pk=partner_txn.pk)
+                ),
+            }, status=201)
+
+        try:
+            partner = Transaction.objects.get(pk=partner_id, budget=self.budget)
+        except Transaction.DoesNotExist:
+            return JsonResponse({"errors": {"partner_id": ["Not found."]}}, status=404)
+        if partner.transfer_partner_id:
+            return JsonResponse({"errors": {"partner_id": ["Already linked to another transfer."]}}, status=400)
+
+        with db_transaction.atomic():
+            txn = self._make_transfer_txn(request, bt)
+            txn.link_transfer(partner)
+
+        return JsonResponse({
+            "bank_transaction": serialize_bank_transaction(bt),
+            "transaction": serialize_transaction(
+                Transaction.objects
+                .select_related("recurring__category", "payment_method")
+                .prefetch_related("lines__category", "bank_transaction__bank_account")
+                .get(pk=txn.pk)
+            ),
+            "partner": serialize_transaction(
+                Transaction.objects
+                .select_related("recurring__category", "payment_method")
+                .prefetch_related("lines__category", "bank_transaction__bank_account")
+                .get(pk=partner.pk)
+            ),
         }, status=201)
 
 

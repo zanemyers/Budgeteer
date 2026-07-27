@@ -4,7 +4,7 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction as db_transaction
 from django.db.models import Q, Sum
 from django.db.models.constraints import UniqueConstraint
 
@@ -81,6 +81,7 @@ class Category(models.Model):
     name = models.CharField(max_length=100)
     category_type = models.CharField(max_length=10, choices=TYPE_CHOICES)
     monthly_budget = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
+    is_system = models.BooleanField(default=False)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -131,6 +132,19 @@ class Category(models.Model):
             return self.goal is not None
         except Goal.DoesNotExist:
             return False
+
+    TRANSFERS_SYSTEM_NAME = "Transfers"
+
+    @classmethod
+    def get_or_create_transfers(cls, budget) -> "Category":
+        """The per-budget system category used as the placeholder line for transfer transactions."""
+        cat, _ = cls.objects.get_or_create(
+            budget=budget,
+            is_system=True,
+            name=cls.TRANSFERS_SYSTEM_NAME,
+            defaults={"category_type": cls.TYPE_EXPENSE},
+        )
+        return cat
 
     @property
     def goal_target(self):
@@ -321,6 +335,13 @@ class Transaction(models.Model):
     paid_date = models.DateField(null=True, blank=True)
     notes = models.TextField(blank=True)
     transaction_type = models.CharField(max_length=10, blank=True, default="")
+    transfer_partner = models.OneToOneField(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
     currency = models.CharField(max_length=3, default="USD")
     exchange_rate_to_usd = models.DecimalField(max_digits=20, decimal_places=8, default=Decimal("1"))
     created_at = models.DateTimeField(auto_now_add=True)
@@ -341,6 +362,34 @@ class Transaction(models.Model):
             return self.transaction_type
         first_line = self.lines.select_related("category").first()
         return first_line.category.category_type if first_line else ""
+
+    def link_transfer(self, partner: "Transaction") -> None:
+        """Atomically mark `self` and `partner` as two legs of the same transfer."""
+        if partner.pk == self.pk:
+            raise ValueError("A transaction can't be its own transfer partner.")
+        if partner.budget_id != self.budget_id:
+            raise ValueError("Transfer partners must belong to the same budget.")
+        with db_transaction.atomic():
+            # Clear any existing partnerships on either side first so we don't
+            # leave orphan back-references when re-linking.
+            if self.transfer_partner_id and self.transfer_partner_id != partner.pk:
+                Transaction.objects.filter(pk=self.transfer_partner_id).update(transfer_partner=None)
+            if partner.transfer_partner_id and partner.transfer_partner_id != self.pk:
+                Transaction.objects.filter(pk=partner.transfer_partner_id).update(transfer_partner=None)
+            Transaction.objects.filter(pk=self.pk).update(transfer_partner=partner)
+            Transaction.objects.filter(pk=partner.pk).update(transfer_partner=self)
+            self.transfer_partner_id = partner.pk
+            partner.transfer_partner_id = self.pk
+
+    def unlink_transfer(self) -> None:
+        """Clear the transfer partnership on both sides, if any."""
+        if not self.transfer_partner_id:
+            return
+        with db_transaction.atomic():
+            partner_pk = self.transfer_partner_id
+            Transaction.objects.filter(pk=self.pk).update(transfer_partner=None)
+            Transaction.objects.filter(pk=partner_pk).update(transfer_partner=None)
+            self.transfer_partner_id = None
 
 
 class PaymentMethod(models.Model):
