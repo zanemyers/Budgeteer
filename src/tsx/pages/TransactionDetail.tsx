@@ -1,4 +1,6 @@
 import { router } from "@inertiajs/react";
+import { useState } from "react";
+import { toast } from "sonner";
 import type { Transaction } from "../types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,6 +15,7 @@ import {
 } from "@/components/ui/table";
 import { fmtDate } from "../utils/date";
 import { fmt, useCurrencySymbol } from "../utils/currency";
+import { jsonFetch } from "../lib/api";
 
 interface Props {
   budget_pk: number;
@@ -21,6 +24,59 @@ interface Props {
 
 export default function TransactionDetail({ budget_pk, transaction: txn }: Props) {
   const symbol = useCurrencySymbol();
+  const [candidates, setCandidates] = useState<Transaction[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const partnerId = txn.transfer_partner_id ?? null;
+
+  async function loadCandidates() {
+    setBusy(true);
+    try {
+      const data = await jsonFetch<{ candidates: Transaction[] }>(
+        `/budgets/${budget_pk}/transactions/${txn.id}/transfer-candidates/`,
+        "GET",
+      );
+      setCandidates(data?.candidates ?? []);
+    } catch (err) {
+      toast.error((err as { error?: string })?.error ?? "Couldn't load transfer candidates.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function link(partner: Transaction) {
+    setBusy(true);
+    try {
+      await jsonFetch(
+        `/budgets/${budget_pk}/transactions/${txn.id}/transfer-link/`,
+        "PATCH",
+        { partner_id: partner.id },
+      );
+      toast.success(`Linked to "${partner.description}".`);
+      router.reload({ only: ["transaction"] });
+    } catch (err) {
+      toast.error((err as { error?: string })?.error ?? "Couldn't link transfer.");
+    } finally {
+      setBusy(false);
+      setCandidates(null);
+    }
+  }
+
+  async function unlink() {
+    setBusy(true);
+    try {
+      await jsonFetch(
+        `/budgets/${budget_pk}/transactions/${txn.id}/transfer-link/`,
+        "PATCH",
+        { partner_id: null },
+      );
+      toast.success("Transfer unlinked.");
+      router.reload({ only: ["transaction"] });
+    } catch {
+      toast.error("Couldn't unlink.");
+    } finally {
+      setBusy(false);
+    }
+  }
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
@@ -117,6 +173,67 @@ export default function TransactionDetail({ budget_pk, transaction: txn }: Props
           </Table>
         </Card>
       </div>
+
+      <Card className="mt-6 p-0 gap-0 overflow-hidden">
+        <div className="px-6 py-2 text-sm font-semibold text-muted-foreground border-b flex items-center justify-between">
+          <span>Transfer Link</span>
+          {partnerId === null && candidates === null && (
+            <Button size="sm" variant="outline" disabled={busy} onClick={() => void loadCandidates()}>
+              Find transfer partner
+            </Button>
+          )}
+        </div>
+        <div className="p-6 text-sm">
+          {partnerId !== null ? (
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <Badge variant="secondary" className="mr-2">Linked</Badge>
+                This transaction is paired with another as a transfer; both legs are excluded from headline income/expense totals.
+                {" "}
+                <a
+                  href={`/budgets/${budget_pk}/transactions/${partnerId}/`}
+                  className="text-primary hover:underline"
+                  onClick={(e) => { e.preventDefault(); router.visit(`/budgets/${budget_pk}/transactions/${partnerId}/`); }}
+                >
+                  View partner →
+                </a>
+              </div>
+              <Button size="sm" variant="outline" disabled={busy} onClick={() => void unlink()}>
+                Unlink
+              </Button>
+            </div>
+          ) : candidates === null ? (
+            <p className="text-muted-foreground">
+              Not linked. Use <em>Find transfer partner</em> if this is one leg of a movement between accounts (e.g. checking → savings) — pairing prevents double-counting in reports.
+            </p>
+          ) : candidates.length === 0 ? (
+            <div className="flex items-center justify-between gap-4">
+              <p className="text-muted-foreground">No matching transactions found (same amount, opposite direction, within ±3 days, different payment method).</p>
+              <Button size="sm" variant="ghost" onClick={() => setCandidates(null)}>Dismiss</Button>
+            </div>
+          ) : (
+            <div>
+              <p className="text-muted-foreground mb-3">Pick the matching counterpart:</p>
+              <ul className="divide-y border rounded">
+                {candidates.map((c) => (
+                  <li key={c.id} className="flex items-center justify-between gap-4 px-4 py-2">
+                    <div className="min-w-0">
+                      <div className="font-medium truncate">{c.description}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {fmtDate(c.paid_date ?? c.due_date)} · {c.payment_method_name ?? "—"} · <span className="tabular-nums">{fmt(c.total_amount, symbol)}</span>
+                      </div>
+                    </div>
+                    <Button size="sm" disabled={busy} onClick={() => void link(c)}>Link</Button>
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-3">
+                <Button size="sm" variant="ghost" onClick={() => setCandidates(null)}>Cancel</Button>
+              </div>
+            </div>
+          )}
+        </div>
+      </Card>
     </div>
   );
 }

@@ -46,6 +46,8 @@ export interface Transaction {
   created_at: string;
   bank_linked?: boolean;
   linked_bank_transactions?: LinkedBankTransaction[];
+  transfer_partner_id?: number | null;
+  is_transfer?: boolean;
 }
 
 export interface LinkedBankTransaction {

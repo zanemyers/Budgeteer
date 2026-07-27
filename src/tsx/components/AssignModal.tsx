@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import type { BudgetOverviewCategory } from "../types";
-import { getCsrfToken } from "../lib/api";
+import { jsonFetch } from "../lib/api";
 import { fmt, useCurrencySymbol } from "../utils/currency";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -76,17 +76,18 @@ export default function AssignModal({ budgetPk, month, categories, readyToAssign
 
       await Promise.all(
         updates.map((u) =>
-          fetch(`/budgets/${budgetPk}/category-budgets/${u.catId}/`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() },
-            body: JSON.stringify({ assigned: u.newAssigned, month }),
-          }),
+          jsonFetch(
+            `/budgets/${budgetPk}/category-budgets/${u.catId}/`,
+            "PATCH",
+            { assigned: u.newAssigned, month },
+          ),
         ),
       );
 
       onSaved();
-    } catch {
-      setError("Something went wrong. Please try again.");
+    } catch (err) {
+      const msg = (err as { error?: string })?.error ?? "Something went wrong. Please try again.";
+      setError(msg);
       setSaving(false);
     }
   }

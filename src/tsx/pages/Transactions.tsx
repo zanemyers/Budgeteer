@@ -8,6 +8,7 @@ import { fmt, fmtConverted, fmtSigned, useCurrencyCode, useCurrencyRate, useCurr
 import { formatMonth, getDefaultMonth, isAtBackLimit, nextMonth, prevMonth } from "../utils/month";
 import { jsonFetch } from "../lib/api";
 import { fmtDate } from "../utils/date";
+import { toast } from "sonner";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -146,23 +147,39 @@ export default function Transactions({ budget_pk, month, category_filter, transa
     return updated;
   }
 
+  function errMsg(err: unknown, fallback: string): string {
+    return (err as { error?: string })?.error ?? fallback;
+  }
+
   async function saveDesc(txn: Transaction) {
     const val = editDesc[txn.id];
     setEditDesc((prev) => { const n = { ...prev }; delete n[txn.id]; return n; });
     if (val === undefined || val === txn.description) return;
-    await patchTxn(txn.id, { description: val });
+    try {
+      await patchTxn(txn.id, { description: val });
+    } catch (err) {
+      toast.error(errMsg(err, "Couldn't save description."));
+    }
   }
 
   async function saveDate(txn: Transaction) {
     const val = editDate[txn.id];
     setEditDate((prev) => { const n = { ...prev }; delete n[txn.id]; return n; });
     if (val === undefined || val === (txn.paid_date ?? "")) return;
-    await patchTxn(txn.id, { paid_date: val || null });
+    try {
+      await patchTxn(txn.id, { paid_date: val || null });
+    } catch (err) {
+      toast.error(errMsg(err, "Couldn't save date."));
+    }
   }
 
   async function savePM(txn: Transaction, pmId: number | null) {
     setEditPM(null);
-    await patchTxn(txn.id, { payment_method: pmId });
+    try {
+      await patchTxn(txn.id, { payment_method: pmId });
+    } catch (err) {
+      toast.error(errMsg(err, "Couldn't save payment method."));
+    }
   }
 
   async function markPaid(txn: Transaction) {
@@ -170,6 +187,8 @@ export default function Transactions({ budget_pk, month, category_filter, transa
     try {
       const updated = await jsonFetch(`/budgets/${budget_pk}/transactions/${txn.id}/mark-paid/`, "POST") as Transaction;
       setTransactions((prev) => prev.map((t) => t.id === txn.id ? updated : t));
+    } catch (err) {
+      toast.error(errMsg(err, "Couldn't mark paid."));
     } finally {
       setMarkingPaid((prev) => { const n = new Set(prev); n.delete(txn.id); return n; });
     }
@@ -187,39 +206,59 @@ export default function Transactions({ budget_pk, month, category_filter, transa
   }
 
   async function deleteTxn(txn: Transaction) {
-    await jsonFetch(`/budgets/${budget_pk}/transactions/${txn.id}/delete/`, "DELETE");
-    setTransactions((prev) => prev.filter((t) => t.id !== txn.id));
+    try {
+      await jsonFetch(`/budgets/${budget_pk}/transactions/${txn.id}/delete/`, "DELETE");
+      setTransactions((prev) => prev.filter((t) => t.id !== txn.id));
+    } catch (err) {
+      toast.error(errMsg(err, "Couldn't delete transaction."));
+    }
   }
 
   async function restoreBankTxn(bt: BankTransaction) {
-    const data = await jsonFetch(`/budgets/${budget_pk}/bank-transactions/${bt.id}/unlink/`, "POST") as { bank_transaction: BankTransaction };
-    setIgnoredBankTxns((prev) => prev.filter((b) => b.id !== bt.id));
-    setBankTxns((prev) => [data.bank_transaction, ...prev]);
+    try {
+      const data = await jsonFetch(`/budgets/${budget_pk}/bank-transactions/${bt.id}/unlink/`, "POST") as { bank_transaction: BankTransaction };
+      setIgnoredBankTxns((prev) => prev.filter((b) => b.id !== bt.id));
+      setBankTxns((prev) => [data.bank_transaction, ...prev]);
+    } catch (err) {
+      toast.error(errMsg(err, "Couldn't restore bank transaction."));
+    }
   }
 
   async function ignoreBankTxn(bt: BankTransaction) {
-    const data = await jsonFetch(`/budgets/${budget_pk}/bank-transactions/${bt.id}/ignore/`, "POST", { reason: "" }) as { bank_transaction: BankTransaction };
-    setBankTxns((prev) => prev.filter((b) => b.id !== bt.id));
-    setIgnoredBankTxns((prev) => [data.bank_transaction, ...prev]);
+    try {
+      const data = await jsonFetch(`/budgets/${budget_pk}/bank-transactions/${bt.id}/ignore/`, "POST", { reason: "" }) as { bank_transaction: BankTransaction };
+      setBankTxns((prev) => prev.filter((b) => b.id !== bt.id));
+      setIgnoredBankTxns((prev) => [data.bank_transaction, ...prev]);
+    } catch (err) {
+      toast.error(errMsg(err, "Couldn't ignore bank transaction."));
+    }
   }
 
   async function ignoreLinkedBankTxn(bt: LinkedBankTransaction) {
-    const data = await jsonFetch(`/budgets/${budget_pk}/bank-transactions/${bt.id}/ignore/`, "POST", { reason: "" }) as { bank_transaction: BankTransaction };
-    setTransactions((prev) =>
-      prev.map((t) => {
-        if (!t.linked_bank_transactions?.some((b) => b.id === bt.id)) return t;
-        const remaining = t.linked_bank_transactions.filter((b) => b.id !== bt.id);
-        return { ...t, linked_bank_transactions: remaining, bank_linked: remaining.length > 0 };
-      })
-    );
-    setIgnoredBankTxns((prev) => [data.bank_transaction, ...prev]);
-    setEditTxn(null);
+    try {
+      const data = await jsonFetch(`/budgets/${budget_pk}/bank-transactions/${bt.id}/ignore/`, "POST", { reason: "" }) as { bank_transaction: BankTransaction };
+      setTransactions((prev) =>
+        prev.map((t) => {
+          if (!t.linked_bank_transactions?.some((b) => b.id === bt.id)) return t;
+          const remaining = t.linked_bank_transactions.filter((b) => b.id !== bt.id);
+          return { ...t, linked_bank_transactions: remaining, bank_linked: remaining.length > 0 };
+        })
+      );
+      setIgnoredBankTxns((prev) => [data.bank_transaction, ...prev]);
+      setEditTxn(null);
+    } catch (err) {
+      toast.error(errMsg(err, "Couldn't ignore bank transaction."));
+    }
   }
 
   async function saveIgnoreReason(bt: BankTransaction, reason: string) {
     if ((bt.ignore_reason ?? "") === reason.trim()) return;
-    const data = await jsonFetch(`/budgets/${budget_pk}/bank-transactions/${bt.id}/ignore/`, "POST", { reason: reason.trim() }) as { bank_transaction: BankTransaction };
-    setIgnoredBankTxns((prev) => prev.map((b) => (b.id === bt.id ? data.bank_transaction : b)));
+    try {
+      const data = await jsonFetch(`/budgets/${budget_pk}/bank-transactions/${bt.id}/ignore/`, "POST", { reason: reason.trim() }) as { bank_transaction: BankTransaction };
+      setIgnoredBankTxns((prev) => prev.map((b) => (b.id === bt.id ? data.bank_transaction : b)));
+    } catch (err) {
+      toast.error(errMsg(err, "Couldn't save ignore reason."));
+    }
   }
 
   function renderRow(txn: Transaction, opts: { suppressStateMarkers?: boolean; includeDueColumn?: boolean } = {}) {
@@ -445,10 +484,15 @@ export default function Transactions({ budget_pk, month, category_filter, transa
     [transactions],
   );
   const rest = useMemo(
-    () => transactions.filter((t) => Boolean(t.paid_date)),
+    () => transactions.filter((t) => Boolean(t.paid_date) && !t.is_transfer),
+    [transactions],
+  );
+  const transfers = useMemo(
+    () => transactions.filter((t) => Boolean(t.paid_date) && t.is_transfer),
     [transactions],
   );
   const sortedRest = useMemo(() => sortTransactions(rest, sortOrder), [rest, sortOrder]);
+  const sortedTransfers = useMemo(() => sortTransactions(transfers, sortOrder), [transfers, sortOrder]);
 
   return (
     <div className="max-w-[1200px]">
@@ -537,6 +581,9 @@ export default function Transactions({ budget_pk, month, category_filter, transa
               </TabsTrigger>
               <TabsTrigger value="logged">
                 Logged ({rest.length})
+              </TabsTrigger>
+              <TabsTrigger value="transfers" disabled={transfers.length === 0}>
+                Transfers {transfers.length > 0 && `(${transfers.length})`}
               </TabsTrigger>
               <TabsTrigger value="ignored" disabled={ignoredCount === 0}>
                 Ignored {ignoredCount > 0 && `(${ignoredCount})`}
@@ -743,6 +790,32 @@ export default function Transactions({ budget_pk, month, category_filter, transa
                 )}
               </Card>
             </TabsContent>
+
+            <TabsContent value="transfers">
+              <Card className="overflow-hidden p-0 border-rule shadow-none">
+                {transfers.length === 0 ? (
+                  <CardContent className="text-muted-foreground py-12 text-center">No linked transfers yet. Link two halves of a money movement (e.g. checking → savings) from a transaction's edit modal to see them here.</CardContent>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <SortHeader label="Description" sortKey="description" />
+                          <SortHeader label="Date" sortKey="paid_date" />
+                          <SortHeader label="Category" sortKey="category" />
+                          <SortHeader label="Amount" sortKey="amount" className="text-right" />
+                          <SortHeader label="Method" sortKey="payment_method" />
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {sortedTransfers.map((txn) => renderRow(txn))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </Card>
+            </TabsContent>
           </Tabs>
         );
       })()}
@@ -760,6 +833,10 @@ export default function Transactions({ budget_pk, month, category_filter, transa
           onSave={editTxn ? updateTransaction : createTransaction}
           onClose={() => { setAddType(null); setEditTxn(null); }}
           onIgnoreLinkedBankTxn={ignoreLinkedBankTxn}
+          onTransactionUpdate={(t) => {
+            setTransactions((prev) => prev.map((x) => x.id === t.id ? t : x));
+            setEditTxn(t);
+          }}
         />
       )}
 
@@ -768,15 +845,53 @@ export default function Transactions({ budget_pk, month, category_filter, transa
           bankTxn={bankTxnToConfirm}
           budgetPk={budget_pk}
           categories={categories}
-          onResolved={({ bankTxn, transaction }) => {
-            setBankTxns((prev) => prev.filter((b) => b.id !== bankTxn.id));
-            if (transaction) {
+          onResolved={({ bankTxn, transaction, transferCandidates, partnerBankTxn, partner }) => {
+            const removeIds = new Set<number>([bankTxn.id]);
+            if (partnerBankTxn) removeIds.add(partnerBankTxn.id);
+            setBankTxns((prev) => prev.filter((b) => !removeIds.has(b.id)));
+            const upsertTxn = (list: Transaction[], t: Transaction) => {
+              const existing = list.find((x) => x.id === t.id);
+              return existing ? list.map((x) => (x.id === t.id ? t : x)) : [...list, t];
+            };
+            if (transaction || partner) {
               setTransactions((prev) => {
-                const existing = prev.find((t) => t.id === transaction.id);
-                return existing
-                  ? prev.map((t) => (t.id === transaction.id ? transaction : t))
-                  : [...prev, transaction];
+                let next = prev;
+                if (transaction) next = upsertTxn(next, transaction);
+                if (partner) next = upsertTxn(next, partner);
+                return next;
               });
+            }
+            if (transaction) {
+              if (transferCandidates && transferCandidates.length === 1) {
+                const suggested = transferCandidates[0];
+                toast("Looks like a transfer", {
+                  description: `Pair with "${suggested.description}"?`,
+                  action: {
+                    label: "Link",
+                    onClick: async () => {
+                      try {
+                        const updated = await jsonFetch<Transaction>(
+                          `/budgets/${budget_pk}/transactions/${transaction.id}/transfer-link/`,
+                          "PATCH",
+                          { partner_id: suggested.id },
+                        );
+                        if (updated) {
+                          setTransactions((prev) => prev.map((t) => t.id === updated.id ? updated : t.id === suggested.id ? { ...t, transfer_partner_id: updated.id } : t));
+                          toast.success(`Linked to "${suggested.description}".`);
+                        }
+                      } catch (err) {
+                        toast.error((err as { error?: string })?.error ?? "Couldn't link transfer.");
+                      }
+                    },
+                  },
+                  duration: 8000,
+                });
+              } else if (transferCandidates && transferCandidates.length > 1) {
+                toast(`${transferCandidates.length} possible transfer partners`, {
+                  description: "Open the transaction to pick one.",
+                  duration: 6000,
+                });
+              }
             }
             setBankTxnToConfirm(null);
           }}

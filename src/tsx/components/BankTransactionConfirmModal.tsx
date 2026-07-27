@@ -30,13 +30,21 @@ interface Props {
   bankTxn: BankTransaction;
   budgetPk: number;
   categories: Category[];
-  onResolved: (result: { bankTxn: BankTransaction; transaction?: Transaction | null }) => void;
+  onResolved: (result: {
+    bankTxn: BankTransaction;
+    transaction?: Transaction | null;
+    transferCandidates?: Transaction[];
+    partnerBankTxn?: BankTransaction | null;
+    partner?: Transaction | null;
+  }) => void;
   onClose: () => void;
 }
 
 export default function BankTransactionConfirmModal({ bankTxn, budgetPk, categories, onResolved, onClose }: Props) {
   const symbol = useCurrencySymbol();
   const [suggestions, setSuggestions] = useState<BankMatchSuggestion[] | null>(null);
+  const [transferCandidates, setTransferCandidates] = useState<Transaction[]>([]);
+  const [transferCandidatesBank, setTransferCandidatesBank] = useState<BankTransaction[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [createMode, setCreateMode] = useState(false);
@@ -59,9 +67,13 @@ export default function BankTransactionConfirmModal({ bankTxn, budgetPk, categor
 
   useEffect(() => {
     let cancelled = false;
-    jsonFetch<{ suggestions: BankMatchSuggestion[] }>(`/budgets/${budgetPk}/bank-transactions/${bankTxn.id}/suggestions/`, "GET")
+    jsonFetch<{ suggestions: BankMatchSuggestion[]; transfer_candidates?: Transaction[]; transfer_candidates_bank?: BankTransaction[] }>(`/budgets/${budgetPk}/bank-transactions/${bankTxn.id}/suggestions/`, "GET")
       .then((data) => {
-        if (!cancelled && data) setSuggestions(data.suggestions);
+        if (!cancelled && data) {
+          setSuggestions(data.suggestions);
+          setTransferCandidates(data.transfer_candidates ?? []);
+          setTransferCandidatesBank(data.transfer_candidates_bank ?? []);
+        }
       })
       .catch(() => {
         if (!cancelled) setLoadError("Could not load suggestions.");
@@ -70,6 +82,62 @@ export default function BankTransactionConfirmModal({ bankTxn, budgetPk, categor
       cancelled = true;
     };
   }, [bankTxn.id, budgetPk]);
+
+  async function confirmAsTransferToBank(partnerBt: BankTransaction) {
+    setBusy(true);
+    setCreateError(null);
+    try {
+      const data = await jsonFetch<{
+        bank_transaction: BankTransaction;
+        transaction: Transaction;
+        partner_bank_transaction: BankTransaction;
+        partner: Transaction;
+      }>(
+        `/budgets/${budgetPk}/bank-transactions/${bankTxn.id}/confirm-as-transfer/`,
+        "POST",
+        { partner_bank_txn_id: partnerBt.id },
+      );
+      if (data) onResolved({
+        bankTxn: data.bank_transaction,
+        transaction: data.transaction,
+        partnerBankTxn: data.partner_bank_transaction,
+        partner: data.partner,
+      });
+    } catch (err: unknown) {
+      const e = err as { error?: string; errors?: Record<string, string[]> };
+      const msg = e.error
+        ?? (e.errors && typeof e.errors === "object" ? Object.values(e.errors).flat().join(" ") : "")
+        ?? "Could not link transfer.";
+      setCreateError(msg || "Could not link transfer.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirmAsTransfer(partner: Transaction) {
+    setBusy(true);
+    setCreateError(null);
+    try {
+      const data = await jsonFetch<{ bank_transaction: BankTransaction; transaction: Transaction; partner: Transaction }>(
+        `/budgets/${budgetPk}/bank-transactions/${bankTxn.id}/confirm-as-transfer/`,
+        "POST",
+        { partner_id: partner.id },
+      );
+      if (data) onResolved({
+        bankTxn: data.bank_transaction,
+        transaction: data.transaction,
+        partner: data.partner,
+      });
+    } catch (err: unknown) {
+      const e = err as { error?: string; errors?: Record<string, string[]> };
+      const msg = e.error
+        ?? (e.errors && typeof e.errors === "object" ? Object.values(e.errors).flat().join(" ") : "")
+        ?? "Could not link transfer.";
+      setCreateError(msg || "Could not link transfer.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function applySuggestion(s: BankMatchSuggestion) {
     setBusy(true);
@@ -80,14 +148,14 @@ export default function BankTransactionConfirmModal({ bankTxn, budgetPk, categor
           "POST",
           { category_id: s.category_id, description: bankTxn.payee || bankTxn.description },
         );
-        if (data) onResolved({ bankTxn: data.bank_transaction, transaction: data.transaction });
+        if (data) onResolved({ bankTxn: data.bank_transaction, transaction: data.transaction, transferCandidates: (data as { transfer_candidates?: Transaction[] }).transfer_candidates });
         return;
       }
       if (s.transaction_id !== null) {
         const data = await jsonFetch<{ bank_transaction: BankTransaction; transaction: Transaction }>(`/budgets/${budgetPk}/bank-transactions/${bankTxn.id}/link/`, "POST", {
           transaction_id: s.transaction_id,
         });
-        if (data) onResolved({ bankTxn: data.bank_transaction, transaction: data.transaction });
+        if (data) onResolved({ bankTxn: data.bank_transaction, transaction: data.transaction, transferCandidates: (data as { transfer_candidates?: Transaction[] }).transfer_candidates });
         return;
       }
     } finally {
@@ -119,7 +187,7 @@ export default function BankTransactionConfirmModal({ bankTxn, budgetPk, categor
           description: l.description,
         })),
       });
-      if (data) onResolved({ bankTxn: data.bank_transaction, transaction: data.transaction });
+      if (data) onResolved({ bankTxn: data.bank_transaction, transaction: data.transaction, transferCandidates: (data as { transfer_candidates?: Transaction[] }).transfer_candidates });
     } catch (err: unknown) {
       const errs = err as Record<string, string[]>;
       const msg = errs && typeof errs === "object" ? Object.values(errs).flat().join(" ") : "Could not create transaction.";
@@ -191,6 +259,58 @@ export default function BankTransactionConfirmModal({ bankTxn, budgetPk, categor
               autoFocus
             />
             <p className="text-xs text-ink-quiet">This will move the transaction to the Ignored card. You can restore it later.</p>
+          </div>
+        )}
+
+        {!createMode && !ignoreMode && (transferCandidates.length > 0 || transferCandidatesBank.length > 0) && (
+          <div className="flex flex-col gap-2 rounded-md border border-fund/30 bg-fund-soft/40 p-3">
+            <div className="text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-ink-quiet">
+              Looks like a transfer
+            </div>
+            <p className="text-xs text-ink-quiet">
+              Same amount on the opposite side, within ±3 days, on a different account. Linking skips the category step — both halves become a paired transfer.
+            </p>
+            {transferCandidatesBank.map((b) => {
+              const amt = Number.parseFloat(b.amount);
+              return (
+                <button
+                  key={`bt:${b.id}`}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void confirmAsTransferToBank(b)}
+                  className="text-left rounded-md border border-rule bg-background px-3 py-2 hover:bg-muted/40 disabled:opacity-50 flex justify-between items-center gap-3"
+                >
+                  <div className="min-w-0">
+                    <div className="font-medium truncate">{b.payee || b.description || "—"}</div>
+                    <div className="text-ink-quiet text-xs">
+                      {fmtDate(b.posted_date)} · {b.bank_account_name} · pending
+                    </div>
+                  </div>
+                  <div className="text-sm tabular-nums whitespace-nowrap">
+                    {fmtSigned(amt, symbol)}
+                  </div>
+                </button>
+              );
+            })}
+            {transferCandidates.map((c) => (
+              <button
+                key={`txn:${c.id}`}
+                type="button"
+                disabled={busy}
+                onClick={() => void confirmAsTransfer(c)}
+                className="text-left rounded-md border border-rule bg-background px-3 py-2 hover:bg-muted/40 disabled:opacity-50 flex justify-between items-center gap-3"
+              >
+                <div className="min-w-0">
+                  <div className="font-medium truncate">{c.description}</div>
+                  <div className="text-ink-quiet text-xs">
+                    {fmtDate(c.paid_date ?? c.due_date)} · {c.payment_method_name ?? "—"}
+                  </div>
+                </div>
+                <div className="text-sm tabular-nums whitespace-nowrap">
+                  {fmtSigned(Number.parseFloat(c.total_amount) * (c.transaction_type === "expense" ? -1 : 1), symbol)}
+                </div>
+              </button>
+            ))}
           </div>
         )}
 

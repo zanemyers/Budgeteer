@@ -36,12 +36,27 @@ export default function Login({ errors: initialErrors, next }: Props) {
         },
         body: body.toString(),
       });
+      // Older allauth / non-AJAX path: fetch followed an HTTP redirect.
       if (res.redirected) {
         router.visit(res.url);
-      } else {
-        const data = await res.json() as { errors: Record<string, string> };
-        setErrors(data.errors ?? { __all__: "Invalid email or password." });
+        return;
       }
+      // Modern allauth returns its AJAX shape: 200 with {location, form: {errors}, html}
+      // on both success AND enumeration-protected failure. Success sets a sessionid cookie
+      // that we can't read (HttpOnly), so trust `location` and let the server bounce us
+      // back to login if auth didn't actually take.
+      const data = await res.json().catch(() => null) as
+        | { location?: string; form?: { errors?: unknown[] }; errors?: Record<string, string> }
+        | null;
+      if (res.ok && data?.location) {
+        // Full navigation so the session cookie initializes auth state cleanly.
+        window.location.assign(data.location);
+        return;
+      }
+      const formErrors = Array.isArray(data?.form?.errors) && data.form.errors.length > 0
+        ? { __all__: String(data.form.errors[0]) }
+        : null;
+      setErrors(data?.errors ?? formErrors ?? { __all__: "Invalid email or password." });
     } finally {
       setLoading(false);
     }

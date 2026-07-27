@@ -35,7 +35,6 @@ interface SimpleFINConnection {
   label: string;
   last_synced_at: string | null;
   last_sync_status: string;
-  last_sync_error: string;
   created_at: string;
 }
 
@@ -526,7 +525,9 @@ function BankTab({ connections, setConnections }: { connections: SimpleFINConnec
                     {c.last_synced_at ? `Last synced ${new Date(c.last_synced_at).toLocaleString()}` : "Never synced"}
                   </span>
                 </div>
-                {c.last_sync_error && <p className="text-destructive text-sm mt-1">{c.last_sync_error}</p>}
+                {c.last_sync_status === "error" && (
+                  <p className="text-destructive text-sm mt-1">Last sync failed — will retry on the next scheduled run.</p>
+                )}
               </div>
               <ConfirmButton onConfirm={() => remove(c)} />
             </div>
