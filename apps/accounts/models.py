@@ -1,17 +1,17 @@
 import hashlib
 import urllib.parse
 from uuid import uuid4
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError, available_timezones
+from zoneinfo import available_timezones
 
 from django.contrib.auth.models import AbstractUser
-from django.core.exceptions import ValidationError
 from django.db import models
-from django.utils.safestring import mark_safe
 
 TIMEZONE_CHOICES = sorted([(tz, tz) for tz in available_timezones()])
 
 
-def avatar_thumbnail_path(instance, filename):
+def avatar_thumbnail_path(instance, _filename):
+    # Django's upload_to callable signature is (instance, filename); we replace
+    # the client filename with a uuid so uploads never collide.
     return f"avatars/thumbnails/{instance.pk}/{uuid4().hex}.jpg"
 
 
@@ -34,29 +34,10 @@ class User(AbstractUser):
     currency = models.CharField(max_length=3, default="USD")
     avatar_thumbnail = models.ImageField(upload_to=avatar_thumbnail_path, blank=True)
 
-    def clean(self):
-        super().clean()
-        if self.timezone:
-            try:
-                ZoneInfo(self.timezone)
-            except (ZoneInfoNotFoundError, KeyError) as err:
-                raise ValidationError({"timezone": f"Invalid timezone: {self.timezone}"}) from err
-
-    def _get_gravatar_url(self, size: int = 40):
-        # See the documentation for the default parameter: https://docs.gravatar.com/api/avatars/images/
-        default = "mp"
-        hashed_email = hashlib.md5(self.email.lower().encode()).hexdigest()  # noqa: S324
-        params = urllib.parse.urlencode({"d": default, "s": str(size)})
-        return f"https://www.gravatar.com/avatar/{hashed_email}?{params}"
-
     @property
     def avatar_url(self):
         if self.avatar_thumbnail:
             return self.avatar_thumbnail.url
-        return self._get_gravatar_url(size=256)
-
-    @property
-    def gravatar(self):
-        size = 40
-        url = self._get_gravatar_url(size=size)
-        return mark_safe(f'<img src="{url}" height="{size}" width="{size}" class="rounded-5">')  # noqa: S308
+        email_hash = hashlib.md5(self.email.lower().encode()).hexdigest()  # noqa: S324
+        params = urllib.parse.urlencode({"d": "mp", "s": "256"})
+        return f"https://www.gravatar.com/avatar/{email_hash}?{params}"

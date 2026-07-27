@@ -8,5 +8,16 @@ from .models import User
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin, ModelAdmin):
-    pass
+    list_display = ("email", "first_name", "last_name", "is_staff")
+    ordering = ("email",)
+    fieldsets = (BaseUserAdmin.fieldsets or ()) + (
+        ("Budgeteer", {
+            "fields": (
+                "currency",
+                "timezone",
+                "default_budget",
+                "avatar_thumbnail",
+            ),
+        }),
+    )
 

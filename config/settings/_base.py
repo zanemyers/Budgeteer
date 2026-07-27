@@ -324,7 +324,6 @@ ACCOUNT_EMAIL_VERIFICATION = "optional"
 # CUSTOM Django Base Site ALLAUTH settings used in the custom adapter (apps.accounts.auth_adapter)
 ACCOUNT_ADAPTER = "apps.accounts.auth_adapter.AccountAdapter"
 ACCOUNT_SIGNUP_OPEN = False
-ACCOUNT_SHOW_POST_LOGIN_MESSAGE = False
 
 if INSTANCE != "prod":
     # See https://github.com/migonzalvar/dj-email-url for more examples on how to set the EMAIL_URL
