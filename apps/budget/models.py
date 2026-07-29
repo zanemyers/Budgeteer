@@ -360,7 +360,11 @@ class Transaction(models.Model):
     def derive_transaction_type(self) -> str:
         if self.transaction_type:
             return self.transaction_type
-        first_line = self.lines.select_related("category").first()
+        # Iterate the (usually prefetched) line cache rather than .first(), which
+        # builds a fresh queryset that ignores the cache and causes an N+1 when
+        # deriving the type across a list of transactions. Meta.ordering
+        # (category__name) makes the first cached line match the old .first().
+        first_line = next(iter(self.lines.all()), None)
         return first_line.category.category_type if first_line else ""
 
     def link_transfer(self, partner: "Transaction") -> None:
