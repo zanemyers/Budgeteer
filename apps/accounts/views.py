@@ -11,15 +11,25 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 
 from allauth.account.forms import ChangePasswordForm
 from allauth.account.models import EmailAddress
-from allauth.core import ratelimit
 from allauth.account.views import (
     ConfirmEmailView as AllAuthConfirmEmailView,
+)
+from allauth.account.views import (
     LoginView,
+)
+from allauth.account.views import (
     PasswordResetDoneView as AllAuthPasswordResetDoneView,
+)
+from allauth.account.views import (
     PasswordResetFromKeyDoneView as AllAuthPasswordResetFromKeyDoneView,
+)
+from allauth.account.views import (
     PasswordResetFromKeyView as AllAuthPasswordResetFromKeyView,
+)
+from allauth.account.views import (
     PasswordResetView as AllAuthPasswordResetView,
 )
+from allauth.core import ratelimit
 from inertia import render as inertia_render
 from PIL import Image, ImageOps
 
@@ -27,7 +37,6 @@ from apps.banking.models import SimpleFINConnection
 from apps.banking.simplefin import SimpleFINError, claim_setup_token
 from apps.base.http import parse_json_body
 from apps.base.models import Currency
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -167,7 +176,10 @@ class AccountSettingsView(LoginRequiredMixin, View):
             # Rate-limit first (allauth's confirm_email limit, 1/180s per email) — we bypass
             # allauth's own confirm-email view, so its rate-limit doesn't apply automatically.
             if not ratelimit.consume(request, action="confirm_email", key=email_str.lower()):
-                return JsonResponse({"error": "Please wait a moment before requesting another verification email."}, status=429)
+                return JsonResponse(
+                    {"error": "Please wait a moment before requesting another verification email."},
+                    status=429,
+                )
             ea = EmailAddress.objects.filter(user=user, email=email_str).first()
             if not ea:
                 return JsonResponse({"error": "Email not found."}, status=404)
@@ -230,7 +242,10 @@ class AccountSettingsView(LoginRequiredMixin, View):
             if EmailAddress.objects.filter(email=email_str).exists():
                 return JsonResponse({"error": "This email is already in use."}, status=400)
             ea = EmailAddress.objects.add_email(request, user, email_str, confirm=True)
-            return JsonResponse({"id": ea.pk, "email": ea.email, "primary": ea.primary, "verified": ea.verified}, status=201)
+            return JsonResponse(
+                {"id": ea.pk, "email": ea.email, "primary": ea.primary, "verified": ea.verified},
+                status=201,
+            )
 
         if action == "claim_simplefin_token":
             try:

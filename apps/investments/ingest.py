@@ -31,14 +31,15 @@ def persist_holdings(bank_account, holdings_payload: list[dict[str, Any]] | None
         sfin_id = hld.get("id")
         if not sfin_id:
             continue
+        sfin_id = str(sfin_id)
         seen_ids.add(sfin_id)
         defaults = {
             "symbol": (hld.get("symbol") or "")[:32],
             "description": (hld.get("description") or "")[:500],
-            "shares": _to_decimal(hld.get("shares"), Decimal("0")) or Decimal("0"),
-            "cost_basis": _to_decimal(hld.get("cost_basis"), None),
-            "market_value": _to_decimal(hld.get("market_value"), None),
-            "purchase_price": _to_decimal(hld.get("purchase_price"), None),
+            "shares": _to_decimal(hld.get("shares"), Decimal("0")),
+            "cost_basis": _to_decimal(hld.get("cost_basis")),
+            "market_value": _to_decimal(hld.get("market_value")),
+            "purchase_price": _to_decimal(hld.get("purchase_price")),
             "currency": (hld.get("currency") or "USD")[:3],
             "raw": hld,
         }
@@ -52,8 +53,6 @@ def persist_holdings(bank_account, holdings_payload: list[dict[str, Any]] | None
         else:
             summary["updated"] += 1
 
-    removed, _ = (
-        Holding.objects.filter(bank_account=bank_account).exclude(simplefin_id__in=seen_ids).delete()
-    )
+    removed, _ = Holding.objects.filter(bank_account=bank_account).exclude(simplefin_id__in=seen_ids).delete()
     summary["removed"] = removed
     return summary
