@@ -93,6 +93,9 @@ def serialize_bank_transaction(bt) -> dict:
 def serialize_transaction(txn) -> dict:
     all_lines = list(txn.lines.all())
     lines = [serialize_transaction_line(line) for line in all_lines]
+    # Sum the already-loaded lines in Python; txn.total_amount would re-aggregate
+    # in the DB (ignoring the prefetch cache) and cause an N+1 across a txn list.
+    total_amount = sum((line.amount for line in all_lines), Decimal("0.00"))
     linked_bt = getattr(txn, "bank_transaction", None) if txn.pk else None
     linked = [linked_bt] if linked_bt else []
     is_transfer = (
@@ -111,7 +114,7 @@ def serialize_transaction(txn) -> dict:
         "payment_method": txn.payment_method_id,
         "payment_method_name": str(txn.payment_method) if txn.payment_method else None,
         "lines": lines,
-        "total_amount": str(txn.total_amount),
+        "total_amount": str(total_amount),
         "transaction_type": txn.derive_transaction_type(),
         "currency": txn.currency,
         "exchange_rate_to_usd": str(txn.exchange_rate_to_usd),
@@ -305,9 +308,11 @@ def get_budget_overview(budget, month_str: str | None, user_rate: "Decimal" = De
     )
     activity_map: dict[int, Decimal] = {row["category_id"]: row["total"] * user_rate for row in regular_activity_qs}
 
-    # Activity for goal categories: all-time paid expenses (no date filter).
-    goal_activity_qs = (
-        TransactionLine.objects.filter(
+    # All-time paid expenses per goal category. Reused below for the net-saved
+    # balance, so compute this (identical) aggregate once.
+    goal_expense_map: dict[int, Decimal] = {
+        row["category_id"]: row["total"] * user_rate
+        for row in TransactionLine.objects.filter(
             transaction__budget=budget,
             category__goal__isnull=False,
             transaction__transaction_type="expense",
@@ -315,9 +320,9 @@ def get_budget_overview(budget, month_str: str | None, user_rate: "Decimal" = De
         )
         .values("category_id")
         .annotate(total=Sum("amount_usd"))
-    )
-    for row in goal_activity_qs:
-        activity_map[row["category_id"]] = row["total"] * user_rate
+    }
+    # A goal category's activity is its all-time paid expense total (no date filter).
+    activity_map.update(goal_expense_map)
 
     # Assigned amounts
     assigned_qs = CategoryBudget.objects.filter(budget=budget, month=period_start).values("category_id", "assigned")
@@ -334,23 +339,13 @@ def get_budget_overview(budget, month_str: str | None, user_rate: "Decimal" = De
         .values("category_id")
         .annotate(total=Sum("amount_usd"))
     )
-    saved_expense_qs = (
-        TransactionLine.objects.filter(
-            transaction__budget=budget,
-            category__goal__isnull=False,
-            transaction__transaction_type="expense",
-            transaction__paid_date__isnull=False,
-        )
-        .values("category_id")
-        .annotate(total=Sum("amount_usd"))
-    )
     credits_map: dict[int, Decimal] = {}
     for row in saved_credits_qs:
         credits_map[row["category_id"]] = credits_map.get(row["category_id"], Decimal("0.00")) + row["total"] * user_rate
 
     saved_map: dict[int, Decimal] = dict(credits_map)
-    for row in saved_expense_qs:
-        saved_map[row["category_id"]] = saved_map.get(row["category_id"], Decimal("0.00")) - row["total"] * user_rate
+    for cat_id, expense_total in goal_expense_map.items():
+        saved_map[cat_id] = saved_map.get(cat_id, Decimal("0.00")) - expense_total
 
     # Monthly SF spending (paid expenses only) for dashboard totals
     goal_monthly_expense_qs = (
@@ -392,7 +387,11 @@ def get_budget_overview(budget, month_str: str | None, user_rate: "Decimal" = De
     )
     income_total = (income_qs["total"] or Decimal("0.00")) * user_rate
 
-    categories = Category.objects.filter(budget=budget, is_system=False).order_by("category_type", "name")
+    categories = (
+        Category.objects.filter(budget=budget, is_system=False)
+        .select_related("goal")
+        .order_by("category_type", "name")
+    )
 
     rows = []
     expense_assigned = Decimal("0.00")

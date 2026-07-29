@@ -24,7 +24,6 @@ class Holding(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = "investments_holding"
         unique_together = [("bank_account", "simplefin_id")]
         ordering = ["symbol", "description"]
 

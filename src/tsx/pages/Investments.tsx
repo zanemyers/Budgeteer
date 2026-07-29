@@ -18,7 +18,6 @@ interface Holding {
   unrealized_gain: string | null;
   unrealized_gain_pct: number | null;
   weight_pct: number | null;
-  updated_at: string | null;
 }
 
 interface InvestmentAccount {

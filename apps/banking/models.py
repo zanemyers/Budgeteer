@@ -20,7 +20,6 @@ class SimpleFINConnection(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = "base_simplefinconnection"
         ordering = ["-created_at"]
         verbose_name = "SimpleFIN Connection"
         verbose_name_plural = "SimpleFIN Connections"
@@ -64,7 +63,6 @@ class BankAccount(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = "base_bankaccount"
         unique_together = [("connection", "simplefin_id")]
         ordering = ["org_name", "name"]
 
@@ -95,7 +93,7 @@ class BankTransaction(models.Model):
     raw = models.JSONField(default=dict, blank=True)
     status = models.CharField(
         max_length=10,
-        choices=Status.choices,
+        choices=Status,
         default=Status.PENDING,
     )
     ignore_reason = models.CharField(max_length=500, blank=True, default="")
@@ -110,11 +108,10 @@ class BankTransaction(models.Model):
     last_seen_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = "base_banktransaction"
         unique_together = [("bank_account", "simplefin_id")]
         ordering = ["-posted_at"]
         indexes = [
-            models.Index(fields=["status", "posted_at"], name="base_banktr_status_980c92_idx"),
+            models.Index(fields=["status", "posted_at"]),
         ]
 
     def __str__(self) -> str:

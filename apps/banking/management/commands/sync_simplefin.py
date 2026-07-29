@@ -8,10 +8,10 @@ from apps.banking.models import BankAccount, BankTransaction, SimpleFINConnectio
 from apps.banking.simplefin import SimpleFINError, fetch_accounts
 from apps.investments.ingest import persist_holdings
 
+COUNT_KEYS = ("accounts", "new_txns", "updated_txns", "new_holdings", "updated_holdings", "removed_holdings")
 
-def _to_decimal(value, default: Decimal = Decimal("0")) -> Decimal:
-    if value in (None, ""):
-        return default
+
+def _to_decimal(value, default: Decimal | None = Decimal("0")) -> Decimal | None:
     try:
         return Decimal(str(value))
     except (InvalidOperation, ValueError):
@@ -19,8 +19,6 @@ def _to_decimal(value, default: Decimal = Decimal("0")) -> Decimal:
 
 
 def _to_datetime(unix_ts) -> datetime | None:
-    if unix_ts is None:
-        return None
     try:
         return datetime.fromtimestamp(int(unix_ts), tz=UTC)
     except (TypeError, ValueError, OSError):
@@ -34,34 +32,25 @@ def sync_connection(conn: SimpleFINConnection, days: int = 31) -> dict:
     default to 31 — covers the longest month so we always pick up at least the
     last full calendar month, and stays comfortably under the recommendation.
 
-    Returns a summary dict: {accounts, new_txns, updated_txns, errors}.
+    Returns a summary dict of per-connection counts: accounts, new/updated
+    transactions, new/updated/removed holdings, and a list of error strings.
     """
     start_ts = int((datetime.now(UTC) - timedelta(days=days)).timestamp())
     # Never request data from before the connection existed — anything older
     # pre-dates the user's tracking and would just clutter the Banking page.
     if conn.created_at:
         start_ts = max(start_ts, int(conn.created_at.timestamp()))
-    summary = {
-        "accounts": 0,
-        "new_txns": 0,
-        "updated_txns": 0,
-        "new_holdings": 0,
-        "updated_holdings": 0,
-        "removed_holdings": 0,
-        "errors": [],
-    }
+    summary = dict.fromkeys(COUNT_KEYS, 0)
+    errors: list[str] = []
 
     try:
         data = fetch_accounts(conn.access_url, start_date=start_ts)
     except SimpleFINError as e:
-        conn.last_sync_error = str(e)[:1000]
-        conn.last_synced_at = timezone.now()
-        conn.save(update_fields=["last_sync_error", "last_synced_at"])
-        summary["errors"].append(str(e))
-        return summary
+        # No data to process — record the failure; the empty dict skips the loop below.
+        errors.append(str(e))
+        data = {}
 
-    api_errors = data.get("errors") or []
-    summary["errors"].extend(api_errors)
+    errors.extend(data.get("errors") or [])
 
     for acct in data.get("accounts", []):
         sfin_id = acct.get("id")
@@ -76,12 +65,8 @@ def sync_connection(conn: SimpleFINConnection, days: int = 31) -> dict:
                 "org_name": (org.get("name") or "")[:255],
                 "org_domain": (org.get("domain") or "")[:255],
                 "currency": (acct.get("currency") or "USD")[:3],
-                "balance": _to_decimal(acct.get("balance"), Decimal("0")),
-                "available_balance": (
-                    _to_decimal(acct.get("available-balance"), None)
-                    if acct.get("available-balance") not in (None, "")
-                    else None
-                ),
+                "balance": _to_decimal(acct.get("balance")),
+                "available_balance": _to_decimal(acct.get("available-balance"), None),
                 "balance_as_of": _to_datetime(acct.get("balance-date")),
             },
         )
@@ -100,17 +85,16 @@ def sync_connection(conn: SimpleFINConnection, days: int = 31) -> dict:
             # Skip pending-at-bank transactions — their id can change when they post.
             if txn.get("pending"):
                 continue
-            posted_at = _to_datetime(txn.get("posted")) or timezone.now()
             defaults = {
-                "posted_at": posted_at,
-                "amount": _to_decimal(txn.get("amount"), Decimal("0")),
+                "posted_at": _to_datetime(txn.get("posted")) or timezone.now(),
+                "amount": _to_decimal(txn.get("amount")),
                 "description": (txn.get("description") or "")[:500],
                 "payee": (txn.get("payee") or "")[:255],
                 "memo": (txn.get("memo") or "")[:500],
-                "is_pending_at_bank": bool(txn.get("pending")),
+                "is_pending_at_bank": False,
                 "raw": txn,
             }
-            bt, created = BankTransaction.objects.update_or_create(
+            _, created = BankTransaction.objects.update_or_create(
                 bank_account=bank_account,
                 simplefin_id=txn_id,
                 defaults=defaults,
@@ -120,10 +104,19 @@ def sync_connection(conn: SimpleFINConnection, days: int = 31) -> dict:
             else:
                 summary["updated_txns"] += 1
 
-    conn.last_sync_error = "; ".join(api_errors)[:1000] if api_errors else ""
+    conn.last_sync_error = "; ".join(errors)[:1000]
     conn.last_synced_at = timezone.now()
     conn.save(update_fields=["last_sync_error", "last_synced_at"])
-    return summary
+    return {**summary, "errors": errors}
+
+
+def _format_counts(c: dict) -> str:
+    """Render a counts dict (per-connection result or grand totals) as one line."""
+    return (
+        f"{c['accounts']} accounts, "
+        f"{c['new_txns']} new / {c['updated_txns']} updated transactions, "
+        f"{c['new_holdings']} new / {c['updated_holdings']} updated / {c['removed_holdings']} removed holdings"
+    )
 
 
 class Command(BaseCommand):
@@ -139,13 +132,11 @@ class Command(BaseCommand):
         parser.add_argument(
             "--user",
             type=int,
-            default=None,
             help="Only sync connections for the given user id.",
         )
         parser.add_argument(
             "--connection",
             type=int,
-            default=None,
             help="Only sync a specific SimpleFINConnection by id.",
         )
 
@@ -156,44 +147,28 @@ class Command(BaseCommand):
         if options["connection"]:
             qs = qs.filter(pk=options["connection"])
 
-        total = qs.count()
-        if not total:
+        connections = list(qs)
+        if not connections:
             self.stdout.write("No SimpleFIN connections to sync.")
             return
 
-        totals = {
-            "accounts": 0,
-            "new_txns": 0,
-            "updated_txns": 0,
-            "new_holdings": 0,
-            "updated_holdings": 0,
-            "removed_holdings": 0,
-            "errors": 0,
-        }
-        for conn in qs:
+        totals = dict.fromkeys(COUNT_KEYS, 0)
+        error_count = 0
+        for conn in connections:
+            # Django auto-creates the `user_id` column for the `user` FK; the IDE's
+            # static analysis can't see the implicit attribute, so suppress its warning.
+            # noinspection PyUnresolvedReferences
             self.stdout.write(f"Syncing {conn} (user {conn.user_id})…")
             result = sync_connection(conn, days=options["days"])
-            totals["accounts"] += result["accounts"]
-            totals["new_txns"] += result["new_txns"]
-            totals["updated_txns"] += result["updated_txns"]
-            totals["new_holdings"] += result["new_holdings"]
-            totals["updated_holdings"] += result["updated_holdings"]
-            totals["removed_holdings"] += result["removed_holdings"]
-            totals["errors"] += len(result["errors"])
+            for key in COUNT_KEYS:
+                totals[key] += result[key]
+            error_count += len(result["errors"])
             for err in result["errors"]:
                 self.stderr.write(f"  error: {err}")
-            self.stdout.write(
-                f"  {result['accounts']} accounts, "
-                f"{result['new_txns']} new / {result['updated_txns']} updated transactions, "
-                f"{result['new_holdings']} new / {result['updated_holdings']} updated "
-                f"/ {result['removed_holdings']} removed holdings"
-            )
+            self.stdout.write(f"  {_format_counts(result)}")
 
         self.stdout.write(
             self.style.SUCCESS(
-                f"Synced {total} connection(s): {totals['accounts']} accounts, "
-                f"{totals['new_txns']} new, {totals['updated_txns']} updated transactions, "
-                f"{totals['new_holdings']} new, {totals['updated_holdings']} updated, "
-                f"{totals['removed_holdings']} removed holdings, {totals['errors']} errors."
+                f"Synced {len(connections)} connection(s): {_format_counts(totals)}, {error_count} errors."
             )
         )

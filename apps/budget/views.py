@@ -312,7 +312,11 @@ class BudgetDetailView(BudgetMemberMixin, View):
             "overview": lambda: get_budget_overview(budget, month_str, user_rate),
             "categories": lambda: [
                 serialize_category(c)
-                for c in Category.objects.filter(budget=budget, is_system=False).order_by("category_type", "name")
+                for c in (
+                    Category.objects.filter(budget=budget, is_system=False)
+                    .select_related("goal")
+                    .order_by("category_type", "name")
+                )
             ],
             "payment_methods": lambda: [
                 serialize_payment_method(pm)
@@ -335,7 +339,11 @@ class GoalsView(BudgetMemberMixin, View):
             "overview": lambda: get_budget_overview(budget, month_str, user_rate),
             "categories": lambda: [
                 serialize_category(c)
-                for c in Category.objects.filter(budget=budget, is_system=False).order_by("category_type", "name")
+                for c in (
+                    Category.objects.filter(budget=budget, is_system=False)
+                    .select_related("goal")
+                    .order_by("category_type", "name")
+                )
             ],
             "payment_methods": lambda: [
                 serialize_payment_method(pm)
@@ -374,7 +382,11 @@ class BudgetSettingsView(BudgetMemberMixin, View):
 
         # Categories — include goal total_saved like CategoryListView did,
         # so the modal can present accurate balances when editing.
-        categories = list(Category.objects.filter(budget=budget, is_system=False).order_by("category_type", "name"))
+        categories = list(
+            Category.objects.filter(budget=budget, is_system=False)
+            .select_related("goal")
+            .order_by("category_type", "name")
+        )
         goal_ids = [c.pk for c in categories if c.is_goal]
         income_saved = {
             row["category_id"]: row["total"]
@@ -734,7 +746,11 @@ class TransactionListView(BudgetMemberMixin, View):
             "ignored_bank_transactions": _ignored_bank_txns,
             "categories": lambda: [
                 serialize_category(c)
-                for c in Category.objects.filter(budget=budget, is_system=False).order_by("category_type", "name")
+                for c in (
+                    Category.objects.filter(budget=budget, is_system=False)
+                    .select_related("goal")
+                    .order_by("category_type", "name")
+                )
             ],
             "payment_methods": lambda: [
                 serialize_payment_method(pm)
