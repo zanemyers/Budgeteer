@@ -265,6 +265,17 @@ SITE_NAME = "Budgeteer"
 if DEBUG is True:
     INSTALLED_APPS += ["debug_toolbar"]
     MIDDLEWARE += ["debug_toolbar.middleware.DebugToolbarMiddleware"]
+    # Under Docker (esp. Docker Desktop on macOS) the browser's request reaches
+    # the container with a SNAT'd source IP that isn't reliably in INTERNAL_IPS,
+    # so the default show-callback hides the toolbar. Drop the IP check but keep
+    # the DEBUG gate by reading the *live* setting: this keeps the toolbar off
+    # under the test runner (which disables DEBUG and doesn't register djdt URLs).
+    def _show_debug_toolbar(request):
+        from django.conf import settings
+
+        return settings.DEBUG
+
+    DEBUG_TOOLBAR_CONFIG = {"SHOW_TOOLBAR_CALLBACK": _show_debug_toolbar}
 
 # UNFOLD ADMIN SETTINGS (https://unfoldadmin.com/docs/configuration/settings/)
 UNFOLD = {

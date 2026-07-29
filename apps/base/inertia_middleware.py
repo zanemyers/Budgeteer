@@ -30,11 +30,8 @@ class InertiaShareMiddleware:
         if request.user.is_authenticated:
             user = request.user
             currency_code = user.currency or "USD"
-            try:
-                currency = Currency.objects.get(code=currency_code)
-                currency_symbol = currency.symbol
-            except Currency.DoesNotExist:
-                currency_symbol = "$"
+            currency = Currency.objects.filter(code=currency_code).first()
+            currency_symbol = currency.symbol if currency else "$"
 
             sidebar_budget = _resolve_sidebar_budget(user)
             current_budget = (
