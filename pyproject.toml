@@ -26,7 +26,6 @@ dependencies = [
     "requests~=2.33",
     "ty>=0.0.34",
     "celery-types>=0.26.0",
-    "unfold>=1.2.4",
 ]
 
 [dependency-groups]
