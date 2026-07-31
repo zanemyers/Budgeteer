@@ -9,6 +9,15 @@ from django.db.models import Q, Sum
 from django.db.models.constraints import UniqueConstraint
 
 
+def add_months(d: datetime.date, months: int) -> datetime.date:
+    """Return `d` shifted forward by `months`, clamping the day to the target month."""
+    month = d.month + months
+    year = d.year + (month - 1) // 12
+    month = (month - 1) % 12 + 1
+    day = min(d.day, calendar.monthrange(year, month)[1])
+    return datetime.date(year, month, day)
+
+
 class Budget(models.Model):
     name = models.CharField(max_length=150, blank=True, default="")
     created_by = models.ForeignKey(
@@ -29,10 +38,7 @@ class Budget(models.Model):
         ordering = ["-created_at"]
 
     def __str__(self) -> str:
-        names = ", ".join(
-            m.get_full_name() or m.email
-            for m in self.members.all()[:3]
-        )
+        names = ", ".join(m.get_full_name() or m.email for m in self.members.all()[:3])
         return f"Budget ({names})" if names else f"Budget #{self.pk}"
 
 
@@ -61,6 +67,254 @@ class BudgetMembership(models.Model):
         return f"{self.user} — {self.budget} ({self.role})"
 
 
+class PaySchedule(models.Model):
+    """A named income source (a job) and which budget month its paychecks fund.
+
+    A budget can have several — e.g. one per job or per spouse. `frequency` and the
+    anchor fields describe *how* the user is paid (for payday projection and UI).
+    Month allocation is driven by `allocation_offset_months`: 0 = income funds the
+    month it's received, 1 = the following month (budgeting a month ahead).
+
+    A paycheck is matched to a schedule by `expected_amount` and/or `match_text`
+    (a substring of the transaction description or bank payee) — both known at
+    entry/sync time, before the income has been categorized.
+    """
+
+    FREQ_MONTHLY = "monthly"
+    FREQ_SEMIMONTHLY = "semimonthly"
+    FREQ_BIWEEKLY = "biweekly"
+    FREQ_WEEKLY = "weekly"
+    FREQ_CHOICES = [
+        (FREQ_MONTHLY, "Once a month"),
+        (FREQ_SEMIMONTHLY, "Twice a month"),
+        (FREQ_BIWEEKLY, "Every two weeks"),
+        (FREQ_WEEKLY, "Weekly"),
+    ]
+
+    ANCHOR_BEGINNING = "beginning"
+    ANCHOR_MIDDLE = "middle"
+    ANCHOR_END = "end"
+    ANCHOR_CHOICES = [
+        (ANCHOR_BEGINNING, "Beginning of the month"),
+        (ANCHOR_MIDDLE, "Middle of the month"),
+        (ANCHOR_END, "End of the month"),
+    ]
+
+    budget = models.ForeignKey(Budget, on_delete=models.CASCADE, related_name="pay_schedules")
+    name = models.CharField(max_length=100, help_text="Label for this income source, e.g. the job it belongs to.")
+    category = models.ForeignKey(
+        "Category",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="pay_schedules",
+        help_text="Income category a matched paycheck should be recorded under.",
+    )
+    frequency = models.CharField(max_length=20, choices=FREQ_CHOICES, default=FREQ_MONTHLY)
+    anchor_1 = models.CharField(
+        max_length=10,
+        choices=ANCHOR_CHOICES,
+        blank=True,
+        default="",
+        help_text="First payday of the month (monthly / twice-a-month schedules).",
+    )
+    anchor_2 = models.CharField(
+        max_length=10,
+        choices=ANCHOR_CHOICES,
+        blank=True,
+        default="",
+        help_text="Second payday of the month, for twice-a-month schedules.",
+    )
+    anchor_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="A reference payday, used to project every-two-weeks / weekly paydays.",
+    )
+    allocation_offset_months = models.PositiveSmallIntegerField(
+        default=0,
+        help_text="0 = income funds the month it's received; 1 = funds the following month.",
+    )
+    expected_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Approximate paycheck amount. Also used to match income to this schedule.",
+    )
+    match_text = models.CharField(
+        max_length=200,
+        blank=True,
+        default="",
+        help_text="If the transaction description or bank payee contains this text, it matches this schedule.",
+    )
+    generated_through = models.DateField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.get_frequency_display()})"
+
+    def _anchor_day(self, anchor: str, year: int, month: int) -> int | None:
+        """Resolve a semantic anchor (beginning/middle/end) to a day in a given month."""
+        if anchor == self.ANCHOR_BEGINNING:
+            return 1
+        if anchor == self.ANCHOR_MIDDLE:
+            return 15
+        if anchor == self.ANCHOR_END:
+            return calendar.monthrange(year, month)[1]
+        return None
+
+    def budget_month_for(self, received_date: datetime.date) -> datetime.date:
+        """First-of-month a paycheck received on `received_date` should fund.
+
+        For a twice-a-month schedule that budgets a month ahead, only the *later*
+        paycheck of the month carries the offset — the earlier (e.g. mid-month) one
+        still funds the month it's received, so you don't skip a month.
+        """
+        offset = self.allocation_offset_months
+        if offset and self.frequency == self.FREQ_SEMIMONTHLY and self.anchor_1 and self.anchor_2:
+            d1 = self._anchor_day(self.anchor_1, received_date.year, received_date.month)
+            d2 = self._anchor_day(self.anchor_2, received_date.year, received_date.month)
+            if d1 and d2 and received_date.day <= (min(d1, d2) + max(d1, d2)) / 2:
+                offset = 0  # first paycheck of the month — funds the received month
+        return add_months(received_date.replace(day=1), offset)
+
+    def paydays_between(self, start: datetime.date, end: datetime.date) -> list[datetime.date]:
+        """All payday dates in [start, end] implied by this schedule's cadence."""
+        if start > end:
+            return []
+        dates: list[datetime.date] = []
+        if self.frequency in (self.FREQ_BIWEEKLY, self.FREQ_WEEKLY):
+            if not self.anchor_date:
+                return []
+            step = 14 if self.frequency == self.FREQ_BIWEEKLY else 7
+            # Walk the cadence from the reference payday to the first date >= start.
+            day = self.anchor_date
+            if day < start:
+                gap = (start - day).days
+                day = day + datetime.timedelta(days=((gap + step - 1) // step) * step)
+            while day <= end:
+                dates.append(day)
+                day = day + datetime.timedelta(days=step)
+            return dates
+        # monthly / semimonthly: resolve anchors within each month of the range
+        anchors = [a for a in (self.anchor_1, self.anchor_2) if a]
+        if self.frequency == self.FREQ_MONTHLY:
+            anchors = anchors[:1]
+        if not anchors:
+            return []
+        cursor = start.replace(day=1)
+        while cursor <= end:
+            for anchor in anchors:
+                day = self._anchor_day(anchor, cursor.year, cursor.month)
+                if day:
+                    payday = cursor.replace(day=day)
+                    if start <= payday <= end:
+                        dates.append(payday)
+            cursor = add_months(cursor, 1)
+        return sorted(dates)
+
+    def generate_instances_up_to(self, through_date: datetime.date, since: datetime.date) -> list["Transaction"]:
+        """Create pending income Transactions for each payday up to `through_date`.
+
+        Requires a category (an income line needs one). The amount is optional: with no
+        `expected_amount` — e.g. variable part-time pay — paychecks are generated as
+        pending placeholders (amount 0) to be filled in before they're marked paid.
+        `since` floors the first run so we don't backfill history.
+        """
+        from apps.base.models import Currency as CurrencyModel
+        from apps.budget.models import Transaction, TransactionLine
+
+        if self.category_id is None:
+            return []
+
+        floor = self.generated_through + datetime.timedelta(days=1) if self.generated_through else since
+        paydays = self.paydays_between(floor, through_date)
+        if not paydays:
+            return []
+
+        creator = self.budget.created_by
+        currency_code = getattr(creator, "currency", None) or "USD"
+        try:
+            exchange_rate = CurrencyModel.objects.get(code=currency_code).rate_to_usd
+        except CurrencyModel.DoesNotExist:
+            exchange_rate = Decimal("1")
+        amount = Decimal(str(self.expected_amount)) if self.expected_amount is not None else Decimal("0.00")
+
+        created: list[Transaction] = []
+        for payday in paydays:
+            transaction, is_new = Transaction.objects.get_or_create(
+                pay_schedule=self,
+                due_date=payday,
+                defaults={
+                    "budget": self.budget,
+                    "created_by": creator,
+                    "description": self.name,
+                    "transaction_type": "income",
+                    "budget_month": self.budget_month_for(payday),
+                    "currency": currency_code,
+                    "exchange_rate_to_usd": exchange_rate,
+                },
+            )
+            if is_new:
+                created.append(transaction)
+            if not transaction.lines.exists():
+                TransactionLine.objects.create(
+                    transaction=transaction,
+                    category=self.category,
+                    amount=amount,
+                    amount_usd=amount / exchange_rate if exchange_rate else amount,
+                )
+
+        self.generated_through = paydays[-1]
+        self.save(update_fields=["generated_through"])
+        return created
+
+
+def _amount_close(a: Decimal, b: Decimal) -> bool:
+    """True if two amounts are within ~5% (or $1) of each other, ignoring sign."""
+    a, b = abs(a), abs(b)
+    return abs(a - b) <= max(b * Decimal("0.05"), Decimal("1"))
+
+
+def match_pay_schedule(budget, *, amount: "Decimal | None" = None, description: str = "") -> "PaySchedule | None":
+    """Pick the pay schedule a paycheck belongs to, by amount and/or description.
+
+    A schedule with no match criteria acts as a weak default; one with criteria only
+    wins when they match. Returns None when nothing matches (caller falls back to the
+    received date), so we never silently allocate income to the wrong month.
+    """
+    text = (description or "").lower()
+    best, best_score = None, 0.0
+    for schedule in budget.pay_schedules.all():
+        if not schedule.expected_amount and not schedule.match_text:
+            score = 0.1  # criteria-less default
+        else:
+            score = 0.0
+            if (
+                schedule.expected_amount is not None
+                and amount is not None
+                and _amount_close(amount, schedule.expected_amount)
+            ):
+                score += 0.5
+            if schedule.match_text and schedule.match_text.lower() in text:
+                score += 0.5
+        if score > best_score:
+            best, best_score = schedule, score
+    return best if best_score > 0 else None
+
+
+def default_income_budget_month(
+    budget, received_date: datetime.date, *, amount: "Decimal | None" = None, description: str = ""
+) -> datetime.date | None:
+    """Target budget month for income, per the matched pay schedule (None if none)."""
+    schedule = match_pay_schedule(budget, amount=amount, description=description)
+    return schedule.budget_month_for(received_date) if schedule else None
+
+
 class Category(models.Model):
     TYPE_INCOME = "income"
     TYPE_EXPENSE = "expense"
@@ -82,6 +336,21 @@ class Category(models.Model):
     category_type = models.CharField(max_length=10, choices=TYPE_CHOICES)
     monthly_budget = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
     is_system = models.BooleanField(default=False)
+    rollover = models.BooleanField(
+        default=False,
+        help_text="Carry this category's leftover balance forward into the next month instead of resetting it.",
+    )
+    base_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        help_text="Recurring amount budgeted to a rollover category each month; leftover accrues on top.",
+    )
+    rollover_start = models.DateField(
+        null=True,
+        blank=True,
+        help_text="First month (1st) the rollover base begins accruing. Set when rollover is enabled.",
+    )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -277,6 +546,8 @@ class RecurringTransaction(models.Model):
             exchange_rate = Decimal("1")
         amount = Decimal(str(self.amount))
 
+        is_income = self.category.category_type == Category.TYPE_INCOME
+
         created: list[Transaction] = []
         for due_date in due_dates:
             transaction, is_new = Transaction.objects.get_or_create(
@@ -289,6 +560,11 @@ class RecurringTransaction(models.Model):
                     "payment_method": self.payment_method,
                     "currency": currency_code,
                     "exchange_rate_to_usd": exchange_rate,
+                    "budget_month": (
+                        default_income_budget_month(self.budget, due_date, amount=self.amount, description=self.name)
+                        if is_income
+                        else None
+                    ),
                 },
             )
             if is_new:
@@ -323,6 +599,13 @@ class Transaction(models.Model):
         blank=True,
         related_name="instances",
     )
+    pay_schedule = models.ForeignKey(
+        "PaySchedule",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="instances",
+    )
     payment_method = models.ForeignKey(
         "PaymentMethod",
         on_delete=models.SET_NULL,
@@ -333,6 +616,11 @@ class Transaction(models.Model):
     description = models.CharField(max_length=200)
     due_date = models.DateField()
     paid_date = models.DateField(null=True, blank=True)
+    budget_month = models.DateField(
+        null=True,
+        blank=True,
+        help_text="First day of the budget month this transaction funds; overrides paid_date bucketing.",
+    )
     notes = models.TextField(blank=True)
     transaction_type = models.CharField(max_length=10, blank=True, default="")
     transfer_partner = models.OneToOneField(

@@ -1,17 +1,9 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import type { Category, CurrencyOption, LinkedBankTransaction, PaymentMethod, Transaction, TransactionLine } from "../types";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { jsonFetch } from "@/lib/api";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -24,9 +16,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { jsonFetch } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import { fmtDate } from "../utils/date";
+import type {
+  Category,
+  CurrencyOption,
+  LinkedBankTransaction,
+  PaymentMethod,
+  Transaction,
+  TransactionLine,
+} from "../types";
 import { fmtSigned, useCurrencySymbol } from "../utils/currency";
+import { fmtDate } from "../utils/date";
 
 type CategoryWithGoal = Category & { is_goal?: boolean };
 
@@ -55,6 +56,7 @@ interface FormState {
   description: string;
   due_date: string;
   paid_date: string;
+  budget_month: string;
   notes: string;
   payment_method: string;
   currency: string;
@@ -62,12 +64,18 @@ interface FormState {
   categoryType: "income" | "expense";
 }
 
-function buildInitial(transaction: Transaction | null | undefined, defaultCategoryType: "income" | "expense" | undefined, categories: Category[], userCurrency: string): FormState {
+function buildInitial(
+  transaction: Transaction | null | undefined,
+  defaultCategoryType: "income" | "expense" | undefined,
+  categories: Category[],
+  userCurrency: string,
+): FormState {
   if (transaction) {
     return {
       description: transaction.description,
       due_date: transaction.due_date,
       paid_date: transaction.paid_date ?? "",
+      budget_month: transaction.budget_month ? transaction.budget_month.slice(0, 7) : "",
       notes: transaction.notes,
       payment_method: transaction.payment_method ? String(transaction.payment_method) : "",
       currency: transaction.currency || userCurrency,
@@ -85,6 +93,7 @@ function buildInitial(transaction: Transaction | null | undefined, defaultCatego
     description: "",
     due_date: new Date().toISOString().split("T")[0],
     paid_date: new Date().toISOString().split("T")[0],
+    budget_month: "",
     notes: "",
     payment_method: "",
     currency: userCurrency,
@@ -108,7 +117,9 @@ export default function TransactionModal({
   onTransactionUpdate,
 }: Props) {
   const symbol = useCurrencySymbol();
-  const [form, setForm] = useState<FormState>(() => buildInitial(transaction, defaultCategoryType, categories, userCurrency));
+  const [form, setForm] = useState<FormState>(() =>
+    buildInitial(transaction, defaultCategoryType, categories, userCurrency),
+  );
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string[]>>({});
   const partnerId = transaction?.transfer_partner_id ?? null;
@@ -176,12 +187,14 @@ export default function TransactionModal({
   const isRecurring = Boolean(transaction?.recurring);
   const isForeignCurrency = form.currency !== userCurrency;
   const visibleCategories = (categories as CategoryWithGoal[]).filter(
-    (c) => c.category_type === form.categoryType || c.is_goal
+    (c) => c.category_type === form.categoryType || c.is_goal,
   );
-  const allLinesSF = form.lines.length > 0 && form.lines.every((l) => {
-    const cat = (categories as CategoryWithGoal[]).find((c) => String(c.id) === l.category);
-    return cat?.is_goal === true;
-  });
+  const allLinesSF =
+    form.lines.length > 0 &&
+    form.lines.every((l) => {
+      const cat = (categories as CategoryWithGoal[]).find((c) => String(c.id) === l.category);
+      return cat?.is_goal === true;
+    });
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -190,7 +203,7 @@ export default function TransactionModal({
   function updateLine(idx: number, field: keyof LineState, value: string) {
     setForm((prev) => ({
       ...prev,
-      lines: prev.lines.map((l, i) => i === idx ? { ...l, [field]: value } : l),
+      lines: prev.lines.map((l, i) => (i === idx ? { ...l, [field]: value } : l)),
     }));
   }
 
@@ -224,6 +237,10 @@ export default function TransactionModal({
         description: l.description,
       })) as TransactionLine[],
     };
+    if ((forceTransactionType ?? form.categoryType) === "income") {
+      // Empty leaves it to the pay schedule's default on the server.
+      payload.budget_month = form.budget_month || null;
+    }
 
     setSaving(true);
     setErrors({});
@@ -245,7 +262,12 @@ export default function TransactionModal({
         : "Add Expense";
 
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
       <DialogContent className="sm:max-w-2xl">
         <form onSubmit={(e) => void handleSubmit(e)}>
           <DialogHeader>
@@ -263,11 +285,12 @@ export default function TransactionModal({
               <div className="flex w-full rounded-md overflow-hidden border border-border-strong">
                 {(["expense", "income"] as const).map((t) => {
                   const active = form.categoryType === t;
-                  const activeClass = t === "expense"
-                    ? "bg-destructive text-white"
-                    : allLinesSF
-                      ? "bg-amber-500 text-white"
-                      : "bg-primary text-primary-foreground";
+                  const activeClass =
+                    t === "expense"
+                      ? "bg-destructive text-white"
+                      : allLinesSF
+                        ? "bg-amber-500 text-white"
+                        : "bg-primary text-primary-foreground";
                   return (
                     <button
                       type="button"
@@ -339,7 +362,9 @@ export default function TransactionModal({
                 {partnerId !== null ? (
                   <div className="flex items-start justify-between gap-3 text-sm">
                     <div className="min-w-0">
-                      <Badge variant="secondary" className="mr-2">Linked</Badge>
+                      <Badge variant="secondary" className="mr-2">
+                        Linked
+                      </Badge>
                       Paired with another transaction; both legs are excluded from headline income/expense totals.
                     </div>
                     <Button
@@ -356,7 +381,8 @@ export default function TransactionModal({
                 ) : transferCandidates === null ? (
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-xs text-ink-quiet">
-                      For account-to-account moves (e.g. checking → savings), link the two legs so they don't double-count.
+                      For account-to-account moves (e.g. checking → savings), link the two legs so they don't
+                      double-count.
                     </p>
                     <Button
                       type="button"
@@ -370,7 +396,10 @@ export default function TransactionModal({
                   </div>
                 ) : transferCandidates.length === 0 ? (
                   <div className="flex items-center justify-between gap-3 text-sm">
-                    <p className="text-ink-quiet">No matching transactions found (same amount, opposite direction, within ±3 days, different payment method).</p>
+                    <p className="text-ink-quiet">
+                      No matching transactions found (same amount, opposite direction, within ±3 days, different payment
+                      method).
+                    </p>
                     <Button
                       type="button"
                       variant="ghost"
@@ -390,15 +419,16 @@ export default function TransactionModal({
                           <div className="min-w-0">
                             <div className="font-medium truncate">{c.description}</div>
                             <div className="text-xs text-ink-quiet">
-                              {fmtDate(c.paid_date ?? c.due_date)} · {c.payment_method_name ?? "—"} · <span className="tabular-nums">{fmtSigned(Number.parseFloat(c.total_amount) * (c.transaction_type === "expense" ? -1 : 1), symbol)}</span>
+                              {fmtDate(c.paid_date ?? c.due_date)} · {c.payment_method_name ?? "—"} ·{" "}
+                              <span className="tabular-nums">
+                                {fmtSigned(
+                                  Number.parseFloat(c.total_amount) * (c.transaction_type === "expense" ? -1 : 1),
+                                  symbol,
+                                )}
+                              </span>
                             </div>
                           </div>
-                          <Button
-                            type="button"
-                            size="sm"
-                            disabled={transferBusy}
-                            onClick={() => void linkTransfer(c)}
-                          >
+                          <Button type="button" size="sm" disabled={transferBusy} onClick={() => void linkTransfer(c)}>
                             Link
                           </Button>
                         </li>
@@ -456,6 +486,18 @@ export default function TransactionModal({
                   onChange={(e) => update("paid_date", e.target.value)}
                 />
               </div>
+              {form.categoryType === "income" && (
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="txn-budget-month">Funds budget month</Label>
+                  <Input
+                    id="txn-budget-month"
+                    type="month"
+                    value={form.budget_month}
+                    onChange={(e) => update("budget_month", e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">Leave blank to use your pay schedule's default.</p>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -465,29 +507,40 @@ export default function TransactionModal({
                   value={form.payment_method || "none"}
                   onValueChange={(v) => update("payment_method", v === "none" ? "" : v)}
                 >
-                  <SelectTrigger id="txn-pm" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="txn-pm" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">— None —</SelectItem>
-                    {paymentMethods.filter((m) => m.is_active).map((m) => (
-                      <SelectItem key={m.id} value={String(m.id)}>
-                        {m.name}{m.last_four ? ` ···${m.last_four}` : ""}
-                      </SelectItem>
-                    ))}
+                    {paymentMethods
+                      .filter((m) => m.is_active)
+                      .map((m) => (
+                        <SelectItem key={m.id} value={String(m.id)}>
+                          {m.name}
+                          {m.last_four ? ` ···${m.last_four}` : ""}
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
               </div>
               <div className="flex flex-col gap-2">
                 <Label htmlFor="txn-currency">Currency</Label>
                 <Select value={form.currency} onValueChange={(v) => update("currency", v)}>
-                  <SelectTrigger id="txn-currency" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="txn-currency" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
                     {currencies.map((c) => (
-                      <SelectItem key={c.code} value={c.code}>{c.code} — {c.name}</SelectItem>
+                      <SelectItem key={c.code} value={c.code}>
+                        {c.code} — {c.name}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
                 {isForeignCurrency && (
-                  <p className="text-muted-foreground text-sm">Amounts will be converted from {form.currency} to {userCurrency}</p>
+                  <p className="text-muted-foreground text-sm">
+                    Amounts will be converted from {form.currency} to {userCurrency}
+                  </p>
                 )}
               </div>
             </div>
@@ -503,11 +556,10 @@ export default function TransactionModal({
               <div key={idx} className="grid grid-cols-12 gap-2 items-end">
                 <div className="col-span-12 md:col-span-5 flex flex-col gap-1.5">
                   <Label className="text-sm">Category</Label>
-                  <Select
-                    value={line.category}
-                    onValueChange={(v) => updateLine(idx, "category", v)}
-                  >
-                    <SelectTrigger className="w-full"><SelectValue placeholder="-- Select --" /></SelectTrigger>
+                  <Select value={line.category} onValueChange={(v) => updateLine(idx, "category", v)}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="-- Select --" />
+                    </SelectTrigger>
                     <SelectContent>
                       {(() => {
                         const regular = visibleCategories.filter((c) => !(c as CategoryWithGoal).is_goal);
@@ -519,7 +571,9 @@ export default function TransactionModal({
                               <SelectGroup>
                                 <SelectLabel>{groupLabel}</SelectLabel>
                                 {regular.map((c) => (
-                                  <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                                  <SelectItem key={c.id} value={String(c.id)}>
+                                    {c.name}
+                                  </SelectItem>
                                 ))}
                               </SelectGroup>
                             )}
@@ -528,7 +582,9 @@ export default function TransactionModal({
                               <SelectGroup>
                                 <SelectLabel>Goals</SelectLabel>
                                 {goals.map((c) => (
-                                  <SelectItem key={c.id} value={String(c.id)}>◎ {c.name}</SelectItem>
+                                  <SelectItem key={c.id} value={String(c.id)}>
+                                    ◎ {c.name}
+                                  </SelectItem>
                                 ))}
                               </SelectGroup>
                             )}
@@ -551,19 +607,11 @@ export default function TransactionModal({
                 </div>
                 <div className="col-span-12 md:col-span-3 flex flex-col gap-1.5">
                   <Label className="text-sm">Note</Label>
-                  <Input
-                    value={line.description}
-                    onChange={(e) => updateLine(idx, "description", e.target.value)}
-                  />
+                  <Input value={line.description} onChange={(e) => updateLine(idx, "description", e.target.value)} />
                 </div>
                 <div className="col-span-12 md:col-span-1">
                   {form.lines.length > 1 && (
-                    <Button
-                      type="button"
-                      variant="destructive-subtle"
-                      size="sm"
-                      onClick={() => removeLine(idx)}
-                    >
+                    <Button type="button" variant="destructive-subtle" size="sm" onClick={() => removeLine(idx)}>
                       &times;
                     </Button>
                   )}
@@ -576,7 +624,9 @@ export default function TransactionModal({
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
             <Button type="submit" disabled={saving}>
               {saving ? "Saving…" : "Save Transaction"}
             </Button>

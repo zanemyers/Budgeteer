@@ -1,11 +1,12 @@
-import { useState } from "react";
 import { Pencil } from "lucide-react";
+import { useState } from "react";
 import CategoryModal from "@/components/CategoryModal";
-import type { GoalCategory } from "@/components/GoalModal";
 import { ConfirmButton } from "@/components/ConfirmButton";
+import type { GoalCategory } from "@/components/GoalModal";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { jsonFetch } from "@/lib/api";
+import { fmt, useCurrencySymbol } from "@/utils/currency";
 
 export interface CategoryType extends GoalCategory {
   parent_id: number | null;
@@ -19,6 +20,7 @@ interface Props {
 }
 
 export function CategoriesPanel({ budgetPk, type, categories, onCategoriesChange }: Props) {
+  const symbol = useCurrencySymbol();
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<CategoryType | null>(null);
   const [deleteError, setDeleteError] = useState<Record<number, string>>({});
@@ -28,9 +30,7 @@ export function CategoriesPanel({ budgetPk, type, categories, onCategoriesChange
 
   function upsert(cat: CategoryType) {
     const exists = categories.some((c) => c.id === cat.id);
-    onCategoriesChange(
-      exists ? categories.map((c) => (c.id === cat.id ? cat : c)) : [...categories, cat],
-    );
+    onCategoriesChange(exists ? categories.map((c) => (c.id === cat.id ? cat : c)) : [...categories, cat]);
   }
 
   async function handleDelete(cat: CategoryType) {
@@ -58,13 +58,26 @@ export function CategoriesPanel({ budgetPk, type, categories, onCategoriesChange
         className="flex justify-between items-center py-2 px-4 border-t first:border-t-0"
         style={isChild ? { paddingLeft: "2.5rem" } : undefined}
       >
-        <span>
-          {isChild && <span className="text-muted-foreground mr-1">↳</span>}
-          {cat.name}
+        <span className="flex items-center gap-2">
+          <span>
+            {isChild && <span className="text-muted-foreground mr-1">↳</span>}
+            {cat.name}
+          </span>
+          {cat.rollover && (
+            <span
+              className="inline-flex items-center gap-0.5 text-xs text-moss"
+              title="Leftover carries into next month; resets to the base if overspent"
+            >
+              ↻ Rolls over
+              {parseFloat(cat.base_amount) > 0 && ` · ${fmt(cat.base_amount, symbol)}/mo`}
+            </span>
+          )}
         </span>
         <div className="flex items-center gap-2">
           {deleteError[cat.id] && <small className="text-destructive">{deleteError[cat.id]}</small>}
-          <Button variant="ghost" size="icon-sm" onClick={() => setEditing(cat)} aria-label="Edit category"><Pencil /></Button>
+          <Button variant="ghost" size="icon-sm" onClick={() => setEditing(cat)} aria-label="Edit category">
+            <Pencil />
+          </Button>
           <ConfirmButton size="xs" onConfirm={() => handleDelete(cat)} label="Delete" />
         </div>
       </div>
@@ -75,7 +88,9 @@ export function CategoriesPanel({ budgetPk, type, categories, onCategoriesChange
     <div>
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-base font-semibold">{title}</h2>
-        <Button size="sm" onClick={() => setAdding(true)}>+ Add</Button>
+        <Button size="sm" onClick={() => setAdding(true)}>
+          + Add
+        </Button>
       </div>
 
       {visible.length === 0 ? (
@@ -108,7 +123,10 @@ export function CategoriesPanel({ budgetPk, type, categories, onCategoriesChange
           type={type}
           categories={categories}
           category={editing}
-          onClose={() => { setAdding(false); setEditing(null); }}
+          onClose={() => {
+            setAdding(false);
+            setEditing(null);
+          }}
           onSaved={(cat) => {
             upsert(cat as CategoryType);
             setAdding(false);

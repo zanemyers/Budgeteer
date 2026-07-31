@@ -1,11 +1,12 @@
-import { useState } from "react";
 import { router } from "@inertiajs/react";
+import { useState } from "react";
 import { BudgetPanel, type BudgetSummary } from "@/components/settings/BudgetPanel";
 import { CategoriesPanel, type CategoryType } from "@/components/settings/CategoriesPanel";
-import { MembersPanel, type Membership } from "@/components/settings/MembersPanel";
-import { PaymentMethodsPanel, type PaymentMethod } from "@/components/settings/PaymentMethodsPanel";
-import { RecurringPanel, type RecurringPanelItem } from "@/components/settings/RecurringPanel";
+import { type Membership, MembersPanel } from "@/components/settings/MembersPanel";
+import { type PaymentMethod, PaymentMethodsPanel } from "@/components/settings/PaymentMethodsPanel";
+import { type PaySchedule, PaySchedulePanel } from "@/components/settings/PaySchedulePanel";
 import type { RecurringFormChoice } from "@/components/settings/RecurringFormModal";
+import { RecurringPanel, type RecurringPanelItem } from "@/components/settings/RecurringPanel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface TypeChoice {
@@ -24,9 +25,11 @@ interface Props {
   role_choices: TypeChoice[];
   recurring: RecurringPanelItem[];
   freq_choices: RecurringFormChoice[];
+  pay_schedules: PaySchedule[];
+  pay_schedule_freq_choices: { value: string; label: string }[];
 }
 
-const VALID_TABS = ["budget", "expense", "income", "payment-methods", "recurring", "members"] as const;
+const VALID_TABS = ["budget", "pay-schedule", "expense", "income", "payment-methods", "recurring", "members"] as const;
 type Tab = (typeof VALID_TABS)[number];
 
 function readTabFromUrl(): Tab {
@@ -45,6 +48,8 @@ export default function BudgetSettings({
   role_choices,
   recurring: initialRecurring,
   freq_choices,
+  pay_schedules,
+  pay_schedule_freq_choices,
 }: Props) {
   const [tab, setTab] = useState<Tab>(readTabFromUrl());
   const [budget, setBudget] = useState(initialBudget);
@@ -73,7 +78,10 @@ export default function BudgetSettings({
         <a
           href={`/budgets/${budget_pk}/`}
           className="text-sm text-muted-foreground hover:text-foreground mt-1"
-          onClick={(e) => { e.preventDefault(); router.visit(`/budgets/${budget_pk}/`); }}
+          onClick={(e) => {
+            e.preventDefault();
+            router.visit(`/budgets/${budget_pk}/`);
+          }}
         >
           ← Back to budget
         </a>
@@ -82,6 +90,7 @@ export default function BudgetSettings({
       <Tabs value={tab} onValueChange={changeTab} className="gap-6 flex-1">
         <TabsList variant="folder" className="w-full justify-start">
           <TabsTrigger value="budget">Budget</TabsTrigger>
+          <TabsTrigger value="pay-schedule">Pay Schedule</TabsTrigger>
           <TabsTrigger value="expense">Expense Categories</TabsTrigger>
           <TabsTrigger value="income">Income Categories</TabsTrigger>
           <TabsTrigger value="payment-methods">Payment Methods</TabsTrigger>
@@ -91,6 +100,16 @@ export default function BudgetSettings({
 
         <TabsContent value="budget" className="mt-2">
           <BudgetPanel budget={budget} onChange={setBudget} />
+        </TabsContent>
+
+        <TabsContent value="pay-schedule" className="mt-2">
+          <PaySchedulePanel
+            budgetPk={budget_pk}
+            paySchedules={pay_schedules}
+            freqChoices={pay_schedule_freq_choices}
+            incomeCategories={categories.filter((c) => c.category_type === "income")}
+            isOwner={budget.is_owner}
+          />
         </TabsContent>
 
         <TabsContent value="expense" className="mt-2">

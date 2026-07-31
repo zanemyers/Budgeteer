@@ -2,22 +2,11 @@ import { useState } from "react";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getCsrfToken } from "@/lib/api";
 
 interface CategoryShape {
@@ -26,6 +15,9 @@ interface CategoryShape {
   category_type: "income" | "expense";
   parent_id: number | null;
   monthly_budget: string;
+  rollover: boolean;
+  base_amount: string;
+  rollover_start: string | null;
   is_goal: boolean;
   goal_target: string | null;
   goal_due_date: string | null;
@@ -60,14 +52,14 @@ export default function CategoryModal({
   const initialParent = category?.parent_id ?? defaultParentId ?? null;
   const [name, setName] = useState(category?.name ?? "");
   const [parentId, setParentId] = useState(initialParent ? String(initialParent) : "none");
+  const [rollover, setRollover] = useState(category?.rollover ?? false);
+  const [baseAmount, setBaseAmount] = useState(category?.base_amount ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
   // Inline child management — only meaningful when editing a top-level category.
   const isTopLevel = isEdit && category!.parent_id === null && !category!.is_goal;
-  const children = isTopLevel
-    ? categories.filter((c) => c.parent_id === category!.id)
-    : [];
+  const children = isTopLevel ? categories.filter((c) => c.parent_id === category!.id) : [];
   // If this category already has children, it can't itself become a child of another
   // (the model only supports a single level of nesting).
   const hasChildren = isEdit && children.length > 0;
@@ -75,11 +67,8 @@ export default function CategoryModal({
   const [addingChild, setAddingChild] = useState(false);
   const [childError, setChildError] = useState("");
 
-  const eligibleParents = categories.filter((c) =>
-    c.category_type === type
-    && !c.is_goal
-    && c.parent_id === null
-    && (!isEdit || c.id !== category!.id)
+  const eligibleParents = categories.filter(
+    (c) => c.category_type === type && !c.is_goal && c.parent_id === null && (!isEdit || c.id !== category!.id),
   );
 
   const typeLabel = type === "income" ? "Income" : "Expense";
@@ -94,6 +83,10 @@ export default function CategoryModal({
       parent_id: parentId === "none" ? null : parentId,
     };
     if (!isEdit) body.category_type = type;
+    if (type === "expense") {
+      body.rollover = rollover;
+      body.base_amount = rollover ? baseAmount || "0" : "0";
+    }
 
     const url = isEdit
       ? `/budgets/${budgetPk}/categories/${category!.id}/edit/`
@@ -107,13 +100,15 @@ export default function CategoryModal({
         body: JSON.stringify(body),
       });
       if (!res.ok) {
-        const data = await res.json() as { errors?: Record<string, string[]> };
-        const flat = Object.values(data.errors ?? data).flat().join(" ");
+        const data = (await res.json()) as { errors?: Record<string, string[]> };
+        const flat = Object.values(data.errors ?? data)
+          .flat()
+          .join(" ");
         setError(flat || "Could not save.");
         setSaving(false);
         return;
       }
-      const cat = await res.json() as CategoryShape;
+      const cat = (await res.json()) as CategoryShape;
       onSaved(cat);
     } catch {
       setError("Network error.");
@@ -137,11 +132,15 @@ export default function CategoryModal({
         }),
       });
       if (!res.ok) {
-        const data = await res.json() as { errors?: Record<string, string[]> };
-        setChildError(Object.values(data.errors ?? data).flat().join(" ") || "Could not add.");
+        const data = (await res.json()) as { errors?: Record<string, string[]> };
+        setChildError(
+          Object.values(data.errors ?? data)
+            .flat()
+            .join(" ") || "Could not add.",
+        );
         return;
       }
-      const child = await res.json() as CategoryShape;
+      const child = (await res.json()) as CategoryShape;
       onChildSaved?.(child);
       setNewChildName("");
     } finally {
@@ -162,11 +161,18 @@ export default function CategoryModal({
   }
 
   return (
-    <Dialog open onOpenChange={(open) => { if (!open && !saving) onClose(); }}>
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open && !saving) onClose();
+      }}
+    >
       <DialogContent>
         <form onSubmit={handleSubmit}>
           <DialogHeader>
-            <DialogTitle>{isEdit ? "Edit" : "Add"} {typeLabel} Category</DialogTitle>
+            <DialogTitle>
+              {isEdit ? "Edit" : "Add"} {typeLabel} Category
+            </DialogTitle>
           </DialogHeader>
 
           <div className="py-4 flex flex-col gap-4">
@@ -188,17 +194,66 @@ export default function CategoryModal({
                   Parent category <span className="text-muted-foreground font-normal">(optional)</span>
                 </Label>
                 <Select value={parentId} onValueChange={setParentId}>
-                  <SelectTrigger id="cat-parent" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="cat-parent" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">— Top-level {typeLabel.toLowerCase()} category —</SelectItem>
                     {eligibleParents.map((p) => (
-                      <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+                      <SelectItem key={p.id} value={String(p.id)}>
+                        {p.name}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
                 <small className="text-muted-foreground">
                   Leave blank to create a top-level category, or choose a parent to make this a subcategory.
                 </small>
+              </div>
+            )}
+
+            {type === "expense" && (
+              <div className="flex flex-col gap-3">
+                <div className="flex items-start gap-3">
+                  <Checkbox
+                    id="cat-rollover"
+                    checked={rollover}
+                    onCheckedChange={(v) => setRollover(v === true)}
+                    className="mt-0.5"
+                  />
+                  <div className="flex flex-col gap-0.5">
+                    <Label htmlFor="cat-rollover">Roll over leftover balance</Label>
+                    <small className="text-muted-foreground">
+                      Budget a set amount each month; unspent money carries into the next month instead of resetting —
+                      good for saving toward something bigger.
+                    </small>
+                  </div>
+                </div>
+                {rollover && (
+                  <div className="flex flex-col gap-2 pl-7">
+                    <Label htmlFor="cat-base">Base amount / month</Label>
+                    <div className="flex">
+                      <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-input bg-muted text-muted-foreground text-sm">
+                        $
+                      </span>
+                      <Input
+                        id="cat-base"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        className="rounded-l-none"
+                        placeholder="e.g. 100"
+                        value={baseAmount}
+                        onChange={(e) => setBaseAmount(e.target.value)}
+                      />
+                    </div>
+                    <small className="text-muted-foreground">
+                      Budgeted automatically each month
+                      {isEdit && category?.rollover_start ? "" : ", starting this month"}. Replaces manual assigning for
+                      this category.
+                    </small>
+                  </div>
+                )}
               </div>
             )}
 
@@ -250,7 +305,9 @@ export default function CategoryModal({
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
+            <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
+              Cancel
+            </Button>
             <Button type="submit" disabled={saving || !name.trim()}>
               {saving ? "Saving…" : "Save"}
             </Button>

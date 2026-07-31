@@ -34,6 +34,7 @@ export interface Transaction {
   due_date: string;
   paid_date: string | null;
   is_paid: boolean;
+  budget_month: string | null;
   notes: string;
   recurring: number | null;
   payment_method: number | null;
@@ -143,6 +144,7 @@ export interface BudgetOverviewCategory {
   assigned: string;
   activity: string;
   available: string;
+  rollover: boolean;
   is_goal: boolean;
   goal_target: string | null;
   goal_due_date: string | null;

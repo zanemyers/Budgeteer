@@ -1,25 +1,25 @@
 import { router } from "@inertiajs/react";
-import { useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import AssignModal from "../components/AssignModal";
-import CleanupAssignedModal from "../components/CleanupAssignedModal";
-import TransactionModal from "../components/TransactionModal";
-import type { BudgetOverview, BudgetOverviewCategory, Category, CurrencyOption, PaymentMethod, Transaction } from "../types";
-import { fmt, useCurrencySymbol } from "../utils/currency";
-import { formatMonth, getDefaultMonth, isAtBackLimit, nextMonth, prevMonth } from "../utils/month";
-import { getCsrfToken } from "../lib/api";
+import { useState } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import AssignModal from "../components/AssignModal";
+import CleanupAssignedModal from "../components/CleanupAssignedModal";
+import TransactionModal from "../components/TransactionModal";
+import { getCsrfToken } from "../lib/api";
+import type {
+  BudgetOverview,
+  BudgetOverviewCategory,
+  Category,
+  CurrencyOption,
+  PaymentMethod,
+  Transaction,
+} from "../types";
+import { fmt, useCurrencySymbol } from "../utils/currency";
+import { formatMonth, getDefaultMonth, isAtBackLimit, nextMonth, prevMonth } from "../utils/month";
 
 interface Props {
   budget_pk: number;
@@ -64,7 +64,9 @@ function CurrencyEditCell({
     return (
       <div className="flex justify-end">
         <div className="flex items-center gap-0 max-w-[130px]">
-          <span className="inline-flex items-center px-2 h-8 rounded-l-md border border-r-0 border-input bg-muted text-muted-foreground text-sm">{symbol}</span>
+          <span className="inline-flex items-center px-2 h-8 rounded-l-md border border-r-0 border-input bg-muted text-muted-foreground text-sm">
+            {symbol}
+          </span>
           <Input
             type="number"
             className="h-8 rounded-l-none"
@@ -91,14 +93,25 @@ function CurrencyEditCell({
       title={title}
       onClick={onStart}
     >
-      {numeric > 0
-        ? <span className={valueClass}>{fmt(value, symbol)}</span>
-        : <span className="text-muted-foreground italic">—</span>}
+      {numeric > 0 ? (
+        <span className={valueClass}>{fmt(value, symbol)}</span>
+      ) : (
+        <span className="text-muted-foreground italic">—</span>
+      )}
     </button>
   );
 }
 
-export default function Dashboard({ budget_pk, month, overview, categories, payment_methods, pending_count, currencies, user_currency }: Props) {
+export default function Dashboard({
+  budget_pk,
+  month,
+  overview,
+  categories,
+  payment_methods,
+  pending_count,
+  currencies,
+  user_currency,
+}: Props) {
   const symbol = useCurrencySymbol();
   const [editingAssigned, setEditingAssigned] = useState<Record<number, string>>({});
   const [editingBudgeted, setEditingBudgeted] = useState<Record<number, string>>({});
@@ -117,7 +130,11 @@ export default function Dashboard({ budget_pk, month, overview, categories, paym
   async function saveAssigned(cat: BudgetOverviewCategory) {
     const val = editingAssigned[cat.id];
     if (val === undefined || val === "") {
-      setEditingAssigned((prev) => { const next = { ...prev }; delete next[cat.id]; return next; });
+      setEditingAssigned((prev) => {
+        const next = { ...prev };
+        delete next[cat.id];
+        return next;
+      });
       return;
     }
     setSavingAssigned((prev) => ({ ...prev, [cat.id]: true }));
@@ -131,15 +148,27 @@ export default function Dashboard({ budget_pk, month, overview, categories, paym
         router.reload({ only: ["overview"] });
       }
     } finally {
-      setEditingAssigned((prev) => { const next = { ...prev }; delete next[cat.id]; return next; });
-      setSavingAssigned((prev) => { const next = { ...prev }; delete next[cat.id]; return next; });
+      setEditingAssigned((prev) => {
+        const next = { ...prev };
+        delete next[cat.id];
+        return next;
+      });
+      setSavingAssigned((prev) => {
+        const next = { ...prev };
+        delete next[cat.id];
+        return next;
+      });
     }
   }
 
   async function saveBudgeted(cat: BudgetOverviewCategory) {
     const val = editingBudgeted[cat.id];
     if (val === undefined || val === "") {
-      setEditingBudgeted((prev) => { const next = { ...prev }; delete next[cat.id]; return next; });
+      setEditingBudgeted((prev) => {
+        const next = { ...prev };
+        delete next[cat.id];
+        return next;
+      });
       return;
     }
     setSavingBudgeted((prev) => ({ ...prev, [cat.id]: true }));
@@ -153,8 +182,16 @@ export default function Dashboard({ budget_pk, month, overview, categories, paym
         router.reload({ only: ["overview"] });
       }
     } finally {
-      setEditingBudgeted((prev) => { const next = { ...prev }; delete next[cat.id]; return next; });
-      setSavingBudgeted((prev) => { const next = { ...prev }; delete next[cat.id]; return next; });
+      setEditingBudgeted((prev) => {
+        const next = { ...prev };
+        delete next[cat.id];
+        return next;
+      });
+      setSavingBudgeted((prev) => {
+        const next = { ...prev };
+        delete next[cat.id];
+        return next;
+      });
     }
   }
 
@@ -165,7 +202,7 @@ export default function Dashboard({ budget_pk, month, overview, categories, paym
       body: JSON.stringify(data),
     });
     if (!res.ok) {
-      const json = await res.json() as { errors?: Record<string, string[]> };
+      const json = (await res.json()) as { errors?: Record<string, string[]> };
       throw json.errors ?? json;
     }
     router.reload({ only: ["overview", "pending_count"] });
@@ -181,43 +218,82 @@ export default function Dashboard({ budget_pk, month, overview, categories, paym
     const budgetedClass = budgeted > 0 && activity > budgeted ? "text-expense" : "";
     const assignedClass = budgeted > 0 && assigned === budgeted ? "text-moss" : "";
     const availableClass = isExpense
-      ? available < 0 ? "text-expense font-semibold" : available === 0 ? "text-muted-foreground" : "text-moss"
+      ? available < 0
+        ? "text-expense font-semibold"
+        : available === 0
+          ? "text-muted-foreground"
+          : "text-moss"
       : "text-moss";
 
     return (
       <TableRow key={cat.id}>
         <TableCell style={isChild ? { paddingLeft: "2.25rem" } : undefined}>
-          <a href={`/budgets/${budget_pk}/transactions/?month=${month}&category=${cat.id}`} className="no-underline hover:underline">
+          <a
+            href={`/budgets/${budget_pk}/transactions/?month=${month}&category=${cat.id}`}
+            className="no-underline hover:underline"
+          >
             {cat.name}
           </a>
+          {cat.rollover && !cat.is_goal && (
+            <span className="ml-1.5 text-moss" title="Leftover rolls over to next month" aria-label="Rolls over">
+              ↻
+            </span>
+          )}
         </TableCell>
         <TableCell className="text-right">
-          <CurrencyEditCell
-            symbol={symbol}
-            value={cat.budgeted}
-            editing={editingBudgeted[cat.id]}
-            onStart={() => setEditingBudgeted((prev) => ({ ...prev, [cat.id]: "" }))}
-            onChange={(v) => setEditingBudgeted((prev) => ({ ...prev, [cat.id]: v }))}
-            onCommit={() => void saveBudgeted(cat)}
-            onCancel={() => setEditingBudgeted((prev) => { const n = { ...prev }; delete n[cat.id]; return n; })}
-            saving={savingBudgeted[cat.id] ?? false}
-            valueClass={budgetedClass}
-            title="Click to set monthly target"
-          />
+          {cat.rollover && !cat.is_goal ? (
+            <span className={`tabular-nums ${budgetedClass}`} title="Auto-budgeted: base + carried-over balance">
+              {fmt(cat.budgeted, symbol)}
+            </span>
+          ) : (
+            <CurrencyEditCell
+              symbol={symbol}
+              value={cat.budgeted}
+              editing={editingBudgeted[cat.id]}
+              onStart={() => setEditingBudgeted((prev) => ({ ...prev, [cat.id]: "" }))}
+              onChange={(v) => setEditingBudgeted((prev) => ({ ...prev, [cat.id]: v }))}
+              onCommit={() => void saveBudgeted(cat)}
+              onCancel={() =>
+                setEditingBudgeted((prev) => {
+                  const n = { ...prev };
+                  delete n[cat.id];
+                  return n;
+                })
+              }
+              saving={savingBudgeted[cat.id] ?? false}
+              valueClass={budgetedClass}
+              title="Click to set monthly target"
+            />
+          )}
         </TableCell>
         <TableCell className="text-right">
-          <CurrencyEditCell
-            symbol={symbol}
-            value={cat.assigned}
-            editing={editingAssigned[cat.id]}
-            onStart={() => setEditingAssigned((prev) => ({ ...prev, [cat.id]: "" }))}
-            onChange={(v) => setEditingAssigned((prev) => ({ ...prev, [cat.id]: v }))}
-            onCommit={() => void saveAssigned(cat)}
-            onCancel={() => setEditingAssigned((prev) => { const n = { ...prev }; delete n[cat.id]; return n; })}
-            saving={savingAssigned[cat.id] ?? false}
-            valueClass={assignedClass}
-            title="Click to set assigned amount"
-          />
+          {cat.rollover && !cat.is_goal ? (
+            <span
+              className="tabular-nums text-muted-foreground"
+              title="Rollover categories aren't assigned from Ready to Assign — the base sets the budget"
+            >
+              —
+            </span>
+          ) : (
+            <CurrencyEditCell
+              symbol={symbol}
+              value={cat.assigned}
+              editing={editingAssigned[cat.id]}
+              onStart={() => setEditingAssigned((prev) => ({ ...prev, [cat.id]: "" }))}
+              onChange={(v) => setEditingAssigned((prev) => ({ ...prev, [cat.id]: v }))}
+              onCommit={() => void saveAssigned(cat)}
+              onCancel={() =>
+                setEditingAssigned((prev) => {
+                  const n = { ...prev };
+                  delete n[cat.id];
+                  return n;
+                })
+              }
+              saving={savingAssigned[cat.id] ?? false}
+              valueClass={assignedClass}
+              title="Click to set assigned amount"
+            />
+          )}
         </TableCell>
         <TableCell className="text-right">{fmt(cat.activity, symbol)}</TableCell>
         <TableCell className={`text-right ${availableClass}`}>{fmt(cat.available, symbol)}</TableCell>
@@ -280,21 +356,27 @@ export default function Dashboard({ budget_pk, month, overview, categories, paym
         </Button>
       </header>
 
-      {/* Ready to Assign */}
+      {/* Ready to Assign — this month's income minus what's assigned and saved to goals. */}
       {(incomeTotal > 0 || parseFloat(overview.expense_assigned) > 0) && Math.abs(rta) >= 0.005 && (
-        <Alert variant={rta >= 0 ? "success" : "destructive"} className={isCurrentMonth && pending_count > 0 ? "mb-4" : "mb-8"}>
+        <Alert
+          variant={rta >= 0 ? "success" : "destructive"}
+          className={isCurrentMonth && pending_count > 0 ? "mb-4" : "mb-8"}
+        >
           <AlertDescription>
             <div className="flex justify-between items-center w-full gap-4 flex-wrap">
               <div>
                 <strong className="font-semibold">Ready to Assign</strong>
                 <div className="text-sm text-muted-foreground">
-                  Income {fmt(overview.income_total, symbol)}
-                  {" "}&minus; Assigned {fmt(overview.expense_assigned, symbol)}
-                  {parseFloat(overview.saved_to_goals_total) > 0 && <> &minus; Saved {fmt(overview.saved_to_goals_total, symbol)}</>}
+                  Income {fmt(overview.income_total, symbol)} &minus; Assigned {fmt(overview.expense_assigned, symbol)}
+                  {parseFloat(overview.saved_to_goals_total) > 0 && (
+                    <> &minus; Saved {fmt(overview.saved_to_goals_total, symbol)}</>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <span className="text-2xl font-semibold tracking-tight tabular-nums">{fmt(overview.ready_to_assign, symbol)}</span>
+                <span className="text-2xl font-semibold tracking-tight tabular-nums">
+                  {fmt(overview.ready_to_assign, symbol)}
+                </span>
                 {rta > 0 && (
                   <Button size="sm" onClick={() => setAssigning(true)}>
                     Assign
@@ -320,9 +402,7 @@ export default function Dashboard({ budget_pk, month, overview, categories, paym
                 <strong className="font-semibold">
                   {pending_count} transaction{pending_count === 1 ? "" : "s"} awaiting review
                 </strong>
-                <div className="text-sm text-ink-quiet">
-                  Recurring transactions or entries without a paid date.
-                </div>
+                <div className="text-sm text-ink-quiet">Recurring transactions or entries without a paid date.</div>
               </div>
               <Button
                 size="sm"
@@ -335,7 +415,6 @@ export default function Dashboard({ budget_pk, month, overview, categories, paym
           </AlertDescription>
         </Alert>
       )}
-
 
       {/* Budget Grid */}
       {overview.categories.length === 0 ? (
@@ -383,7 +462,12 @@ export default function Dashboard({ budget_pk, month, overview, categories, paym
                       const renderRow = (cat: BudgetOverviewCategory, isChild: boolean) => (
                         <TableRow key={cat.id}>
                           <TableCell style={isChild ? { paddingLeft: "2.25rem" } : undefined}>
-                            <a href={`/budgets/${budget_pk}/transactions/?month=${month}&category=${cat.id}`} className="no-underline hover:underline">{cat.name}</a>
+                            <a
+                              href={`/budgets/${budget_pk}/transactions/?month=${month}&category=${cat.id}`}
+                              className="no-underline hover:underline"
+                            >
+                              {cat.name}
+                            </a>
                           </TableCell>
                           <TableCell className="text-right text-income">{fmt(cat.activity, symbol)}</TableCell>
                         </TableRow>
@@ -417,7 +501,10 @@ export default function Dashboard({ budget_pk, month, overview, categories, paym
                     <hr className="border-rule my-1.5" />
                     {sfMonthlySpending > 0 && (
                       <div className="flex justify-between items-baseline">
-                        <dt className="text-sm text-ink-quiet" title="Drawn from previously-saved goal balances, not this month's budget">
+                        <dt
+                          className="text-sm text-ink-quiet"
+                          title="Drawn from previously-saved goal balances, not this month's budget"
+                        >
                           Paid from goals
                         </dt>
                         <dd className="text-fund tabular-nums">{fmt(sfMonthlySpending, symbol)}</dd>
@@ -425,14 +512,16 @@ export default function Dashboard({ budget_pk, month, overview, categories, paym
                     )}
                     <div className="flex justify-between items-baseline">
                       <dt className="text-sm font-medium">Kept</dt>
-                      <dd className={`text-xl font-semibold tracking-tight tabular-nums ${netPositive ? "text-moss" : "text-expense"}`}>
-                        {netPositive ? "" : "−"}{fmt(Math.abs(netAmount), symbol)}
+                      <dd
+                        className={`text-xl font-semibold tracking-tight tabular-nums ${netPositive ? "text-moss" : "text-expense"}`}
+                      >
+                        {netPositive ? "" : "−"}
+                        {fmt(Math.abs(netAmount), symbol)}
                       </dd>
                     </div>
                   </dl>
                 </div>
               </Card>
-
             </div>
           )}
 

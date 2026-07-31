@@ -1,12 +1,13 @@
 """Plain Python serialization helpers for passing model data to Inertia pages."""
+
 import calendar
 import datetime
 from decimal import Decimal
 
 from django.db.models import Q, Sum
-from django.db.models.functions import Coalesce
+from django.db.models.functions import Coalesce, TruncMonth
 
-from apps.budget.models import Category, CategoryBudget, Transaction, TransactionLine
+from apps.budget.models import Category, CategoryBudget, Transaction, TransactionLine, add_months
 
 
 def serialize_category(cat, total_saved: "Decimal | None" = None) -> dict:
@@ -16,6 +17,9 @@ def serialize_category(cat, total_saved: "Decimal | None" = None) -> dict:
         "category_type": cat.category_type,
         "parent_id": cat.parent_id,
         "monthly_budget": str(cat.monthly_budget),
+        "rollover": cat.rollover,
+        "base_amount": str(cat.base_amount),
+        "rollover_start": cat.rollover_start.isoformat() if cat.rollover_start else None,
         "is_goal": cat.is_goal,
         "goal_target": str(cat.goal_target) if cat.goal_target is not None else None,
         "goal_due_date": str(cat.goal_due_date) if cat.goal_due_date else None,
@@ -29,21 +33,33 @@ def serialize_category(cat, total_saved: "Decimal | None" = None) -> dict:
 
 def get_goal_total_saved(budget, category_id: int, user_rate: "Decimal" = Decimal("1")) -> "Decimal":
     """Compute all-time net saved for a goal category, converted to user's currency."""
-    credits = (
-        TransactionLine.objects.filter(
-            transaction__budget=budget,
-            category_id=category_id,
-            transaction__transaction_type__in=("income", "transfer"),
-        ).aggregate(total=Sum("amount_usd"))["total"] or Decimal("0.00")
-    )
-    expense = (
-        TransactionLine.objects.filter(
-            transaction__budget=budget,
-            category_id=category_id,
-            transaction__transaction_type="expense",
-        ).aggregate(total=Sum("amount_usd"))["total"] or Decimal("0.00")
-    )
+    credits = TransactionLine.objects.filter(
+        transaction__budget=budget,
+        category_id=category_id,
+        transaction__transaction_type__in=("income", "transfer"),
+    ).aggregate(total=Sum("amount_usd"))["total"] or Decimal("0.00")
+    expense = TransactionLine.objects.filter(
+        transaction__budget=budget,
+        category_id=category_id,
+        transaction__transaction_type="expense",
+    ).aggregate(total=Sum("amount_usd"))["total"] or Decimal("0.00")
     return (credits - expense) * user_rate
+
+
+def serialize_pay_schedule(schedule) -> dict:
+    return {
+        "id": schedule.pk,
+        "name": schedule.name,
+        "category": schedule.category_id,
+        "category_name": schedule.category.name if schedule.category else None,
+        "frequency": schedule.frequency,
+        "anchor_1": schedule.anchor_1,
+        "anchor_2": schedule.anchor_2,
+        "anchor_date": schedule.anchor_date.isoformat() if schedule.anchor_date else None,
+        "allocation_offset_months": schedule.allocation_offset_months,
+        "expected_amount": str(schedule.expected_amount) if schedule.expected_amount is not None else None,
+        "match_text": schedule.match_text,
+    }
 
 
 def serialize_payment_method(pm) -> dict:
@@ -109,6 +125,7 @@ def serialize_transaction(txn) -> dict:
         "due_date": str(txn.due_date),
         "paid_date": str(txn.paid_date) if txn.paid_date else None,
         "is_paid": txn.paid_date is not None,
+        "budget_month": str(txn.budget_month) if txn.budget_month else None,
         "notes": txn.notes,
         "recurring": txn.recurring_id,
         "payment_method": txn.payment_method_id,
@@ -147,8 +164,7 @@ def find_transfer_candidates(txn: Transaction, *, day_window: int = 3) -> list[T
     opposite_types = ("expense",) if txn_type in ("income", "transfer") else ("income", "transfer")
 
     candidates = (
-        Transaction.objects
-        .filter(budget_id=txn.budget_id)
+        Transaction.objects.filter(budget_id=txn.budget_id)
         .exclude(pk=txn.pk)
         .filter(transfer_partner__isnull=True)
         .filter(
@@ -185,8 +201,7 @@ def find_pending_bank_transfer_candidates(bt, budget, *, day_window: int = 3) ->
         return []
     posted = bt.posted_at.date()
     qs = (
-        BankTransaction.objects
-        .filter(
+        BankTransaction.objects.filter(
             bank_account__connection__user_id=bt.bank_account.connection.user_id,
             bank_account__payment_method__budget=budget,
             status=BankTransaction.Status.PENDING,
@@ -220,8 +235,7 @@ def find_transfer_candidates_for_bank_txn(bt, budget, *, day_window: int = 3) ->
     opposite_types = ("income", "transfer") if bt.amount < 0 else ("expense",)
 
     candidates = (
-        Transaction.objects
-        .filter(budget=budget)
+        Transaction.objects.filter(budget=budget)
         .filter(transfer_partner__isnull=True)
         .filter(
             Q(paid_date__range=(window_start, window_end))
@@ -281,11 +295,7 @@ def serialize_membership(membership) -> dict:
 def get_budget_overview(budget, month_str: str | None, user_rate: "Decimal" = Decimal("1")) -> dict:
     """Compute the YNAB-style budget overview for a given month."""
     try:
-        selected = (
-            datetime.date.fromisoformat(month_str + "-01")
-            if month_str
-            else datetime.date.today().replace(day=1)
-        )
+        selected = datetime.date.fromisoformat(month_str + "-01") if month_str else datetime.date.today().replace(day=1)
     except (ValueError, TypeError, AttributeError):
         selected = datetime.date.today().replace(day=1)
 
@@ -293,12 +303,18 @@ def get_budget_overview(budget, month_str: str | None, user_rate: "Decimal" = De
     period_start = selected
     period_end = selected.replace(day=last_day)
 
-    # Activity for regular (non-SF) categories: only paid transactions count.
-    # Amounts stored as amount_usd (USD equivalent at transaction time); scaled to user currency below.
-    regular_activity_qs = (
+    # Effective budget month for a line: the transaction's budget_month override if set
+    # (income targeted at a future month), otherwise the month of its paid_date. Since
+    # budget_month is only ever set on income, transfers/expenses fall back to paid_date.
+    eff_month = Coalesce("transaction__budget_month", TruncMonth("transaction__paid_date"))
+
+    # Expense activity for regular (non-goal) categories: only paid transactions count,
+    # bucketed by paid_date. Amounts stored as amount_usd; scaled to user currency below.
+    expense_activity_qs = (
         TransactionLine.objects.filter(
             transaction__budget=budget,
             category__goal__isnull=True,
+            category__category_type=Category.TYPE_EXPENSE,
             transaction__paid_date__range=(period_start, period_end),
         )
         .exclude(transaction__transaction_type="transfer")
@@ -306,7 +322,25 @@ def get_budget_overview(budget, month_str: str | None, user_rate: "Decimal" = De
         .values("category_id")
         .annotate(total=Sum("amount_usd"))
     )
-    activity_map: dict[int, Decimal] = {row["category_id"]: row["total"] * user_rate for row in regular_activity_qs}
+    activity_map: dict[int, Decimal] = {row["category_id"]: row["total"] * user_rate for row in expense_activity_qs}
+
+    # Income activity for regular (non-goal) categories: bucketed by effective budget month
+    # so income targeted at this month shows here even if it was received earlier/later.
+    income_activity_qs = (
+        TransactionLine.objects.filter(
+            transaction__budget=budget,
+            category__goal__isnull=True,
+            category__category_type=Category.TYPE_INCOME,
+            transaction__paid_date__isnull=False,
+        )
+        .exclude(transaction__transfer_partner__isnull=False)
+        .alias(eff_month=eff_month)
+        .filter(eff_month=period_start)
+        .values("category_id")
+        .annotate(total=Sum("amount_usd"))
+    )
+    for row in income_activity_qs:
+        activity_map[row["category_id"]] = row["total"] * user_rate
 
     # All-time paid expenses per goal category. Reused below for the net-saved
     # balance, so compute this (identical) aggregate once.
@@ -341,22 +375,21 @@ def get_budget_overview(budget, month_str: str | None, user_rate: "Decimal" = De
     )
     credits_map: dict[int, Decimal] = {}
     for row in saved_credits_qs:
-        credits_map[row["category_id"]] = credits_map.get(row["category_id"], Decimal("0.00")) + row["total"] * user_rate
+        credits_map[row["category_id"]] = (
+            credits_map.get(row["category_id"], Decimal("0.00")) + row["total"] * user_rate
+        )
 
     saved_map: dict[int, Decimal] = dict(credits_map)
     for cat_id, expense_total in goal_expense_map.items():
         saved_map[cat_id] = saved_map.get(cat_id, Decimal("0.00")) - expense_total
 
     # Monthly SF spending (paid expenses only) for dashboard totals
-    goal_monthly_expense_qs = (
-        TransactionLine.objects.filter(
-            transaction__budget=budget,
-            category__goal__isnull=False,
-            transaction__transaction_type="expense",
-            transaction__paid_date__range=(period_start, period_end),
-        )
-        .aggregate(total=Sum("amount_usd"))
-    )
+    goal_monthly_expense_qs = TransactionLine.objects.filter(
+        transaction__budget=budget,
+        category__goal__isnull=False,
+        transaction__transaction_type="expense",
+        transaction__paid_date__range=(period_start, period_end),
+    ).aggregate(total=Sum("amount_usd"))
     goal_monthly_spending = (goal_monthly_expense_qs["total"] or Decimal("0.00")) * user_rate
 
     # Saved to goals this month — any income or transfer line landing in a goal (paid only).
@@ -367,31 +400,75 @@ def get_budget_overview(budget, month_str: str | None, user_rate: "Decimal" = De
             transaction__budget=budget,
             transaction__transaction_type__in=("transfer", "income"),
             category__goal__isnull=False,
-            transaction__paid_date__range=(period_start, period_end),
+            transaction__paid_date__isnull=False,
         )
+        .alias(eff_month=eff_month)
+        .filter(eff_month=period_start)
         .aggregate(total=Sum("amount_usd"))
     )
     goal_transfers_month = (goal_transfers_qs["total"] or Decimal("0.00")) * user_rate
 
-    # Total income this month — any income-type line, regardless of which category it lands in.
-    # An income line to a goal category counts here AND in goal_transfers_month, so net RTA = 0
-    # for income that went straight to a goal.
+    # Total income this month — any income-type line, regardless of which category it lands in,
+    # bucketed by effective budget month. An income line to a goal category counts here AND in
+    # goal_transfers_month, so net RTA = 0 for income that went straight to a goal.
     income_qs = (
         TransactionLine.objects.filter(
             transaction__budget=budget,
             transaction__transaction_type="income",
-            transaction__paid_date__range=(period_start, period_end),
+            transaction__paid_date__isnull=False,
         )
         .exclude(transaction__transfer_partner__isnull=False)
+        .alias(eff_month=eff_month)
+        .filter(eff_month=period_start)
         .aggregate(total=Sum("amount_usd"))
     )
     income_total = (income_qs["total"] or Decimal("0.00")) * user_rate
 
     categories = (
-        Category.objects.filter(budget=budget, is_system=False)
-        .select_related("goal")
-        .order_by("category_type", "name")
+        Category.objects.filter(budget=budget, is_system=False).select_related("goal").order_by("category_type", "name")
     )
+
+    # Rollover categories are budgeted a recurring base each month (from rollover_start). Only a
+    # *positive* leftover carries forward — a month that ends at zero or overspent resets to just the
+    # base next month (no negative carryover). This needs a month-by-month walk, so we fetch spending
+    # per month and iterate the running balance.
+    rollover_info: dict[int, dict] = {}
+    for cat in categories:
+        if not (cat.rollover and not cat.is_goal and cat.base_amount and cat.rollover_start):
+            continue
+        if cat.rollover_start > period_start:
+            continue  # not accruing yet for this month
+        start = cat.rollover_start
+        base = cat.base_amount
+        spend_by_month: dict[datetime.date, Decimal] = {}
+        for row in (
+            TransactionLine.objects.filter(
+                transaction__budget=budget,
+                category_id=cat.pk,
+                transaction__transaction_type="expense",
+                transaction__paid_date__gte=start,
+                transaction__paid_date__lte=period_end,
+            )
+            .exclude(transaction__transfer_partner__isnull=False)
+            .annotate(m=TruncMonth("transaction__paid_date"))
+            .values("m")
+            .annotate(total=Sum("amount_usd"))
+        ):
+            spend_by_month[row["m"]] = row["total"] * user_rate
+
+        balance = Decimal("0.00")
+        budgeted = base
+        cursor = start
+        while cursor <= period_start:
+            carry = balance if balance > Decimal("0.00") else Decimal("0.00")
+            budgeted = base + carry  # this month's budgeted target = base + positive leftover only
+            balance = budgeted - spend_by_month.get(cursor, Decimal("0.00"))
+            cursor = add_months(cursor, 1)
+        rollover_info[cat.pk] = {
+            "budgeted": budgeted,
+            "available": balance,
+            "activity": spend_by_month.get(period_start, Decimal("0.00")),
+        }
 
     rows = []
     expense_assigned = Decimal("0.00")
@@ -416,8 +493,17 @@ def get_budget_overview(budget, month_str: str | None, user_rate: "Decimal" = De
                 months_remaining = max((due.year - today.year) * 12 + (due.month - today.month), 1)
                 goal_monthly_needed = (remaining_amount / months_remaining).quantize(Decimal("0.01"))
 
+        budgeted = cat.monthly_budget
         if cat.category_type == Category.TYPE_INCOME:
             available = activity
+        elif cat.pk in rollover_info:
+            info = rollover_info[cat.pk]
+            # The base auto-sets the BUDGETED target (base + carryover) and the running available
+            # balance. It does NOT assign from Ready to Assign — RTA is untouched by rollover.
+            budgeted = info["budgeted"]
+            available = info["available"]
+            activity = info["activity"]
+            assigned = Decimal("0.00")
         else:
             expense_assigned += assigned
             available = assigned - activity
@@ -427,10 +513,11 @@ def get_budget_overview(budget, month_str: str | None, user_rate: "Decimal" = De
             "name": cat.name,
             "category_type": cat.category_type,
             "parent_id": cat.parent_id,
-            "budgeted": str(cat.monthly_budget),
+            "budgeted": str(budgeted),
             "assigned": str(assigned),
             "activity": str(activity),
             "available": str(available),
+            "rollover": cat.rollover,
             "is_goal": cat.is_goal,
             "goal_target": str(cat.goal_target) if cat.goal_target is not None else None,
             "goal_due_date": str(cat.goal_due_date) if cat.goal_due_date else None,
@@ -443,12 +530,17 @@ def get_budget_overview(budget, month_str: str | None, user_rate: "Decimal" = De
         }
         rows.append(row)
 
+    # Ready to Assign is per-month: this month's income (by effective budget month) minus what's
+    # been assigned and saved to goals this month. Surplus is not carried forward automatically —
+    # to fund a future month, target income at it via its budget month.
+    ready_to_assign = income_total - expense_assigned - goal_transfers_month
+
     return {
         "income_total": str(income_total),
         "expense_assigned": str(expense_assigned),
         "saved_to_goals_total": str(goal_transfers_month),
         "goal_monthly_spending": str(goal_monthly_spending),
-        "ready_to_assign": str(income_total - expense_assigned - goal_transfers_month),
+        "ready_to_assign": str(ready_to_assign),
         "categories": rows,
     }
 
@@ -478,7 +570,9 @@ def get_pending_count(budget, month_str: str | None) -> int:
     Month scoping uses Coalesce(paid_date, due_date), matching TransactionListView.
     """
     try:
-        month_start = datetime.date.fromisoformat(month_str + "-01") if month_str else datetime.date.today().replace(day=1)
+        month_start = (
+            datetime.date.fromisoformat(month_str + "-01") if month_str else datetime.date.today().replace(day=1)
+        )
     except (ValueError, TypeError, AttributeError):
         month_start = datetime.date.today().replace(day=1)
     last_day = calendar.monthrange(month_start.year, month_start.month)[1]

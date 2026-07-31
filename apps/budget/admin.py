@@ -2,7 +2,7 @@ from django.contrib import admin
 
 from unfold.admin import ModelAdmin, StackedInline, TabularInline
 
-from apps.budget.models import Category, Goal
+from apps.budget.models import Category, Goal, PaySchedule
 
 
 class SubcategoryInline(TabularInline):
@@ -43,3 +43,11 @@ class CategoryAdmin(ModelAdmin):
     @admin.display(description="Goal", boolean=True)
     def is_goal_display(self, obj):
         return obj.is_goal
+
+
+@admin.register(PaySchedule)
+class PayScheduleAdmin(ModelAdmin):
+    list_display = ["name", "budget", "frequency", "allocation_offset_months"]
+    list_filter = ["frequency"]
+    search_fields = ["name"]
+    list_select_related = ["budget"]

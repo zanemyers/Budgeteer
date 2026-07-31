@@ -9,11 +9,17 @@ urlpatterns = [
     path("", views.BudgetListView.as_view(), name="list"),
     # Payment Methods
     path("<int:budget_pk>/payment-methods/", views.PaymentMethodsView.as_view(), name="payment-methods"),
-    path("<int:budget_pk>/payment-methods/<int:pk>/", views.PaymentMethodDetailView.as_view(), name="payment-method-detail"),
+    path(
+        "<int:budget_pk>/payment-methods/<int:pk>/",
+        views.PaymentMethodDetailView.as_view(),
+        name="payment-method-detail",
+    ),
     path("create/", views.BudgetCreateView.as_view(), name="create"),
     path("<int:budget_pk>/set-default/", views.BudgetSetDefaultView.as_view(), name="set-default"),
     path("<int:budget_pk>/", views.BudgetDetailView.as_view(), name="detail"),
     path("<int:budget_pk>/edit/", views.BudgetUpdateView.as_view(), name="edit"),
+    path("<int:budget_pk>/pay-schedules/", views.PayScheduleListCreateView.as_view(), name="pay-schedule-create"),
+    path("<int:budget_pk>/pay-schedules/<int:pk>/", views.PayScheduleDetailView.as_view(), name="pay-schedule-detail"),
     path("<int:budget_pk>/goals/", views.GoalsView.as_view(), name="goals"),
     path("<int:budget_pk>/delete/", views.BudgetDeleteView.as_view(), name="delete"),
     path("<int:budget_pk>/settings/", views.BudgetSettingsView.as_view(), name="settings"),
@@ -25,25 +31,69 @@ urlpatterns = [
     path("<int:budget_pk>/categories/<int:pk>/edit/", views.CategoryUpdateView.as_view(), name="category-edit"),
     path("<int:budget_pk>/categories/<int:pk>/delete/", views.CategoryDeleteView.as_view(), name="category-delete"),
     # Category budgets (assigned amounts)
-    path("<int:budget_pk>/category-budgets/<int:category_pk>/", views.CategoryBudgetUpdateView.as_view(), name="category-budget-update"),
+    path(
+        "<int:budget_pk>/category-budgets/<int:category_pk>/",
+        views.CategoryBudgetUpdateView.as_view(),
+        name="category-budget-update",
+    ),
     # Transactions
     path("<int:budget_pk>/transactions/", views.TransactionListView.as_view(), name="transaction-list"),
     path("<int:budget_pk>/transactions/create/", views.TransactionCreateView.as_view(), name="transaction-create"),
     path("<int:budget_pk>/transactions/<int:pk>/", views.TransactionDetailView.as_view(), name="transaction-detail"),
     path("<int:budget_pk>/transactions/<int:pk>/edit/", views.TransactionUpdateView.as_view(), name="transaction-edit"),
-    path("<int:budget_pk>/transactions/<int:pk>/delete/", views.TransactionDeleteView.as_view(), name="transaction-delete"),
-    path("<int:budget_pk>/transactions/<int:pk>/mark-paid/", views.TransactionMarkPaidView.as_view(), name="transaction-mark-paid"),
-    path("<int:budget_pk>/transactions/<int:pk>/transfer-candidates/", views.TransferCandidatesView.as_view(), name="transaction-transfer-candidates"),
-    path("<int:budget_pk>/transactions/<int:pk>/transfer-link/", views.TransferLinkView.as_view(), name="transaction-transfer-link"),
+    path(
+        "<int:budget_pk>/transactions/<int:pk>/delete/",
+        views.TransactionDeleteView.as_view(),
+        name="transaction-delete",
+    ),
+    path(
+        "<int:budget_pk>/transactions/<int:pk>/mark-paid/",
+        views.TransactionMarkPaidView.as_view(),
+        name="transaction-mark-paid",
+    ),
+    path(
+        "<int:budget_pk>/transactions/<int:pk>/transfer-candidates/",
+        views.TransferCandidatesView.as_view(),
+        name="transaction-transfer-candidates",
+    ),
+    path(
+        "<int:budget_pk>/transactions/<int:pk>/transfer-link/",
+        views.TransferLinkView.as_view(),
+        name="transaction-transfer-link",
+    ),
     # Recurring (lives in BudgetSettings; modal endpoints only)
     path("<int:budget_pk>/recurring/create/", views.RecurringCreateView.as_view(), name="recurring-create"),
     path("<int:budget_pk>/recurring/<int:pk>/", views.RecurringDetailView.as_view(), name="recurring-detail"),
     # Bank transactions (SimpleFIN → local reconciliation)
     path("<int:budget_pk>/bank-transactions/", views.BankTransactionListView.as_view(), name="bank-txn-list"),
-    path("<int:budget_pk>/bank-transactions/<int:pk>/suggestions/", views.BankTransactionSuggestionsView.as_view(), name="bank-txn-suggestions"),
-    path("<int:budget_pk>/bank-transactions/<int:pk>/link/", views.BankTransactionLinkView.as_view(), name="bank-txn-link"),
-    path("<int:budget_pk>/bank-transactions/<int:pk>/create-transaction/", views.BankTransactionCreateTxnView.as_view(), name="bank-txn-create"),
-    path("<int:budget_pk>/bank-transactions/<int:pk>/confirm-as-transfer/", views.BankTransactionConfirmAsTransferView.as_view(), name="bank-txn-confirm-transfer"),
-    path("<int:budget_pk>/bank-transactions/<int:pk>/ignore/", views.BankTransactionIgnoreView.as_view(), name="bank-txn-ignore"),
-    path("<int:budget_pk>/bank-transactions/<int:pk>/unlink/", views.BankTransactionUnlinkView.as_view(), name="bank-txn-unlink"),
+    path(
+        "<int:budget_pk>/bank-transactions/<int:pk>/suggestions/",
+        views.BankTransactionSuggestionsView.as_view(),
+        name="bank-txn-suggestions",
+    ),
+    path(
+        "<int:budget_pk>/bank-transactions/<int:pk>/link/",
+        views.BankTransactionLinkView.as_view(),
+        name="bank-txn-link",
+    ),
+    path(
+        "<int:budget_pk>/bank-transactions/<int:pk>/create-transaction/",
+        views.BankTransactionCreateTxnView.as_view(),
+        name="bank-txn-create",
+    ),
+    path(
+        "<int:budget_pk>/bank-transactions/<int:pk>/confirm-as-transfer/",
+        views.BankTransactionConfirmAsTransferView.as_view(),
+        name="bank-txn-confirm-transfer",
+    ),
+    path(
+        "<int:budget_pk>/bank-transactions/<int:pk>/ignore/",
+        views.BankTransactionIgnoreView.as_view(),
+        name="bank-txn-ignore",
+    ),
+    path(
+        "<int:budget_pk>/bank-transactions/<int:pk>/unlink/",
+        views.BankTransactionUnlinkView.as_view(),
+        name="bank-txn-unlink",
+    ),
 ]

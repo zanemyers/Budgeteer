@@ -1,13 +1,7 @@
 import { useState } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -19,6 +13,9 @@ export interface GoalCategory {
   category_type: "income" | "expense";
   parent_id: number | null;
   monthly_budget: string;
+  rollover: boolean;
+  base_amount: string;
+  rollover_start: string | null;
   is_goal: boolean;
   goal_target: string | null;
   goal_due_date: string | null;
@@ -35,7 +32,13 @@ interface Props {
 }
 
 function CurrencyInput({
-  id, value, onChange, placeholder, required, min = "0", step = "0.01",
+  id,
+  value,
+  onChange,
+  placeholder,
+  required,
+  min = "0",
+  step = "0.01",
 }: {
   id?: string;
   value: string;
@@ -47,7 +50,9 @@ function CurrencyInput({
 }) {
   return (
     <div className="flex">
-      <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-input bg-muted text-muted-foreground text-sm">$</span>
+      <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-input bg-muted text-muted-foreground text-sm">
+        $
+      </span>
       <Input
         id={id}
         type="number"
@@ -109,13 +114,15 @@ export default function GoalModal({ budgetPk, goal, onClose, onSaved }: Props) {
         body: JSON.stringify(body),
       });
       if (!res.ok) {
-        const data = await res.json() as { errors?: Record<string, string[]> };
-        const flat = Object.values(data.errors ?? data).flat().join(" ");
+        const data = (await res.json()) as { errors?: Record<string, string[]> };
+        const flat = Object.values(data.errors ?? data)
+          .flat()
+          .join(" ");
         setError(flat || "Could not save.");
         setSaving(false);
         return;
       }
-      const cat = await res.json() as GoalCategory;
+      const cat = (await res.json()) as GoalCategory;
       onSaved(cat);
     } catch {
       setError("Network error.");
@@ -124,7 +131,12 @@ export default function GoalModal({ budgetPk, goal, onClose, onSaved }: Props) {
   }
 
   return (
-    <Dialog open onOpenChange={(open) => { if (!open && !saving) onClose(); }}>
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open && !saving) onClose();
+      }}
+    >
       <DialogContent className="sm:max-w-2xl">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
@@ -192,12 +204,7 @@ export default function GoalModal({ budgetPk, goal, onClose, onSaved }: Props) {
                 <Label htmlFor="goal-initial">
                   Already saved <span className="text-muted-foreground font-normal">(optional)</span>
                 </Label>
-                <CurrencyInput
-                  id="goal-initial"
-                  placeholder="0"
-                  value={initialBalance}
-                  onChange={setInitialBalance}
-                />
+                <CurrencyInput id="goal-initial" placeholder="0" value={initialBalance} onChange={setInitialBalance} />
               </div>
             )}
 
@@ -239,7 +246,9 @@ export default function GoalModal({ budgetPk, goal, onClose, onSaved }: Props) {
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
+            <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
+              Cancel
+            </Button>
             <Button type="submit" disabled={saving || !name.trim() || !target}>
               {saving ? "Saving…" : "Save"}
             </Button>
