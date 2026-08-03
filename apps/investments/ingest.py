@@ -14,7 +14,8 @@ def _to_decimal(value, default: Decimal | None = None) -> Decimal | None:
 
 
 def persist_holdings(bank_account, holdings_payload: list[dict[str, Any]] | None) -> dict:
-    """Upsert holdings for a BankAccount from a SimpleFIN account's `holdings` array.
+    """
+    Upsert holdings for a BankAccount from a SimpleFIN account's `holdings` array.
 
     Positions absent from the payload are deleted — SimpleFIN sends the full set
     each sync, so a missing id means the position was closed.

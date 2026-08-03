@@ -1,9 +1,9 @@
-import { createElement, useState } from "react";
 import { router } from "@inertiajs/react";
-import AuthLayout from "../layouts/AuthLayout";
+import { createElement, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { getCsrfToken } from "@/lib/api";
+import AuthLayout from "../layouts/AuthLayout";
 
 interface Props {
   email: string;
@@ -43,7 +43,13 @@ export default function EmailConfirm({ email, invalid }: Props) {
           <h1 className="text-xl font-semibold mb-2">Invalid confirmation link</h1>
           <p className="text-muted-foreground text-sm mb-6">This link is invalid or has already been used.</p>
           <Button asChild variant="outline" size="sm">
-            <a href="/accounts/login/" onClick={(e) => { e.preventDefault(); router.visit("/accounts/login/"); }}>
+            <a
+              href="/accounts/login/"
+              onClick={(e) => {
+                e.preventDefault();
+                router.visit("/accounts/login/");
+              }}
+            >
               Back to sign in
             </a>
           </Button>
@@ -60,7 +66,13 @@ export default function EmailConfirm({ email, invalid }: Props) {
           <h1 className="text-xl font-semibold mb-2">Email confirmed</h1>
           <p className="text-muted-foreground text-sm mb-6">{email} has been verified.</p>
           <Button asChild size="sm">
-            <a href="/" onClick={(e) => { e.preventDefault(); router.visit("/"); }}>
+            <a
+              href="/"
+              onClick={(e) => {
+                e.preventDefault();
+                router.visit("/");
+              }}
+            >
               Continue
             </a>
           </Button>

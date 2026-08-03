@@ -4,15 +4,17 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('budget', '0025_remove_payschedule_anchor_day_and_more'),
+        ("budget", "0025_remove_payschedule_anchor_day_and_more"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='category',
-            name='rollover',
-            field=models.BooleanField(default=False, help_text="Carry this category's leftover balance forward into the next month instead of resetting it."),
+            model_name="category",
+            name="rollover",
+            field=models.BooleanField(
+                default=False,
+                help_text="Carry this category's leftover balance forward into the next month instead of resetting it.",
+            ),
         ),
     ]

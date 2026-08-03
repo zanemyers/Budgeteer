@@ -1,12 +1,12 @@
-import { createElement, useState } from "react";
 import { router } from "@inertiajs/react";
-import AuthLayout from "../layouts/AuthLayout";
+import { createElement, useState } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getCsrfToken } from "@/lib/api";
+import AuthLayout from "../layouts/AuthLayout";
 
 interface Props {
   done: boolean;
@@ -38,7 +38,7 @@ export default function PasswordResetConfirm({ done, token_fail, errors: initial
       if (res.redirected) {
         router.visit(res.url);
       } else {
-        const data = await res.json() as { errors: Record<string, string> };
+        const data = (await res.json()) as { errors: Record<string, string> };
         setErrors(data.errors ?? {});
       }
     } finally {
@@ -54,7 +54,13 @@ export default function PasswordResetConfirm({ done, token_fail, errors: initial
           <h1 className="text-xl font-semibold mb-2">Password changed</h1>
           <p className="text-muted-foreground text-sm mb-6">Your password has been updated. You can now sign in.</p>
           <Button asChild>
-            <a href="/accounts/login/" onClick={(e) => { e.preventDefault(); router.visit("/accounts/login/"); }}>
+            <a
+              href="/accounts/login/"
+              onClick={(e) => {
+                e.preventDefault();
+                router.visit("/accounts/login/");
+              }}
+            >
               Sign in
             </a>
           </Button>
@@ -72,7 +78,13 @@ export default function PasswordResetConfirm({ done, token_fail, errors: initial
             This password reset link is invalid or has already been used.
           </p>
           <Button asChild>
-            <a href="/accounts/password/reset/" onClick={(e) => { e.preventDefault(); router.visit("/accounts/password/reset/"); }}>
+            <a
+              href="/accounts/password/reset/"
+              onClick={(e) => {
+                e.preventDefault();
+                router.visit("/accounts/password/reset/");
+              }}
+            >
               Request a new link
             </a>
           </Button>

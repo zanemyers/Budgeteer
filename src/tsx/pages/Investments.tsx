@@ -1,8 +1,8 @@
-import { useMemo, useState } from "react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ChevronDown, ChevronRight } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useCurrencySymbol } from "../utils/currency";
 import { fmtDate } from "../utils/date";
 
@@ -113,15 +113,23 @@ export default function Investments({ accounts, portfolio }: Props) {
           <Card className="border-rule shadow-none mb-8">
             <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-6 py-6">
               <div>
-                <div className="text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-ink-quiet">Portfolio value</div>
-                <div className="text-2xl font-semibold tabular-nums mt-1">{fmtMoney(portfolio.market_value, symbol)}</div>
+                <div className="text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-ink-quiet">
+                  Portfolio value
+                </div>
+                <div className="text-2xl font-semibold tabular-nums mt-1">
+                  {fmtMoney(portfolio.market_value, symbol)}
+                </div>
               </div>
               <div>
-                <div className="text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-ink-quiet">Cost basis</div>
+                <div className="text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-ink-quiet">
+                  Cost basis
+                </div>
                 <div className="text-2xl font-semibold tabular-nums mt-1">{fmtMoney(portfolio.cost_basis, symbol)}</div>
               </div>
               <div>
-                <div className="text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-ink-quiet">Unrealized gain</div>
+                <div className="text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-ink-quiet">
+                  Unrealized gain
+                </div>
                 <div className={`text-2xl font-semibold tabular-nums mt-1 ${gainClass(portfolio.unrealized_gain)}`}>
                   {fmtMoney(portfolio.unrealized_gain, symbol)}
                 </div>
@@ -147,7 +155,11 @@ export default function Investments({ accounts, portfolio }: Props) {
                     aria-expanded={isOpen}
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      {isOpen ? <ChevronDown className="size-4 shrink-0" /> : <ChevronRight className="size-4 shrink-0" />}
+                      {isOpen ? (
+                        <ChevronDown className="size-4 shrink-0" />
+                      ) : (
+                        <ChevronRight className="size-4 shrink-0" />
+                      )}
                       <div className="min-w-0">
                         <div className="font-medium truncate">{acct.name}</div>
                         <div className="text-xs text-ink-quiet truncate">
@@ -160,11 +172,15 @@ export default function Investments({ accounts, portfolio }: Props) {
                     </div>
                     <div className="flex items-baseline gap-6 shrink-0">
                       <div className="text-right">
-                        <div className="text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-ink-quiet">Market value</div>
+                        <div className="text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-ink-quiet">
+                          Market value
+                        </div>
                         <div className="font-semibold tabular-nums">{fmtMoney(acct.market_value, symbol)}</div>
                       </div>
                       <div className="text-right">
-                        <div className="text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-ink-quiet">Gain</div>
+                        <div className="text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-ink-quiet">
+                          Gain
+                        </div>
                         <div className={`font-semibold tabular-nums ${gainClass(acct.unrealized_gain)}`}>
                           {fmtMoney(acct.unrealized_gain, symbol)}
                           {acct.unrealized_gain_pct !== null && (
@@ -197,9 +213,15 @@ export default function Investments({ accounts, portfolio }: Props) {
                               <TableCell className="font-medium tabular-nums">{h.symbol || "—"}</TableCell>
                               <TableCell className="text-sm text-ink-quiet">{h.description || "—"}</TableCell>
                               <TableCell className="text-right tabular-nums">{fmtShares(h.shares)}</TableCell>
-                              <TableCell className="text-right tabular-nums">{fmtMoney(h.purchase_price, symbol)}</TableCell>
-                              <TableCell className="text-right tabular-nums">{fmtMoney(h.cost_basis, symbol)}</TableCell>
-                              <TableCell className="text-right tabular-nums">{fmtMoney(h.market_value, symbol)}</TableCell>
+                              <TableCell className="text-right tabular-nums">
+                                {fmtMoney(h.purchase_price, symbol)}
+                              </TableCell>
+                              <TableCell className="text-right tabular-nums">
+                                {fmtMoney(h.cost_basis, symbol)}
+                              </TableCell>
+                              <TableCell className="text-right tabular-nums">
+                                {fmtMoney(h.market_value, symbol)}
+                              </TableCell>
                               <TableCell className={`text-right tabular-nums ${gainClass(h.unrealized_gain)}`}>
                                 {fmtMoney(h.unrealized_gain, symbol)}
                               </TableCell>

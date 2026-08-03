@@ -531,7 +531,7 @@ class TestCategoryRollover(BaseTest):
         self.assertEqual(Decimal(july["available"]), Decimal("0.00"))
 
     def test_rollover_does_not_touch_ready_to_assign(self):
-        cat = self._cat(rollover=True, base="100.00", start=datetime.date(2026, 7, 1))
+        self._cat(rollover=True, base="100.00", start=datetime.date(2026, 7, 1))
         august = get_budget_overview(self.budget, "2026-08")
         # The base sets the budgeted target only — it never draws from Ready to Assign.
         self.assertEqual(Decimal(august["expense_assigned"]), Decimal("0.00"))

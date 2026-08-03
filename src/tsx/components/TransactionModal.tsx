@@ -553,6 +553,7 @@ export default function TransactionModal({
               </Alert>
             )}
             {form.lines.map((line, idx) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: rows are fully controlled and addressed by index
               <div key={idx} className="grid grid-cols-12 gap-2 items-end">
                 <div className="col-span-12 md:col-span-5 flex flex-col gap-1.5">
                   <Label className="text-sm">Category</Label>

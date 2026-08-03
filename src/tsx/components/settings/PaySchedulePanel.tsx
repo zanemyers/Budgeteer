@@ -12,6 +12,7 @@ import {
   type PayScheduleCategory,
   type PayScheduleChoice,
   PayScheduleFormModal,
+  type PaySchedulePaymentMethod,
 } from "./PayScheduleFormModal";
 
 export type { PaySchedule } from "./PayScheduleFormModal";
@@ -21,6 +22,7 @@ interface Props {
   paySchedules: PaySchedule[];
   freqChoices: PayScheduleChoice[];
   incomeCategories: PayScheduleCategory[];
+  paymentMethods: PaySchedulePaymentMethod[];
   isOwner: boolean;
 }
 
@@ -35,7 +37,14 @@ function matchSummary(schedule: PaySchedule, symbol: string): string {
   return parts.length ? parts.join(" · ") : "Any income";
 }
 
-export function PaySchedulePanel({ budgetPk, paySchedules, freqChoices, incomeCategories, isOwner }: Props) {
+export function PaySchedulePanel({
+  budgetPk,
+  paySchedules,
+  freqChoices,
+  incomeCategories,
+  paymentMethods,
+  isOwner,
+}: Props) {
   const symbol = useCurrencySymbol();
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<PaySchedule | null>(null);
@@ -81,10 +90,11 @@ export function PaySchedulePanel({ budgetPk, paySchedules, freqChoices, incomeCa
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[26%]">Name</TableHead>
-                  <TableHead className="w-[20%]">Category</TableHead>
-                  <TableHead className="w-[18%]">Frequency</TableHead>
-                  <TableHead className="w-[22%]">Matches</TableHead>
+                  <TableHead className="w-[22%]">Name</TableHead>
+                  <TableHead className="w-[16%]">Category</TableHead>
+                  <TableHead className="w-[16%]">Account</TableHead>
+                  <TableHead className="w-[14%]">Frequency</TableHead>
+                  <TableHead className="w-[18%]">Matches</TableHead>
                   {isOwner && <TableHead className="w-[14%] text-right">Actions</TableHead>}
                 </TableRow>
               </TableHeader>
@@ -95,6 +105,7 @@ export function PaySchedulePanel({ budgetPk, paySchedules, freqChoices, incomeCa
                       <span className="font-medium">{schedule.name}</span>
                     </TableCell>
                     <TableCell className="text-sm text-ink-quiet">{schedule.category_name ?? "—"}</TableCell>
+                    <TableCell className="text-sm text-ink-quiet">{schedule.payment_method_name ?? "—"}</TableCell>
                     <TableCell className="text-sm">{freqLabel(schedule, freqChoices)}</TableCell>
                     <TableCell className="text-sm text-ink-quiet">{matchSummary(schedule, symbol)}</TableCell>
                     {isOwner && (
@@ -129,6 +140,7 @@ export function PaySchedulePanel({ budgetPk, paySchedules, freqChoices, incomeCa
           schedule={editing}
           freqChoices={freqChoices}
           incomeCategories={incomeCategories}
+          paymentMethods={paymentMethods}
           onClose={() => {
             setShowForm(false);
             setEditing(null);

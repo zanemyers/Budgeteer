@@ -1,13 +1,15 @@
-"""Suggest matches between an unlinked BankTransaction and local Transactions.
+"""
+Suggest matches between an unlinked BankTransaction and local Transactions.
 
 A "suggestion" is one of:
-- {"kind": "transaction", "transaction_id": id, ...}       — link to an existing unpaid Transaction
-- {"kind": "recurring", "transaction_id": id, ...}         — same, but the Transaction was generated from a RecurringTransaction
-- {"kind": "paid_transaction", "transaction_id": id, ...}  — link to an already-paid manual entry that hasn't been bank-linked yet
-- {"kind": "merchant_rule", "category_id": id, ...}        — propose creating a new Transaction in a likely category
+- {"kind": "transaction", ...}       — link to an existing unpaid Transaction
+- {"kind": "recurring", ...}         — same, but the Transaction came from a RecurringTransaction
+- {"kind": "paid_transaction", ...}  — link to an already-paid manual entry not yet bank-linked
+- {"kind": "merchant_rule", ...}     — propose creating a new Transaction in a likely category
 
 Confidence is in [0, 1]. Higher = better match. The caller decides how to present them.
 """
+
 from __future__ import annotations
 
 import datetime
@@ -69,7 +71,7 @@ def _amount_matches(a: Decimal, b: Decimal) -> bool:
     return abs(abs(a) - abs(b)) <= AMOUNT_TOLERANCE
 
 
-def suggest_matches(bank_txn: "BankTransaction", budget: "Budget") -> list[dict]:
+def suggest_matches(bank_txn: BankTransaction, budget: Budget) -> list[dict]:
     """Return up to MAX_SUGGESTIONS dicts ranked by confidence."""
     bank_date = bank_txn.posted_at.date()
     earliest = bank_date - datetime.timedelta(days=DATE_WINDOW_DAYS)

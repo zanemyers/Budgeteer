@@ -1,5 +1,5 @@
-import { useState } from "react";
 import { router } from "@inertiajs/react";
+import { useState } from "react";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -7,13 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getCsrfToken } from "@/lib/api";
 import { fmtDate } from "@/utils/date";
 
@@ -59,7 +53,14 @@ export default function BudgetList({ budgets: initial }: Props) {
     if (newName === null) return;
     setCreating(true);
     try {
-      const body: { name: string; copy_from?: number; copy_categories?: boolean; copy_payment_methods?: boolean; copy_members?: boolean; add_default_categories?: boolean } = { name: newName.trim() };
+      const body: {
+        name: string;
+        copy_from?: number;
+        copy_categories?: boolean;
+        copy_payment_methods?: boolean;
+        copy_members?: boolean;
+        add_default_categories?: boolean;
+      } = { name: newName.trim() };
       if (copyFrom) {
         body.copy_from = parseInt(copyFrom, 10);
         body.copy_categories = copyCategories;
@@ -74,7 +75,7 @@ export default function BudgetList({ budgets: initial }: Props) {
         body: JSON.stringify(body),
       });
       if (res.ok) {
-        const { id } = await res.json() as { id: number };
+        const { id } = (await res.json()) as { id: number };
         router.visit(`/budgets/${id}/`);
       }
     } finally {
@@ -84,7 +85,11 @@ export default function BudgetList({ budgets: initial }: Props) {
 
   async function saveName(budget: Budget) {
     const val = editingName[budget.id];
-    setEditingName((prev) => { const n = { ...prev }; delete n[budget.id]; return n; });
+    setEditingName((prev) => {
+      const n = { ...prev };
+      delete n[budget.id];
+      return n;
+    });
     if (val === undefined || val === budget.name) return;
     setSavingId(budget.id);
     try {
@@ -94,8 +99,8 @@ export default function BudgetList({ budgets: initial }: Props) {
         body: JSON.stringify({ name: val }),
       });
       if (res.ok) {
-        const updated = await res.json() as { id: number; name: string };
-        setBudgets((prev) => prev.map((b) => b.id === updated.id ? { ...b, name: updated.name } : b));
+        const updated = (await res.json()) as { id: number; name: string };
+        setBudgets((prev) => prev.map((b) => (b.id === updated.id ? { ...b, name: updated.name } : b)));
       }
     } finally {
       setSavingId(null);
@@ -127,16 +132,16 @@ export default function BudgetList({ budgets: initial }: Props) {
     <div className="max-w-2xl">
       <header className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-semibold tracking-tight">My Budgets</h1>
-        {newName === null && (
-          <Button onClick={() => setNewName("")}>New Budget</Button>
-        )}
+        {newName === null && <Button onClick={() => setNewName("")}>New Budget</Button>}
       </header>
 
       {newName !== null && (
         <Card className="mb-6 border-rule shadow-none">
           <CardContent className="flex flex-col gap-4">
             <div className="flex flex-col gap-2">
-              <Label htmlFor="budget-name" className="font-semibold">Budget name</Label>
+              <Label htmlFor="budget-name" className="font-semibold">
+                Budget name
+              </Label>
               <Input
                 id="budget-name"
                 placeholder="e.g. Vacation 2025"
@@ -155,24 +160,42 @@ export default function BudgetList({ budgets: initial }: Props) {
                   Copy from existing budget <span className="text-muted-foreground font-normal">(optional)</span>
                 </Label>
                 <Select value={copyFrom || "none"} onValueChange={(v) => setCopyFrom(v === "none" ? "" : v)}>
-                  <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">— Start fresh —</SelectItem>
                     {budgets.map((b) => (
-                      <SelectItem key={b.id} value={String(b.id)}>{displayName(b)}</SelectItem>
+                      <SelectItem key={b.id} value={String(b.id)}>
+                        {displayName(b)}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
                 {copyFrom && (
                   <div className="flex flex-col gap-2 mt-2">
-                    {([
-                      { key: "categories", label: "Category names (no amounts)", value: copyCategories, set: setCopyCategories },
-                      { key: "payment_methods", label: "Payment methods", value: copyPaymentMethods, set: setCopyPaymentMethods },
-                      { key: "members", label: "Members", value: copyMembers, set: setCopyMembers },
-                    ] as const).map(({ key, label, value, set }) => (
+                    {(
+                      [
+                        {
+                          key: "categories",
+                          label: "Category names (no amounts)",
+                          value: copyCategories,
+                          set: setCopyCategories,
+                        },
+                        {
+                          key: "payment_methods",
+                          label: "Payment methods",
+                          value: copyPaymentMethods,
+                          set: setCopyPaymentMethods,
+                        },
+                        { key: "members", label: "Members", value: copyMembers, set: setCopyMembers },
+                      ] as const
+                    ).map(({ key, label, value, set }) => (
                       <div key={key} className="flex items-center gap-2">
                         <Checkbox id={`copy-${key}`} checked={value} onCheckedChange={(c) => set(c === true)} />
-                        <Label htmlFor={`copy-${key}`} className="text-sm font-normal">{label}</Label>
+                        <Label htmlFor={`copy-${key}`} className="text-sm font-normal">
+                          {label}
+                        </Label>
                       </div>
                     ))}
                   </div>
@@ -183,7 +206,9 @@ export default function BudgetList({ budgets: initial }: Props) {
               <div className="flex items-start gap-2">
                 <Checkbox id="add-defaults" checked={addDefaults} onCheckedChange={(c) => setAddDefaults(c === true)} />
                 <div className="flex flex-col gap-0.5">
-                  <Label htmlFor="add-defaults" className="text-sm font-normal">Start with suggested categories</Label>
+                  <Label htmlFor="add-defaults" className="text-sm font-normal">
+                    Start with suggested categories
+                  </Label>
                   <span className="text-muted-foreground text-xs">
                     Adds common income/expense categories (Salary, Housing, Food, etc.) you can rename or remove later.
                   </span>
@@ -194,7 +219,9 @@ export default function BudgetList({ budgets: initial }: Props) {
               <Button disabled={creating} onClick={() => void createBudget()}>
                 {creating ? "Creating…" : "Create"}
               </Button>
-              <Button variant="outline" onClick={resetForm}>Cancel</Button>
+              <Button variant="outline" onClick={resetForm}>
+                Cancel
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -222,9 +249,7 @@ export default function BudgetList({ budgets: initial }: Props) {
                     <Input
                       value={editingName[budget.id]}
                       autoFocus
-                      onChange={(e) =>
-                        setEditingName((prev) => ({ ...prev, [budget.id]: e.target.value }))
-                      }
+                      onChange={(e) => setEditingName((prev) => ({ ...prev, [budget.id]: e.target.value }))}
                       onBlur={() => void saveName(budget)}
                       onKeyDown={(e) => {
                         if (e.key === "Enter") void saveName(budget);
@@ -272,9 +297,7 @@ export default function BudgetList({ budgets: initial }: Props) {
                       variant="ghost"
                       size="sm"
                       disabled={isSaving || isEditing}
-                      onClick={() =>
-                        setEditingName((prev) => ({ ...prev, [budget.id]: budget.name }))
-                      }
+                      onClick={() => setEditingName((prev) => ({ ...prev, [budget.id]: budget.name }))}
                     >
                       {isSaving ? "…" : "Rename"}
                     </Button>

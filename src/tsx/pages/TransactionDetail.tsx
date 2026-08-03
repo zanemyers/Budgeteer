@@ -1,21 +1,14 @@
 import { router } from "@inertiajs/react";
 import { useState } from "react";
 import { toast } from "sonner";
-import type { Transaction } from "../types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { fmtDate } from "../utils/date";
-import { fmt, useCurrencySymbol } from "../utils/currency";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { jsonFetch } from "../lib/api";
+import type { Transaction } from "../types";
+import { fmt, useCurrencySymbol } from "../utils/currency";
+import { fmtDate } from "../utils/date";
 
 interface Props {
   budget_pk: number;
@@ -46,11 +39,9 @@ export default function TransactionDetail({ budget_pk, transaction: txn }: Props
   async function link(partner: Transaction) {
     setBusy(true);
     try {
-      await jsonFetch(
-        `/budgets/${budget_pk}/transactions/${txn.id}/transfer-link/`,
-        "PATCH",
-        { partner_id: partner.id },
-      );
+      await jsonFetch(`/budgets/${budget_pk}/transactions/${txn.id}/transfer-link/`, "PATCH", {
+        partner_id: partner.id,
+      });
       toast.success(`Linked to "${partner.description}".`);
       router.reload({ only: ["transaction"] });
     } catch (err) {
@@ -64,11 +55,7 @@ export default function TransactionDetail({ budget_pk, transaction: txn }: Props
   async function unlink() {
     setBusy(true);
     try {
-      await jsonFetch(
-        `/budgets/${budget_pk}/transactions/${txn.id}/transfer-link/`,
-        "PATCH",
-        { partner_id: null },
-      );
+      await jsonFetch(`/budgets/${budget_pk}/transactions/${txn.id}/transfer-link/`, "PATCH", { partner_id: null });
       toast.success("Transfer unlinked.");
       router.reload({ only: ["transaction"] });
     } catch {
@@ -84,7 +71,10 @@ export default function TransactionDetail({ budget_pk, transaction: txn }: Props
         <Button asChild variant="outline" size="sm">
           <a
             href={`/budgets/${budget_pk}/transactions/`}
-            onClick={(e) => { e.preventDefault(); router.visit(`/budgets/${budget_pk}/transactions/`); }}
+            onClick={(e) => {
+              e.preventDefault();
+              router.visit(`/budgets/${budget_pk}/transactions/`);
+            }}
           >
             ← Back
           </a>
@@ -104,9 +94,11 @@ export default function TransactionDetail({ budget_pk, transaction: txn }: Props
               <dd>{fmtDate(txn.paid_date)}</dd>
               <dt className="text-muted-foreground">Status</dt>
               <dd>
-                {txn.transaction_type === "income"
-                  ? <Badge variant={txn.is_paid ? "success" : "secondary"}>{txn.is_paid ? "Received" : "Pending"}</Badge>
-                  : <Badge variant={txn.is_paid ? "success" : "warning"}>{txn.is_paid ? "Paid" : "Unpaid"}</Badge>}
+                {txn.transaction_type === "income" ? (
+                  <Badge variant={txn.is_paid ? "success" : "secondary"}>{txn.is_paid ? "Received" : "Pending"}</Badge>
+                ) : (
+                  <Badge variant={txn.is_paid ? "success" : "warning"}>{txn.is_paid ? "Paid" : "Unpaid"}</Badge>
+                )}
               </dd>
               <dt className="text-muted-foreground">Payment Method</dt>
               <dd>{txn.payment_method_name ?? "—"}</dd>
@@ -123,7 +115,10 @@ export default function TransactionDetail({ budget_pk, transaction: txn }: Props
                     <a
                       href={`/budgets/${budget_pk}/recurring/${txn.recurring}/`}
                       className="text-primary hover:underline"
-                      onClick={(e) => { e.preventDefault(); router.visit(`/budgets/${budget_pk}/recurring/${txn.recurring}/`); }}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        router.visit(`/budgets/${budget_pk}/recurring/${txn.recurring}/`);
+                      }}
                     >
                       View Schedule
                     </a>
@@ -151,12 +146,17 @@ export default function TransactionDetail({ budget_pk, transaction: txn }: Props
                     <a
                       href={`/budgets/${budget_pk}/transactions/?category=${line.category}`}
                       className="no-underline hover:underline"
-                      onClick={(e) => { e.preventDefault(); router.visit(`/budgets/${budget_pk}/transactions/?category=${line.category}`); }}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        router.visit(`/budgets/${budget_pk}/transactions/?category=${line.category}`);
+                      }}
                     >
                       {line.category_name}
                     </a>
                   </TableCell>
-                  <TableCell className={`text-right font-semibold ${line.category_type === "income" ? "text-primary" : "text-destructive"}`}>
+                  <TableCell
+                    className={`text-right font-semibold ${line.category_type === "income" ? "text-primary" : "text-destructive"}`}
+                  >
                     {fmt(line.amount, symbol)}
                   </TableCell>
                   <TableCell className="text-muted-foreground text-sm">{line.description}</TableCell>
@@ -164,7 +164,9 @@ export default function TransactionDetail({ budget_pk, transaction: txn }: Props
               ))}
               <TableRow className="bg-muted/50 hover:bg-muted/50 font-semibold">
                 <TableCell>Total</TableCell>
-                <TableCell className={`text-right ${txn.transaction_type === "income" ? "text-primary" : "text-destructive"}`}>
+                <TableCell
+                  className={`text-right ${txn.transaction_type === "income" ? "text-primary" : "text-destructive"}`}
+                >
                   {fmt(txn.total_amount, symbol)}
                 </TableCell>
                 <TableCell></TableCell>
@@ -187,13 +189,18 @@ export default function TransactionDetail({ budget_pk, transaction: txn }: Props
           {partnerId !== null ? (
             <div className="flex items-center justify-between gap-4">
               <div>
-                <Badge variant="secondary" className="mr-2">Linked</Badge>
-                This transaction is paired with another as a transfer; both legs are excluded from headline income/expense totals.
-                {" "}
+                <Badge variant="secondary" className="mr-2">
+                  Linked
+                </Badge>
+                This transaction is paired with another as a transfer; both legs are excluded from headline
+                income/expense totals.{" "}
                 <a
                   href={`/budgets/${budget_pk}/transactions/${partnerId}/`}
                   className="text-primary hover:underline"
-                  onClick={(e) => { e.preventDefault(); router.visit(`/budgets/${budget_pk}/transactions/${partnerId}/`); }}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    router.visit(`/budgets/${budget_pk}/transactions/${partnerId}/`);
+                  }}
                 >
                   View partner →
                 </a>
@@ -204,12 +211,18 @@ export default function TransactionDetail({ budget_pk, transaction: txn }: Props
             </div>
           ) : candidates === null ? (
             <p className="text-muted-foreground">
-              Not linked. Use <em>Find transfer partner</em> if this is one leg of a movement between accounts (e.g. checking → savings) — pairing prevents double-counting in reports.
+              Not linked. Use <em>Find transfer partner</em> if this is one leg of a movement between accounts (e.g.
+              checking → savings) — pairing prevents double-counting in reports.
             </p>
           ) : candidates.length === 0 ? (
             <div className="flex items-center justify-between gap-4">
-              <p className="text-muted-foreground">No matching transactions found (same amount, opposite direction, within ±3 days, different payment method).</p>
-              <Button size="sm" variant="ghost" onClick={() => setCandidates(null)}>Dismiss</Button>
+              <p className="text-muted-foreground">
+                No matching transactions found (same amount, opposite direction, within ±3 days, different payment
+                method).
+              </p>
+              <Button size="sm" variant="ghost" onClick={() => setCandidates(null)}>
+                Dismiss
+              </Button>
             </div>
           ) : (
             <div>
@@ -220,15 +233,20 @@ export default function TransactionDetail({ budget_pk, transaction: txn }: Props
                     <div className="min-w-0">
                       <div className="font-medium truncate">{c.description}</div>
                       <div className="text-xs text-muted-foreground">
-                        {fmtDate(c.paid_date ?? c.due_date)} · {c.payment_method_name ?? "—"} · <span className="tabular-nums">{fmt(c.total_amount, symbol)}</span>
+                        {fmtDate(c.paid_date ?? c.due_date)} · {c.payment_method_name ?? "—"} ·{" "}
+                        <span className="tabular-nums">{fmt(c.total_amount, symbol)}</span>
                       </div>
                     </div>
-                    <Button size="sm" disabled={busy} onClick={() => void link(c)}>Link</Button>
+                    <Button size="sm" disabled={busy} onClick={() => void link(c)}>
+                      Link
+                    </Button>
                   </li>
                 ))}
               </ul>
               <div className="mt-3">
-                <Button size="sm" variant="ghost" onClick={() => setCandidates(null)}>Cancel</Button>
+                <Button size="sm" variant="ghost" onClick={() => setCandidates(null)}>
+                  Cancel
+                </Button>
               </div>
             </div>
           )}

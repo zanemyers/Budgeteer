@@ -1,9 +1,9 @@
 {% extends "admin/index.html" %}
+
 {% load i18n humanize %}
 
 {% block content %}
   <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4 mb-6">
-
     {# ── Bank sync health ───────────────────────────────────── #}
     <div class="bg-white border border-base-200 dark:bg-base-900 dark:border-base-800 rounded shadow-xs p-4 flex flex-col gap-2">
       <div class="flex items-center justify-between">
@@ -17,13 +17,12 @@
         {% endif %}
       </div>
       <div class="text-3xl font-semibold text-font-important-light dark:text-font-important-dark">
-        {{ sync_health.ok }}<span class="text-font-subtle-light dark:text-font-subtle-dark text-xl"> / {{ sync_health.total }}</span>
+        {{ sync_health.ok }}<span class="text-font-subtle-light dark:text-font-subtle-dark text-xl">/ {{ sync_health.total }}</span>
       </div>
       <div class="text-xs text-font-subtle-light dark:text-font-subtle-dark">
         Last successful sync: {{ sync_health.last_ok_when }}
       </div>
     </div>
-
     {# ── Currency freshness ─────────────────────────────────── #}
     <div class="bg-white border border-base-200 dark:bg-base-900 dark:border-base-800 rounded shadow-xs p-4 flex flex-col gap-2">
       <div class="flex items-center justify-between">
@@ -44,9 +43,13 @@
           Last update: {{ currency_freshness.when }}
         </span>
         {% if currency_freshness.color != "success" %}
-          <form method="post" action="{% url 'admin_refresh_exchange_rates' %}" class="m-0" data-refresh-rates>
+          <form method="post"
+                action="{% url 'admin_refresh_exchange_rates' %}"
+                class="m-0"
+                data-refresh-rates>
             {% csrf_token %}
-            <button type="submit" class="inline-flex items-center gap-1 rounded border border-base-200 dark:border-base-800 bg-base-50 dark:bg-base-900 px-2 py-0.5 text-xs font-medium text-font-important-light dark:text-font-important-dark hover:bg-base-100 dark:hover:bg-base-800 transition disabled:opacity-60 disabled:cursor-not-allowed">
+            <button type="submit"
+                    class="inline-flex items-center gap-1 rounded border border-base-200 dark:border-base-800 bg-base-50 dark:bg-base-900 px-2 py-0.5 text-xs font-medium text-font-important-light dark:text-font-important-dark hover:bg-base-100 dark:hover:bg-base-800 transition disabled:opacity-60 disabled:cursor-not-allowed">
               <span data-label-default>Refresh now</span>
               <span data-label-busy class="hidden items-center gap-1">
                 <svg class="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
@@ -61,7 +64,6 @@
         {% endif %}
       </div>
     </div>
-
     {# ── Transactions (lifetime + 30d) ──────────────────────── #}
     <div class="bg-white border border-base-200 dark:bg-base-900 dark:border-base-800 rounded shadow-xs p-4 flex flex-col gap-2">
       <h3 class="text-sm font-semibold text-font-important-light dark:text-font-important-dark">Transactions</h3>
@@ -72,7 +74,6 @@
         {{ system_totals.transactions_30d|intcomma }} in the last 30 days
       </div>
     </div>
-
     {# ── Spend ──────────────────────────────────────────────── #}
     <div class="bg-white border border-base-200 dark:bg-base-900 dark:border-base-800 rounded shadow-xs p-4 flex flex-col gap-2">
       <h3 class="text-sm font-semibold text-font-important-light dark:text-font-important-dark">Spent (last 30d)</h3>
@@ -85,12 +86,9 @@
         {{ system_totals.budgets }} budget{{ system_totals.budgets|pluralize }}
       </div>
     </div>
-
   </div>
-
   {# ── Two-column row: recent sync errors + recent transactions ── #}
   <div class="grid grid-cols-1 gap-4 lg:grid-cols-2 mb-6">
-
     <div class="bg-white border border-base-200 dark:bg-base-900 dark:border-base-800 rounded shadow-xs p-4">
       <h3 class="text-sm font-semibold text-font-important-light dark:text-font-important-dark mb-3">Recent sync errors</h3>
       {% if sync_health.recent_errors %}
@@ -109,7 +107,6 @@
         <p class="text-sm text-font-subtle-light dark:text-font-subtle-dark">No errors. Nothing to surface here.</p>
       {% endif %}
     </div>
-
     <div class="bg-white border border-base-200 dark:bg-base-900 dark:border-base-800 rounded shadow-xs p-4">
       <h3 class="text-sm font-semibold text-font-important-light dark:text-font-important-dark mb-3">Recent logins</h3>
       {% if recent_activity.users %}
@@ -125,12 +122,9 @@
         <p class="text-sm text-font-subtle-light dark:text-font-subtle-dark">No logins recorded yet.</p>
       {% endif %}
     </div>
-
   </div>
-
   {# ── Charts: spend trend + spend by category ──────────────── #}
   <div class="grid grid-cols-1 gap-4 lg:grid-cols-2 mb-6">
-
     <div class="bg-white border border-base-200 dark:bg-base-900 dark:border-base-800 rounded shadow-xs p-4">
       <h3 class="text-sm font-semibold text-font-important-light dark:text-font-important-dark mb-3">Monthly spend</h3>
       <div style="position: relative; height: 220px;">
@@ -138,7 +132,6 @@
       </div>
       {{ spend_trend|json_script:"spend-trend-data" }}
     </div>
-
     <div class="bg-white border border-base-200 dark:bg-base-900 dark:border-base-800 rounded shadow-xs p-4">
       <h3 class="text-sm font-semibold text-font-important-light dark:text-font-important-dark mb-3">Top categories this month</h3>
       <div style="position: relative; height: 220px;">
@@ -146,14 +139,11 @@
       </div>
       {{ spend_by_category|json_script:"spend-by-category-data" }}
     </div>
-
   </div>
-
   {# Dashboard is the page; the default app list is hidden — admin nav lives in the sidebar. #}
-
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script>
-    (function () {
+    (function() {
       const isDark = document.documentElement.classList.contains('dark');
       const ink = isDark ? '#e8e6e3' : '#171717';
       const muted = isDark ? '#a3a3a3' : '#737373';
@@ -181,14 +171,32 @@
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-              legend: { display: false },
-              tooltip: { callbacks: { label: (c) => fmtUsd(c.parsed.y) } },
+              legend: {
+                display: false
+              },
+              tooltip: {
+                callbacks: {
+                  label: (c) => fmtUsd(c.parsed.y)
+                }
+              },
             },
             scales: {
-              x: { ticks: { color: muted }, grid: { display: false } },
+              x: {
+                ticks: {
+                  color: muted
+                },
+                grid: {
+                  display: false
+                }
+              },
               y: {
-                ticks: { color: muted, callback: fmtUsd },
-                grid: { color: grid },
+                ticks: {
+                  color: muted,
+                  callback: fmtUsd
+                },
+                grid: {
+                  color: grid
+                },
                 beginAtZero: true,
               },
             },
@@ -231,18 +239,27 @@
             plugins: {
               legend: {
                 position: 'right',
-                labels: { color: ink, boxWidth: 12, font: { size: 11 } },
+                labels: {
+                  color: ink,
+                  boxWidth: 12,
+                  font: {
+                    size: 11
+                  }
+                },
               },
-              tooltip: { callbacks: { label: (c) => `${c.label}: ${fmtUsd(c.parsed)}` } },
+              tooltip: {
+                callbacks: {
+                  label: (c) => `${c.label}: ${fmtUsd(c.parsed)}`
+                }
+              },
             },
           },
         });
       }
     })();
   </script>
-
   <script>
-    (function () {
+    (function() {
       const form = document.querySelector('form[data-refresh-rates]');
       if (!form) return;
       const button = form.querySelector('button');
@@ -267,7 +284,10 @@
         try {
           const res = await fetch(form.action, {
             method: 'POST',
-            headers: { 'X-CSRFToken': csrf, 'X-Requested-With': 'XMLHttpRequest' },
+            headers: {
+              'X-CSRFToken': csrf,
+              'X-Requested-With': 'XMLHttpRequest'
+            },
             body: new FormData(form),
           });
           if (!res.ok) throw new Error('Request failed: ' + res.status);

@@ -73,7 +73,9 @@ class TestRecurringGeneration(BaseTest):
         through = datetime.date(2026, 3, 31)
         created = rt.generate_instances_up_to(through)
         self.assertEqual(len(created), 3)  # Jan, Feb, Mar
-        due_dates = list(Transaction.objects.filter(recurring=rt).values_list("due_date", flat=True).order_by("due_date"))
+        due_dates = list(
+            Transaction.objects.filter(recurring=rt).values_list("due_date", flat=True).order_by("due_date")
+        )
         self.assertEqual(due_dates[0], datetime.date(2026, 1, 1))
         self.assertEqual(due_dates[1], datetime.date(2026, 2, 1))
         self.assertEqual(due_dates[2], datetime.date(2026, 3, 1))

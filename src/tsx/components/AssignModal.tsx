@@ -1,17 +1,11 @@
 import { useMemo, useState } from "react";
-import type { BudgetOverviewCategory } from "../types";
-import { jsonFetch } from "../lib/api";
-import { fmt, useCurrencySymbol } from "../utils/currency";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { jsonFetch } from "../lib/api";
+import type { BudgetOverviewCategory } from "../types";
+import { fmt, useCurrencySymbol } from "../utils/currency";
 
 interface Props {
   budgetPk: number;
@@ -29,10 +23,7 @@ export default function AssignModal({ budgetPk, month, categories, readyToAssign
   const [error, setError] = useState<string | null>(null);
 
   // Only assignable expense categories (excluding goals — they have their own contribution model).
-  const assignable = useMemo(
-    () => categories.filter((c) => c.category_type === "expense" && !c.is_goal),
-    [categories],
-  );
+  const assignable = useMemo(() => categories.filter((c) => c.category_type === "expense" && !c.is_goal), [categories]);
 
   const totalToAssign = useMemo(() => {
     return Object.values(drafts).reduce((sum, v) => {
@@ -76,11 +67,7 @@ export default function AssignModal({ budgetPk, month, categories, readyToAssign
 
       await Promise.all(
         updates.map((u) =>
-          jsonFetch(
-            `/budgets/${budgetPk}/category-budgets/${u.catId}/`,
-            "PATCH",
-            { assigned: u.newAssigned, month },
-          ),
+          jsonFetch(`/budgets/${budgetPk}/category-budgets/${u.catId}/`, "PATCH", { assigned: u.newAssigned, month }),
         ),
       );
 
@@ -99,7 +86,12 @@ export default function AssignModal({ budgetPk, month, categories, readyToAssign
   }
 
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Assign {fmt(readyToAssign, symbol)}</DialogTitle>
@@ -123,12 +115,18 @@ export default function AssignModal({ budgetPk, month, categories, readyToAssign
                     <div className="min-w-0">
                       <div className="font-medium text-sm truncate">{cat.name}</div>
                       <div className="text-xs text-ink-quiet tabular-nums">
-                        {currentAssigned > 0 ? <>now {fmt(cat.assigned, symbol)}</> : <span className="italic">unassigned</span>}
+                        {currentAssigned > 0 ? (
+                          <>now {fmt(cat.assigned, symbol)}</>
+                        ) : (
+                          <span className="italic">unassigned</span>
+                        )}
                       </div>
                     </div>
                     <span className="text-ink-quiet text-sm">+</span>
                     <div className="flex items-center gap-0">
-                      <span className="inline-flex items-center px-2 h-9 rounded-l-md border border-r-0 border-input bg-muted text-muted-foreground text-sm">{symbol}</span>
+                      <span className="inline-flex items-center px-2 h-9 rounded-l-md border border-r-0 border-input bg-muted text-muted-foreground text-sm">
+                        {symbol}
+                      </span>
                       <Input
                         type="number"
                         min="0"
@@ -150,7 +148,8 @@ export default function AssignModal({ budgetPk, month, categories, readyToAssign
           <div className="flex items-center gap-3 text-sm">
             <span className="text-ink-quiet">Remaining</span>
             <span className={`font-semibold tabular-nums ${remaining < 0 ? "text-expense" : "text-moss"}`}>
-              {remaining < 0 ? "−" : ""}{fmt(Math.abs(remaining), symbol)}
+              {remaining < 0 ? "−" : ""}
+              {fmt(Math.abs(remaining), symbol)}
             </span>
             {assignable.length > 1 && (
               <Button type="button" variant="ghost" size="sm" onClick={distributeEqually}>
@@ -159,8 +158,14 @@ export default function AssignModal({ budgetPk, month, categories, readyToAssign
             )}
           </div>
           <div className="flex gap-2">
-            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-            <Button type="button" onClick={() => void handleSave()} disabled={saving || totalToAssign <= 0 || remaining < 0}>
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={() => void handleSave()}
+              disabled={saving || totalToAssign <= 0 || remaining < 0}
+            >
               {saving ? "Assigning…" : `Assign ${fmt(totalToAssign, symbol)}`}
             </Button>
           </div>

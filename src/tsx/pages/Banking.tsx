@@ -104,9 +104,13 @@ function AccountCard({
   async function setPaymentMethod(value: string) {
     setSaving(true);
     try {
-      const updated = await jsonFetch<{ payment_method_id: number | null }>(`/banking/accounts/${account.id}/`, "PATCH", {
-        payment_method_id: value === "none" ? null : Number(value),
-      });
+      const updated = await jsonFetch<{ payment_method_id: number | null }>(
+        `/banking/accounts/${account.id}/`,
+        "PATCH",
+        {
+          payment_method_id: value === "none" ? null : Number(value),
+        },
+      );
       if (updated) onUpdate({ ...account, payment_method_id: updated.payment_method_id });
     } finally {
       setSaving(false);

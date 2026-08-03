@@ -1,4 +1,4 @@
-from django.db import migrations, models
+from django.db import migrations
 from django.db.models import F
 
 
@@ -13,7 +13,6 @@ def noop_reverse(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("budget", "0016_backfill_recurring_lines"),
     ]

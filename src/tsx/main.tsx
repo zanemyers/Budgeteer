@@ -1,6 +1,6 @@
+import { createInertiaApp } from "@inertiajs/react";
 import { createElement } from "react";
 import { createRoot } from "react-dom/client";
-import { createInertiaApp } from "@inertiajs/react";
 import AppLayout from "./layouts/AppLayout";
 
 document.addEventListener("DOMContentLoaded", () => {

@@ -62,10 +62,7 @@ export function ConfirmButton({
       <div
         ref={removeRef}
         aria-hidden={confirming}
-        className={cn(
-          "flex w-fit",
-          confirming && "pointer-events-none absolute inset-y-0 right-0",
-        )}
+        className={cn("flex w-fit", confirming && "pointer-events-none absolute inset-y-0 right-0")}
         style={{
           opacity: confirming ? 0 : 1,
           transition: `opacity ${DURATION_MS}ms ease-out`,
@@ -85,10 +82,7 @@ export function ConfirmButton({
       <div
         ref={confirmRef}
         aria-hidden={!confirming}
-        className={cn(
-          "flex w-fit gap-2",
-          !confirming && "pointer-events-none absolute inset-y-0 right-0",
-        )}
+        className={cn("flex w-fit gap-2", !confirming && "pointer-events-none absolute inset-y-0 right-0")}
         style={{
           opacity: confirming ? 1 : 0,
           transition: `opacity ${DURATION_MS}ms ease-out`,

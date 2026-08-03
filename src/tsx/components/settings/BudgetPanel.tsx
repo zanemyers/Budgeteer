@@ -1,5 +1,5 @@
-import { useState } from "react";
 import { router } from "@inertiajs/react";
+import { useState } from "react";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { SettingsRow } from "@/components/settings/SettingsRow";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -40,7 +40,7 @@ export function BudgetPanel({ budget, onChange }: Props) {
         body: JSON.stringify({ name: name.trim() }),
       });
       if (res.ok) {
-        const data = await res.json() as { name: string };
+        const data = (await res.json()) as { name: string };
         onChange({ ...budget, name: data.name });
         setSavedFlash(true);
         setTimeout(() => setSavedFlash(false), 1500);
@@ -82,7 +82,9 @@ export function BudgetPanel({ budget, onChange }: Props) {
               className="flex-1"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") void saveName(); }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void saveName();
+              }}
             />
             <Button disabled={!dirty || saving} onClick={() => void saveName()}>
               {saving ? "Saving…" : "Save"}
@@ -97,10 +99,7 @@ export function BudgetPanel({ budget, onChange }: Props) {
         </div>
       </SettingsRow>
 
-      <SettingsRow
-        label="Default budget"
-        description="The default budget opens automatically when you sign in."
-      >
+      <SettingsRow label="Default budget" description="The default budget opens automatically when you sign in.">
         {budget.is_default ? (
           <p className="text-sm text-primary">Current default.</p>
         ) : (

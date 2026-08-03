@@ -11,13 +11,15 @@ class UserAdmin(BaseUserAdmin, ModelAdmin):
     list_display = ("email", "first_name", "last_name", "is_staff")
     ordering = ("email",)
     fieldsets = (BaseUserAdmin.fieldsets or ()) + (
-        ("Budgeteer", {
-            "fields": (
-                "currency",
-                "timezone",
-                "default_budget",
-                "avatar_thumbnail",
-            ),
-        }),
+        (
+            "Budgeteer",
+            {
+                "fields": (
+                    "currency",
+                    "timezone",
+                    "default_budget",
+                    "avatar_thumbnail",
+                ),
+            },
+        ),
     )
-

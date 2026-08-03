@@ -19,7 +19,6 @@ def assign_payment_methods_to_budgets(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("budget", "0008_budget_name"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),

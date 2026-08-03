@@ -6,28 +6,42 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('budget', '0013_add_currency_to_transaction'),
+        ("budget", "0013_add_currency_to_transaction"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.AlterUniqueTogether(
-            name='category',
+            name="category",
             unique_together=set(),
         ),
         migrations.AddField(
-            model_name='category',
-            name='parent',
-            field=models.ForeignKey(blank=True, help_text='Optional parent category. Subcategories cannot have children of their own.', null=True, on_delete=django.db.models.deletion.CASCADE, related_name='children', to='budget.category'),
+            model_name="category",
+            name="parent",
+            field=models.ForeignKey(
+                blank=True,
+                help_text="Optional parent category. Subcategories cannot have children of their own.",
+                null=True,
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="children",
+                to="budget.category",
+            ),
         ),
         migrations.AddConstraint(
-            model_name='category',
-            constraint=models.UniqueConstraint(condition=models.Q(('parent__isnull', True)), fields=('budget', 'name', 'category_type'), name='unique_root_category_per_budget_type'),
+            model_name="category",
+            constraint=models.UniqueConstraint(
+                condition=models.Q(("parent__isnull", True)),
+                fields=("budget", "name", "category_type"),
+                name="unique_root_category_per_budget_type",
+            ),
         ),
         migrations.AddConstraint(
-            model_name='category',
-            constraint=models.UniqueConstraint(condition=models.Q(('parent__isnull', False)), fields=('parent', 'name'), name='unique_subcategory_per_parent'),
+            model_name="category",
+            constraint=models.UniqueConstraint(
+                condition=models.Q(("parent__isnull", False)),
+                fields=("parent", "name"),
+                name="unique_subcategory_per_parent",
+            ),
         ),
     ]

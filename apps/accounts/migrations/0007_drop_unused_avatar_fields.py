@@ -4,18 +4,17 @@ from django.db import migrations
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('accounts', '0006_add_currency_to_user'),
+        ("accounts", "0006_add_currency_to_user"),
     ]
 
     operations = [
         migrations.RemoveField(
-            model_name='user',
-            name='avatar_crop_data',
+            model_name="user",
+            name="avatar_crop_data",
         ),
         migrations.RemoveField(
-            model_name='user',
-            name='avatar_original',
+            model_name="user",
+            name="avatar_original",
         ),
     ]

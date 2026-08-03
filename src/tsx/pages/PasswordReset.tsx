@@ -1,12 +1,12 @@
-import { createElement, useState } from "react";
 import { router } from "@inertiajs/react";
-import AuthLayout from "../layouts/AuthLayout";
+import { createElement, useState } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getCsrfToken } from "@/lib/api";
+import AuthLayout from "../layouts/AuthLayout";
 
 interface Props {
   done: boolean;
@@ -37,7 +37,7 @@ export default function PasswordReset({ done: initialDone, errors: initialErrors
       if (res.redirected) {
         setDone(true);
       } else {
-        const data = await res.json() as { errors: Record<string, string> };
+        const data = (await res.json()) as { errors: Record<string, string> };
         setErrors(data.errors ?? {});
       }
     } finally {
@@ -55,7 +55,13 @@ export default function PasswordReset({ done: initialDone, errors: initialErrors
             If an account exists for that address, we&apos;ve sent password reset instructions.
           </p>
           <Button asChild variant="outline" size="sm">
-            <a href="/accounts/login/" onClick={(e) => { e.preventDefault(); router.visit("/accounts/login/"); }}>
+            <a
+              href="/accounts/login/"
+              onClick={(e) => {
+                e.preventDefault();
+                router.visit("/accounts/login/");
+              }}
+            >
               Back to sign in
             </a>
           </Button>
@@ -79,13 +85,7 @@ export default function PasswordReset({ done: initialDone, errors: initialErrors
         <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
             <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              autoFocus
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
+            <Input id="email" type="email" autoFocus value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
           <Button className="w-full mt-2" disabled={loading}>
             {loading ? "Sending…" : "Send reset link"}
@@ -96,7 +96,10 @@ export default function PasswordReset({ done: initialDone, errors: initialErrors
           <a
             href="/accounts/login/"
             className="text-sm text-muted-foreground hover:underline"
-            onClick={(e) => { e.preventDefault(); router.visit("/accounts/login/"); }}
+            onClick={(e) => {
+              e.preventDefault();
+              router.visit("/accounts/login/");
+            }}
           >
             Back to sign in
           </a>

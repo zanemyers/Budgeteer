@@ -4,18 +4,17 @@ from django.db import migrations
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('budget', '0001_initial'),
+        ("budget", "0001_initial"),
     ]
 
     operations = [
         migrations.RemoveField(
-            model_name='budget',
-            name='description',
+            model_name="budget",
+            name="description",
         ),
         migrations.RemoveField(
-            model_name='budget',
-            name='name',
+            model_name="budget",
+            name="name",
         ),
     ]

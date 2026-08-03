@@ -1,4 +1,5 @@
-"""Rename the legacy `base_*` tables to the banking app defaults.
+"""
+Rename the legacy `base_*` tables to the banking app defaults.
 
 These tables were created while the models lived in `apps.base`, then moved to
 `apps.banking` via a state-only migration that kept the old `db_table` names.

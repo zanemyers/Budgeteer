@@ -1,17 +1,11 @@
 import { useMemo, useState } from "react";
-import type { BudgetOverviewCategory } from "../types";
-import { getCsrfToken } from "../lib/api";
-import { fmt, useCurrencySymbol } from "../utils/currency";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { getCsrfToken } from "../lib/api";
+import type { BudgetOverviewCategory } from "../types";
+import { fmt, useCurrencySymbol } from "../utils/currency";
 
 interface Props {
   budgetPk: number;
@@ -119,14 +113,20 @@ export default function CleanupAssignedModal({ budgetPk, month, categories, over
   }
 
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Reduce by {fmt(overAssignedBy, symbol)}</DialogTitle>
         </DialogHeader>
 
         <p className="text-sm text-ink-quiet -mt-1">
-          You've assigned more than your income. Pull amounts back from individual categories or split it proportionally.
+          You've assigned more than your income. Pull amounts back from individual categories or split it
+          proportionally.
         </p>
 
         <div className="py-2 flex flex-col gap-2 max-h-[55vh] overflow-y-auto">
@@ -144,9 +144,10 @@ export default function CleanupAssignedModal({ budgetPk, month, categories, over
                 const draftVal = drafts[cat.id] ?? "";
                 const current = Number.parseFloat(cat.assigned);
                 const draftNum = Number.parseFloat(draftVal);
-                const newAfter = Number.isFinite(draftNum) && draftNum > 0
-                  ? Math.max(0, current - Math.min(draftNum, current))
-                  : current;
+                const newAfter =
+                  Number.isFinite(draftNum) && draftNum > 0
+                    ? Math.max(0, current - Math.min(draftNum, current))
+                    : current;
                 return (
                   <li key={cat.id} className="grid grid-cols-[1fr_auto_8rem] items-center gap-3 py-1.5">
                     <div className="min-w-0">
@@ -154,7 +155,10 @@ export default function CleanupAssignedModal({ budgetPk, month, categories, over
                       <div className="text-xs text-ink-quiet tabular-nums">
                         {fmt(cat.assigned, symbol)}
                         {draftVal && (
-                          <> &rarr; <span className="text-moss">{fmt(newAfter, symbol)}</span></>
+                          <>
+                            {" "}
+                            &rarr; <span className="text-moss">{fmt(newAfter, symbol)}</span>
+                          </>
                         )}
                       </div>
                     </div>
@@ -162,7 +166,9 @@ export default function CleanupAssignedModal({ budgetPk, month, categories, over
                       Zero
                     </Button>
                     <div className="flex items-center gap-0">
-                      <span className="inline-flex items-center px-2 h-9 rounded-l-md border border-r-0 border-input bg-muted text-muted-foreground text-sm">−{symbol}</span>
+                      <span className="inline-flex items-center px-2 h-9 rounded-l-md border border-r-0 border-input bg-muted text-muted-foreground text-sm">
+                        −{symbol}
+                      </span>
                       <Input
                         type="number"
                         min="0"
@@ -183,7 +189,9 @@ export default function CleanupAssignedModal({ budgetPk, month, categories, over
 
         <DialogFooter className="flex !justify-between items-center gap-3 flex-wrap">
           <div className="flex items-center gap-3 text-sm">
-            <span className="text-ink-quiet">{stillOver > 0 ? "Still over by" : stillOver < 0 ? "Reducing too far" : "Balanced"}</span>
+            <span className="text-ink-quiet">
+              {stillOver > 0 ? "Still over by" : stillOver < 0 ? "Reducing too far" : "Balanced"}
+            </span>
             {stillOver !== 0 && (
               <span className={`font-semibold tabular-nums ${stillOver > 0 ? "text-expense" : "text-fund"}`}>
                 {fmt(Math.abs(stillOver), symbol)}
@@ -196,7 +204,9 @@ export default function CleanupAssignedModal({ budgetPk, month, categories, over
             )}
           </div>
           <div className="flex gap-2">
-            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
             <Button type="button" onClick={() => void handleSave()} disabled={saving || totalReduction <= 0}>
               {saving ? "Reducing…" : `Reduce ${fmt(totalReduction, symbol)}`}
             </Button>

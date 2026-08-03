@@ -2,7 +2,6 @@ from django.db import migrations
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("base", "0004_banktransaction_onetoone"),
     ]

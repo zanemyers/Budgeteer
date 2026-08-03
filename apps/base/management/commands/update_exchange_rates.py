@@ -2,11 +2,11 @@ import csv
 from functools import cache
 from pathlib import Path
 
-import requests
-
 from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.utils import timezone
+
+import requests
 
 from apps.base.models import Currency
 

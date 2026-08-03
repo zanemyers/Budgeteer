@@ -30,7 +30,6 @@ def noop_reverse(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("budget", "0017_drop_transaction_is_paid"),
     ]

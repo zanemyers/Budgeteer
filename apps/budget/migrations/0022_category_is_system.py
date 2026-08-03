@@ -4,15 +4,14 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('budget', '0021_transaction_transfer_partner_alter_goal_category'),
+        ("budget", "0021_transaction_transfer_partner_alter_goal_category"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='category',
-            name='is_system',
+            model_name="category",
+            name="is_system",
             field=models.BooleanField(default=False),
         ),
     ]

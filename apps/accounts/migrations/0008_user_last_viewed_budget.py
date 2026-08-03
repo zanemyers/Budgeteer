@@ -5,16 +5,21 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('accounts', '0007_drop_unused_avatar_fields'),
-        ('budget', '0013_add_currency_to_transaction'),
+        ("accounts", "0007_drop_unused_avatar_fields"),
+        ("budget", "0013_add_currency_to_transaction"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='user',
-            name='last_viewed_budget',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='+', to='budget.budget'),
+            model_name="user",
+            name="last_viewed_budget",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="+",
+                to="budget.budget",
+            ),
         ),
     ]

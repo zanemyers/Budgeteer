@@ -1,4 +1,5 @@
-"""Initial migration for the banking app.
+"""
+Initial migration for the banking app.
 
 Banking models previously lived in `apps.base`. The actual DB tables already
 exist (`base_simplefinconnection`, `base_bankaccount`, `base_banktransaction`).
@@ -8,6 +9,7 @@ the matching `base.0006_move_banking_models_out` removes them from base's state.
 Each model's Meta sets `db_table` to the original `base_*` name to preserve
 the table name in Postgres.
 """
+
 from decimal import Decimal
 
 import django.db.models.deletion
@@ -18,7 +20,6 @@ import apps.base.fields
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
@@ -34,7 +35,12 @@ class Migration(migrations.Migration):
                 migrations.CreateModel(
                     name="SimpleFINConnection",
                     fields=[
-                        ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                        (
+                            "id",
+                            models.BigAutoField(
+                                auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                            ),
+                        ),
                         ("label", models.CharField(blank=True, default="", max_length=100)),
                         ("access_url", apps.base.fields.EncryptedTextField()),
                         ("last_synced_at", models.DateTimeField(blank=True, null=True)),
@@ -60,14 +66,22 @@ class Migration(migrations.Migration):
                 migrations.CreateModel(
                     name="BankAccount",
                     fields=[
-                        ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                        (
+                            "id",
+                            models.BigAutoField(
+                                auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                            ),
+                        ),
                         ("simplefin_id", models.CharField(max_length=255)),
                         ("name", models.CharField(max_length=255)),
                         ("org_name", models.CharField(blank=True, default="", max_length=255)),
                         ("org_domain", models.CharField(blank=True, default="", max_length=255)),
                         ("currency", models.CharField(default="USD", max_length=3)),
                         ("balance", models.DecimalField(blank=True, decimal_places=2, max_digits=16, null=True)),
-                        ("available_balance", models.DecimalField(blank=True, decimal_places=2, max_digits=16, null=True)),
+                        (
+                            "available_balance",
+                            models.DecimalField(blank=True, decimal_places=2, max_digits=16, null=True),
+                        ),
                         ("balance_as_of", models.DateTimeField(blank=True, null=True)),
                         ("is_hidden", models.BooleanField(default=False)),
                         ("created_at", models.DateTimeField(auto_now_add=True)),
@@ -100,7 +114,12 @@ class Migration(migrations.Migration):
                 migrations.CreateModel(
                     name="BankTransaction",
                     fields=[
-                        ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
+                        (
+                            "id",
+                            models.BigAutoField(
+                                auto_created=True, primary_key=True, serialize=False, verbose_name="ID"
+                            ),
+                        ),
                         ("simplefin_id", models.CharField(max_length=255)),
                         ("posted_at", models.DateTimeField()),
                         ("amount", models.DecimalField(decimal_places=2, default=Decimal("0"), max_digits=14)),

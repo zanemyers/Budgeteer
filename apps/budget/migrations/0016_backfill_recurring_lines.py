@@ -29,7 +29,6 @@ def noop_reverse(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("budget", "0015_add_direct_deposit_payment_type"),
     ]

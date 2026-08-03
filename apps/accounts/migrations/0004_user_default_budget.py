@@ -1,10 +1,8 @@
-from django.conf import settings
-from django.db import migrations, models
 import django.db.models.deletion
+from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("accounts", "0003_alter_user_groups_alter_user_is_active"),
         ("budget", "0009_paymentmethod_budget"),

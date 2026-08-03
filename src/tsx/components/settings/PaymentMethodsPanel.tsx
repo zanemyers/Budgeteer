@@ -1,11 +1,11 @@
-import { useState } from "react";
 import { Pencil } from "lucide-react";
+import { useState } from "react";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { PaymentMethodModal } from "./PaymentMethodModal";
 import { getCsrfToken } from "@/lib/api";
+import { PaymentMethodModal } from "./PaymentMethodModal";
 
 export interface PaymentMethod {
   id: number;
@@ -54,7 +54,9 @@ export function PaymentMethodsPanel({ budgetPk, paymentMethods, typeChoices, onC
     <div>
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-base font-semibold">Payment methods</h2>
-        <Button size="sm" onClick={() => setAdding(true)}>+ Add</Button>
+        <Button size="sm" onClick={() => setAdding(true)}>
+          + Add
+        </Button>
       </div>
 
       {paymentMethods.length === 0 ? (
@@ -80,13 +82,16 @@ export function PaymentMethodsPanel({ budgetPk, paymentMethods, typeChoices, onC
               <div className="flex items-center gap-2 min-w-0">
                 <span className="font-medium truncate">{pm.name}</span>
                 <span className="text-muted-foreground text-sm truncate">
-                  {pm.payment_type_display}{pm.last_four && ` ···· ${pm.last_four}`}
+                  {pm.payment_type_display}
+                  {pm.last_four && ` ···· ${pm.last_four}`}
                 </span>
                 {!pm.is_active && <Badge variant="secondary">Inactive</Badge>}
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 {deleteError[pm.id] && <small className="text-destructive">{deleteError[pm.id]}</small>}
-                <Button variant="ghost" size="icon-sm" onClick={() => setEditing(pm)} aria-label="Edit payment method"><Pencil /></Button>
+                <Button variant="ghost" size="icon-sm" onClick={() => setEditing(pm)} aria-label="Edit payment method">
+                  <Pencil />
+                </Button>
                 <ConfirmButton onConfirm={() => handleDelete(pm)} label="Delete" />
               </div>
             </div>
@@ -99,7 +104,10 @@ export function PaymentMethodsPanel({ budgetPk, paymentMethods, typeChoices, onC
           budgetPk={budgetPk}
           typeChoices={typeChoices}
           paymentMethod={editing}
-          onClose={() => { setAdding(false); setEditing(null); }}
+          onClose={() => {
+            setAdding(false);
+            setEditing(null);
+          }}
           onSaved={(pm) => {
             upsert(pm);
             setAdding(false);

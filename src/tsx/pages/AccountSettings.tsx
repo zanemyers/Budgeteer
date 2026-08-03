@@ -1,21 +1,17 @@
 import { useState } from "react";
+import { toast } from "sonner";
 import { ConfirmButton } from "@/components/ConfirmButton";
+import { PageTourButton } from "@/components/PageTourButton";
 import { SettingsRow } from "@/components/settings/SettingsRow";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { getCsrfToken } from "@/lib/api";
-import { toast } from "sonner";
+import { usePageTour } from "@/lib/onboardingTour";
 
 interface EmailAddress {
   id: number;
@@ -50,11 +46,27 @@ interface Props {
 }
 
 const COMMON_TIMEZONES = [
-  "America/New_York", "America/Chicago", "America/Denver", "America/Phoenix",
-  "America/Los_Angeles", "America/Anchorage", "America/Adak", "Pacific/Honolulu",
-  "America/Puerto_Rico", "Europe/London", "Europe/Paris", "Europe/Berlin",
-  "Europe/Moscow", "Asia/Dubai", "Asia/Kolkata", "Asia/Bangkok", "Asia/Shanghai",
-  "Asia/Tokyo", "Australia/Sydney", "Pacific/Auckland", "UTC",
+  "America/New_York",
+  "America/Chicago",
+  "America/Denver",
+  "America/Phoenix",
+  "America/Los_Angeles",
+  "America/Anchorage",
+  "America/Adak",
+  "Pacific/Honolulu",
+  "America/Puerto_Rico",
+  "Europe/London",
+  "Europe/Paris",
+  "Europe/Berlin",
+  "Europe/Moscow",
+  "Asia/Dubai",
+  "Asia/Kolkata",
+  "Asia/Bangkok",
+  "Asia/Shanghai",
+  "Asia/Tokyo",
+  "Australia/Sydney",
+  "Pacific/Auckland",
+  "UTC",
 ];
 
 function CurrencyTab({ currency: initialCurrency, currencies }: { currency: string; currencies: CurrencyOption[] }) {
@@ -76,7 +88,7 @@ function CurrencyTab({ currency: initialCurrency, currencies }: { currency: stri
       });
       if (res.ok) setSuccess(true);
       else {
-        const data = await res.json() as { error?: string };
+        const data = (await res.json()) as { error?: string };
         setError(data.error ?? "Something went wrong.");
       }
     } finally {
@@ -86,17 +98,29 @@ function CurrencyTab({ currency: initialCurrency, currencies }: { currency: stri
 
   return (
     <form onSubmit={(e) => void save(e)} className="flex flex-col gap-3">
-      {success && <Alert variant="success"><AlertDescription>Currency updated.</AlertDescription></Alert>}
-      {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
+      {success && (
+        <Alert variant="success">
+          <AlertDescription>Currency updated.</AlertDescription>
+        </Alert>
+      )}
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
       {currencies.length === 0 ? (
         <p className="text-muted-foreground text-sm">No currencies loaded yet. An API key is required.</p>
       ) : (
         <div className="flex gap-2 items-start">
           <Select value={currency} onValueChange={setCurrency}>
-            <SelectTrigger className="flex-1"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="flex-1">
+              <SelectValue />
+            </SelectTrigger>
             <SelectContent>
               {currencies.map((c) => (
-                <SelectItem key={c.code} value={c.code}>{c.symbol} {c.code} — {c.name}</SelectItem>
+                <SelectItem key={c.code} value={c.code}>
+                  {c.symbol} {c.code} — {c.name}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -131,7 +155,7 @@ function AvatarForm({ avatarUrl: initialAvatar }: { avatarUrl: string }) {
         headers: { "X-CSRFToken": getCsrfToken() },
         body: fd,
       });
-      const data = await res.json() as { avatar_url?: string; error?: string };
+      const data = (await res.json()) as { avatar_url?: string; error?: string };
       if (res.ok && data.avatar_url) {
         setAvatarUrl(data.avatar_url);
         setAvatarPreview(null);
@@ -185,7 +209,7 @@ function TimezoneForm({ timezone: initialTz }: { timezone: string }) {
       });
       if (res.ok) setTzSuccess(true);
       else {
-        const data = await res.json() as { error?: string };
+        const data = (await res.json()) as { error?: string };
         setTzError(data.error ?? "Something went wrong.");
       }
     } finally {
@@ -197,14 +221,26 @@ function TimezoneForm({ timezone: initialTz }: { timezone: string }) {
 
   return (
     <form onSubmit={(e) => void saveTz(e)} className="flex flex-col gap-3">
-      {tzSuccess && <Alert variant="success"><AlertDescription>Timezone updated.</AlertDescription></Alert>}
-      {tzError && <Alert variant="destructive"><AlertDescription>{tzError}</AlertDescription></Alert>}
+      {tzSuccess && (
+        <Alert variant="success">
+          <AlertDescription>Timezone updated.</AlertDescription>
+        </Alert>
+      )}
+      {tzError && (
+        <Alert variant="destructive">
+          <AlertDescription>{tzError}</AlertDescription>
+        </Alert>
+      )}
       <div className="flex gap-3 items-end">
         <Select value={tz} onValueChange={setTz}>
-          <SelectTrigger className="flex-1"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="flex-1">
+            <SelectValue />
+          </SelectTrigger>
           <SelectContent>
             {tzOptions.map((t) => (
-              <SelectItem key={t} value={t}>{t.replace("_", " ")}</SelectItem>
+              <SelectItem key={t} value={t}>
+                {t.replace("_", " ")}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -215,7 +251,9 @@ function TimezoneForm({ timezone: initialTz }: { timezone: string }) {
 }
 
 function NameTab({
-  firstName, lastName, onSaved,
+  firstName,
+  lastName,
+  onSaved,
 }: {
   firstName: string;
   lastName: string;
@@ -242,7 +280,7 @@ function NameTab({
         setSuccess(true);
         onSaved(fn, ln);
       } else {
-        const data = await res.json() as { error?: string };
+        const data = (await res.json()) as { error?: string };
         setError(data.error ?? "Something went wrong.");
       }
     } finally {
@@ -252,15 +290,27 @@ function NameTab({
 
   return (
     <form onSubmit={(e) => void save(e)} className="flex flex-col gap-3">
-      {success && <Alert variant="success"><AlertDescription>Name updated.</AlertDescription></Alert>}
-      {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
+      {success && (
+        <Alert variant="success">
+          <AlertDescription>Name updated.</AlertDescription>
+        </Alert>
+      )}
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
       <div className="flex gap-3 items-end">
         <div className="flex flex-col gap-1.5 flex-1 min-w-0">
-          <Label htmlFor="first-name" className="text-xs text-muted-foreground">First</Label>
+          <Label htmlFor="first-name" className="text-xs text-muted-foreground">
+            First
+          </Label>
           <Input id="first-name" value={fn} onChange={(e) => setFn(e.target.value)} />
         </div>
         <div className="flex flex-col gap-1.5 flex-1 min-w-0">
-          <Label htmlFor="last-name" className="text-xs text-muted-foreground">Last</Label>
+          <Label htmlFor="last-name" className="text-xs text-muted-foreground">
+            Last
+          </Label>
           <Input id="last-name" value={ln} onChange={(e) => setLn(e.target.value)} />
         </div>
         <Button disabled={saving}>{saving ? "Saving…" : "Save"}</Button>
@@ -286,13 +336,20 @@ function PasswordTab() {
       const res = await fetch("/accounts/settings/", {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() },
-        body: JSON.stringify({ action: "change_password", old_password: oldPw, new_password: newPw, confirm_password: confirmPw }),
+        body: JSON.stringify({
+          action: "change_password",
+          old_password: oldPw,
+          new_password: newPw,
+          confirm_password: confirmPw,
+        }),
       });
       if (res.ok) {
         setSuccess(true);
-        setOldPw(""); setNewPw(""); setConfirmPw("");
+        setOldPw("");
+        setNewPw("");
+        setConfirmPw("");
       } else {
-        const data = await res.json() as { error?: string };
+        const data = (await res.json()) as { error?: string };
         setError(data.error ?? "Something went wrong.");
       }
     } finally {
@@ -302,26 +359,48 @@ function PasswordTab() {
 
   return (
     <form onSubmit={(e) => void save(e)} className="flex flex-col gap-3">
-      {success && <Alert variant="success"><AlertDescription>Password changed.</AlertDescription></Alert>}
-      {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
+      {success && (
+        <Alert variant="success">
+          <AlertDescription>Password changed.</AlertDescription>
+        </Alert>
+      )}
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="current-pw" className="text-xs text-muted-foreground">Current password</Label>
+        <Label htmlFor="current-pw" className="text-xs text-muted-foreground">
+          Current password
+        </Label>
         <Input id="current-pw" type="password" value={oldPw} onChange={(e) => setOldPw(e.target.value)} />
       </div>
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="new-pw" className="text-xs text-muted-foreground">New password</Label>
+        <Label htmlFor="new-pw" className="text-xs text-muted-foreground">
+          New password
+        </Label>
         <Input id="new-pw" type="password" value={newPw} onChange={(e) => setNewPw(e.target.value)} />
       </div>
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="confirm-pw" className="text-xs text-muted-foreground">Confirm new password</Label>
+        <Label htmlFor="confirm-pw" className="text-xs text-muted-foreground">
+          Confirm new password
+        </Label>
         <Input id="confirm-pw" type="password" value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} />
       </div>
-      <Button className="self-start mt-1" disabled={saving}>{saving ? "Saving…" : "Change password"}</Button>
+      <Button className="self-start mt-1" disabled={saving}>
+        {saving ? "Saving…" : "Change password"}
+      </Button>
     </form>
   );
 }
 
-function EmailTab({ addresses, setAddresses }: { addresses: EmailAddress[]; setAddresses: React.Dispatch<React.SetStateAction<EmailAddress[]>> }) {
+function EmailTab({
+  addresses,
+  setAddresses,
+}: {
+  addresses: EmailAddress[];
+  setAddresses: React.Dispatch<React.SetStateAction<EmailAddress[]>>;
+}) {
   const [busy, setBusy] = useState<number | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [newEmail, setNewEmail] = useState("");
@@ -349,7 +428,9 @@ function EmailTab({ addresses, setAddresses }: { addresses: EmailAddress[]; setA
       } else {
         toast.error((data.error as string) ?? "Couldn't send the verification email.");
       }
-    } finally { setBusy(null); }
+    } finally {
+      setBusy(null);
+    }
   }
 
   async function makePrimary(addr: EmailAddress) {
@@ -362,7 +443,9 @@ function EmailTab({ addresses, setAddresses }: { addresses: EmailAddress[]; setA
       } else {
         toast.error((data.error as string) ?? "Couldn't update primary email.");
       }
-    } finally { setBusy(null); }
+    } finally {
+      setBusy(null);
+    }
   }
 
   async function remove(addr: EmailAddress) {
@@ -385,26 +468,42 @@ function EmailTab({ addresses, setAddresses }: { addresses: EmailAddress[]; setA
         headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() },
         body: JSON.stringify({ action: "add_email", email: newEmail }),
       });
-      const data = await res.json() as { id?: number; email?: string; primary?: boolean; verified?: boolean; error?: string };
-      if (!res.ok) { setAddError(data.error ?? "Something went wrong."); return; }
+      const data = (await res.json()) as {
+        id?: number;
+        email?: string;
+        primary?: boolean;
+        verified?: boolean;
+        error?: string;
+      };
+      if (!res.ok) {
+        setAddError(data.error ?? "Something went wrong.");
+        return;
+      }
       setAddresses((prev) => [...prev, data as EmailAddress]);
       setNewEmail("");
       setShowAdd(false);
-    } finally { setAdding(false); }
+    } finally {
+      setAdding(false);
+    }
   }
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-2">
         {addresses.map((addr) => (
-          <div key={addr.id} className="flex justify-between items-start gap-3 p-3 rounded-lg border border-border-strong bg-card shadow-sm">
+          <div
+            key={addr.id}
+            className="flex justify-between items-start gap-3 p-3 rounded-lg border border-border-strong bg-card shadow-sm"
+          >
             <div>
               <div className="font-medium">{addr.email}</div>
               <div className="flex gap-1.5 mt-1.5">
                 {addr.primary && <Badge variant="success">Primary</Badge>}
-                {addr.verified
-                  ? <Badge variant="success">Verified</Badge>
-                  : <Badge variant="warning">Unverified</Badge>}
+                {addr.verified ? (
+                  <Badge variant="success">Verified</Badge>
+                ) : (
+                  <Badge variant="warning">Unverified</Badge>
+                )}
               </div>
             </div>
             <div className="flex gap-2 flex-wrap justify-end">
@@ -418,9 +517,7 @@ function EmailTab({ addresses, setAddresses }: { addresses: EmailAddress[]; setA
                   Make primary
                 </Button>
               )}
-              {!addr.primary && (
-                <ConfirmButton onConfirm={() => remove(addr)} />
-              )}
+              {!addr.primary && <ConfirmButton onConfirm={() => remove(addr)} />}
             </div>
           </div>
         ))}
@@ -439,17 +536,37 @@ function EmailTab({ addresses, setAddresses }: { addresses: EmailAddress[]; setA
             />
             {addError && <p className="text-destructive text-sm mt-1">{addError}</p>}
           </div>
-          <Button size="sm" disabled={adding}>{adding ? "Adding…" : "Add"}</Button>
-          <Button type="button" variant="outline" size="sm" onClick={() => { setShowAdd(false); setAddError(""); }}>Cancel</Button>
+          <Button size="sm" disabled={adding}>
+            {adding ? "Adding…" : "Add"}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setShowAdd(false);
+              setAddError("");
+            }}
+          >
+            Cancel
+          </Button>
         </form>
       ) : (
-        <Button variant="outline" size="sm" className="self-start" onClick={() => setShowAdd(true)}>+ Add email address</Button>
+        <Button variant="outline" size="sm" className="self-start" onClick={() => setShowAdd(true)}>
+          + Add email address
+        </Button>
       )}
     </div>
   );
 }
 
-function BankTab({ connections, setConnections }: { connections: SimpleFINConnection[]; setConnections: React.Dispatch<React.SetStateAction<SimpleFINConnection[]>> }) {
+function BankTab({
+  connections,
+  setConnections,
+}: {
+  connections: SimpleFINConnection[];
+  setConnections: React.Dispatch<React.SetStateAction<SimpleFINConnection[]>>;
+}) {
   const [token, setToken] = useState("");
   const [label, setLabel] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -467,7 +584,7 @@ function BankTab({ connections, setConnections }: { connections: SimpleFINConnec
         headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() },
         body: JSON.stringify({ action: "claim_simplefin_token", setup_token: token, label }),
       });
-      const data = await res.json() as SimpleFINConnection & { error?: string };
+      const data = (await res.json()) as SimpleFINConnection & { error?: string };
       if (!res.ok) {
         setError(data.error ?? "Could not claim token.");
         return;
@@ -508,15 +625,18 @@ function BankTab({ connections, setConnections }: { connections: SimpleFINConnec
           </Button>
         </div>
         <p className="text-muted-foreground text-sm">
-          Sign in at SimpleFIN Bridge, link your bank accounts, then generate a setup token and paste it below.
-          The token is exchanged for an access URL once and stored encrypted.
+          Sign in at SimpleFIN Bridge, link your bank accounts, then generate a setup token and paste it below. The
+          token is exchanged for an access URL once and stored encrypted.
         </p>
       </section>
 
       {connections.length > 0 && (
         <div className="flex flex-col gap-2">
           {connections.map((c) => (
-            <div key={c.id} className="flex justify-between items-start gap-3 p-3 rounded-lg border border-border-strong bg-card shadow-sm">
+            <div
+              key={c.id}
+              className="flex justify-between items-start gap-3 p-3 rounded-lg border border-border-strong bg-card shadow-sm"
+            >
               <div>
                 <div className="font-medium">{c.label || `Connection #${c.id}`}</div>
                 <div className="flex gap-2 mt-1.5 items-center flex-wrap">
@@ -526,7 +646,9 @@ function BankTab({ connections, setConnections }: { connections: SimpleFINConnec
                   </span>
                 </div>
                 {c.last_sync_status === "error" && (
-                  <p className="text-destructive text-sm mt-1">Last sync failed — will retry on the next scheduled run.</p>
+                  <p className="text-destructive text-sm mt-1">
+                    Last sync failed — will retry on the next scheduled run.
+                  </p>
                 )}
               </div>
               <ConfirmButton onConfirm={() => remove(c)} />
@@ -536,11 +658,24 @@ function BankTab({ connections, setConnections }: { connections: SimpleFINConnec
       )}
 
       <form onSubmit={(e) => void claim(e)} className="flex flex-col gap-4">
-        {success && <Alert variant="success"><AlertDescription>Connection added.</AlertDescription></Alert>}
-        {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
+        {success && (
+          <Alert variant="success">
+            <AlertDescription>Connection added.</AlertDescription>
+          </Alert>
+        )}
+        {error && (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
         <div className="flex flex-col gap-2">
           <Label htmlFor="sf-label">Label (optional)</Label>
-          <Input id="sf-label" placeholder="e.g. Personal banks" value={label} onChange={(e) => setLabel(e.target.value)} />
+          <Input
+            id="sf-label"
+            placeholder="e.g. Personal banks"
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+          />
         </div>
         <div className="flex flex-col gap-2">
           <Label htmlFor="sf-token">Setup token</Label>
@@ -553,9 +688,7 @@ function BankTab({ connections, setConnections }: { connections: SimpleFINConnec
             onChange={(e) => setToken(e.target.value)}
             required
           />
-          <p className="text-muted-foreground text-sm">
-            Tokens are one-shot — once claimed, they cannot be reused.
-          </p>
+          <p className="text-muted-foreground text-sm">Tokens are one-shot — once claimed, they cannot be reused.</p>
         </div>
         <Button className="self-start" disabled={submitting || !token}>
           {submitting ? "Claiming…" : "Add connection"}
@@ -565,19 +698,30 @@ function BankTab({ connections, setConnections }: { connections: SimpleFINConnec
   );
 }
 
-export default function AccountSettings({ first_name, last_name, email_addresses, timezone, avatar_url, currency, currencies, simplefin_connections }: Props) {
+export default function AccountSettings({
+  first_name,
+  last_name,
+  email_addresses,
+  timezone,
+  avatar_url,
+  currency,
+  currencies,
+  simplefin_connections,
+}: Props) {
   const [firstName, setFirstName] = useState(first_name);
   const [lastName, setLastName] = useState(last_name);
   const [addresses, setAddresses] = useState(email_addresses);
   const [connections, setConnections] = useState(simplefin_connections);
+  usePageTour("account");
 
   return (
     <div className="max-w-3xl">
-      <header className="mb-8">
-        <h1 className="text-3xl font-semibold tracking-tight">Account Settings</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Profile, password, currency, and bank connections.
-        </p>
+      <header className="mb-8 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight">Account Settings</h1>
+          <p className="text-sm text-muted-foreground mt-1">Profile, password, currency, and bank connections.</p>
+        </div>
+        <PageTourButton stage="account" />
       </header>
 
       <div>
@@ -588,7 +732,10 @@ export default function AccountSettings({ first_name, last_name, email_addresses
           <NameTab
             firstName={firstName}
             lastName={lastName}
-            onSaved={(fn, ln) => { setFirstName(fn); setLastName(ln); }}
+            onSaved={(fn, ln) => {
+              setFirstName(fn);
+              setLastName(ln);
+            }}
           />
         </SettingsRow>
         <SettingsRow label="Timezone" description="Used for due dates and report ranges.">
@@ -600,10 +747,18 @@ export default function AccountSettings({ first_name, last_name, email_addresses
         <SettingsRow label="Password" description="Use a unique password you don't reuse elsewhere.">
           <PasswordTab />
         </SettingsRow>
-        <SettingsRow label="Currency" description="All transactions display in this currency. Foreign-currency entries convert at the daily rate.">
+        <SettingsRow
+          label="Currency"
+          description="All transactions display in this currency. Foreign-currency entries convert at the daily rate."
+          dataTour="account-currency"
+        >
           <CurrencyTab currency={currency} currencies={currencies} />
         </SettingsRow>
-        <SettingsRow label="SimpleFIN" description="Connect a SimpleFIN bridge to pull live account balances and recent transactions.">
+        <SettingsRow
+          label="SimpleFIN"
+          description="Connect a SimpleFIN bridge to pull live account balances and recent transactions."
+          dataTour="account-bank"
+        >
           <BankTab connections={connections} setConnections={setConnections} />
         </SettingsRow>
       </div>

@@ -64,10 +64,7 @@ class InertiaShareMiddleware:
 
         # Forward Django messages as flash props on the *next* request via session,
         # but we can also attach them to the current response for redirects.
-        flash_messages = [
-            {"level": m.level_tag, "message": str(m)}
-            for m in get_messages(request)
-        ]
+        flash_messages = [{"level": m.level_tag, "message": str(m)} for m in get_messages(request)]
         if flash_messages:
             share(request, flash=flash_messages)
 

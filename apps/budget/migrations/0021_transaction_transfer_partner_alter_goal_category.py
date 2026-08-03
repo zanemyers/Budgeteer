@@ -5,20 +5,31 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('budget', '0020_goal_delete_sinkingfund'),
+        ("budget", "0020_goal_delete_sinkingfund"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='transaction',
-            name='transfer_partner',
-            field=models.OneToOneField(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='+', to='budget.transaction'),
+            model_name="transaction",
+            name="transfer_partner",
+            field=models.OneToOneField(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="+",
+                to="budget.transaction",
+            ),
         ),
         migrations.AlterField(
-            model_name='goal',
-            name='category',
-            field=models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, primary_key=True, related_name='goal', serialize=False, to='budget.category'),
+            model_name="goal",
+            name="category",
+            field=models.OneToOneField(
+                on_delete=django.db.models.deletion.CASCADE,
+                primary_key=True,
+                related_name="goal",
+                serialize=False,
+                to="budget.category",
+            ),
         ),
     ]

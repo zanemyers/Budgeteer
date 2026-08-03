@@ -1,11 +1,9 @@
 from decimal import Decimal
 
-import django.db.models.deletion
 from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("budget", "0005_add_payment_method"),
     ]

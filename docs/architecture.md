@@ -14,12 +14,17 @@ Budgeteer is a Django + Inertia.js + React single-page application. Django handl
 # Standard view pattern
 from inertia import render as inertia_render
 
+
 class TransactionListView(BudgetMemberMixin, View):
     def get(self, request, budget_pk):
-        return inertia_render(request, "Transactions", {
-            "budget_pk": self.budget.pk,
-            "transactions": lambda: [...],  # lambdas evaluated lazily
-        })
+        return inertia_render(
+            request,
+            "Transactions",
+            {
+                "budget_pk": self.budget.pk,
+                "transactions": lambda: [...],  # lambdas evaluated lazily
+            },
+        )
 ```
 
 The component name passed to `inertia_render` must exactly match the filename in `src/tsx/pages/` (e.g. `"Transactions"` → `src/tsx/pages/Transactions.tsx`).

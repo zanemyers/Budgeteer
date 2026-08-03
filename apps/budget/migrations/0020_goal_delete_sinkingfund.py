@@ -4,11 +4,10 @@ from django.db import migrations
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('budget', '0019_alter_transactionline_amount_usd'),
+        ("budget", "0019_alter_transactionline_amount_usd"),
     ]
 
     operations = [
-        migrations.RenameModel(old_name='SinkingFund', new_name='Goal'),
+        migrations.RenameModel(old_name="SinkingFund", new_name="Goal"),
     ]

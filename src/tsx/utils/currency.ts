@@ -34,7 +34,7 @@ export function fmtConverted(
   amount: string | number,
   txnRate: string | number,
   userRate: string | number,
-  symbol = "$"
+  symbol = "$",
 ): string {
   const a = parseFloat(String(amount));
   const tr = parseFloat(String(txnRate)) || 1;

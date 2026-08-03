@@ -26,7 +26,8 @@ def _to_datetime(unix_ts) -> datetime | None:
 
 
 def sync_connection(conn: SimpleFINConnection, days: int = 31) -> dict:
-    """Pull accounts + transactions for a connection and upsert into the DB.
+    """
+    Pull accounts + transactions for a connection and upsert into the DB.
 
     SimpleFIN warns at >45 days ("recommended range") and hard-caps at 90. We
     default to 31 — covers the longest month so we always pick up at least the

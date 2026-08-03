@@ -16,9 +16,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { jsonFetch } from "../lib/api";
-import { fmtDate } from "../utils/date";
-import { fmt, fmtSigned, useCurrencySymbol } from "../utils/currency";
 import type { BankMatchSuggestion, BankTransaction, Category, Transaction } from "../types";
+import { fmt, fmtSigned, useCurrencySymbol } from "../utils/currency";
+import { fmtDate } from "../utils/date";
 
 interface NewLine {
   category: string;
@@ -67,7 +67,11 @@ export default function BankTransactionConfirmModal({ bankTxn, budgetPk, categor
 
   useEffect(() => {
     let cancelled = false;
-    jsonFetch<{ suggestions: BankMatchSuggestion[]; transfer_candidates?: Transaction[]; transfer_candidates_bank?: BankTransaction[] }>(`/budgets/${budgetPk}/bank-transactions/${bankTxn.id}/suggestions/`, "GET")
+    jsonFetch<{
+      suggestions: BankMatchSuggestion[];
+      transfer_candidates?: Transaction[];
+      transfer_candidates_bank?: BankTransaction[];
+    }>(`/budgets/${budgetPk}/bank-transactions/${bankTxn.id}/suggestions/`, "GET")
       .then((data) => {
         if (!cancelled && data) {
           setSuggestions(data.suggestions);
@@ -92,22 +96,22 @@ export default function BankTransactionConfirmModal({ bankTxn, budgetPk, categor
         transaction: Transaction;
         partner_bank_transaction: BankTransaction;
         partner: Transaction;
-      }>(
-        `/budgets/${budgetPk}/bank-transactions/${bankTxn.id}/confirm-as-transfer/`,
-        "POST",
-        { partner_bank_txn_id: partnerBt.id },
-      );
-      if (data) onResolved({
-        bankTxn: data.bank_transaction,
-        transaction: data.transaction,
-        partnerBankTxn: data.partner_bank_transaction,
-        partner: data.partner,
+      }>(`/budgets/${budgetPk}/bank-transactions/${bankTxn.id}/confirm-as-transfer/`, "POST", {
+        partner_bank_txn_id: partnerBt.id,
       });
+      if (data)
+        onResolved({
+          bankTxn: data.bank_transaction,
+          transaction: data.transaction,
+          partnerBankTxn: data.partner_bank_transaction,
+          partner: data.partner,
+        });
     } catch (err: unknown) {
       const e = err as { error?: string; errors?: Record<string, string[]> };
-      const msg = e.error
-        ?? (e.errors && typeof e.errors === "object" ? Object.values(e.errors).flat().join(" ") : "")
-        ?? "Could not link transfer.";
+      const msg =
+        e.error ??
+        (e.errors && typeof e.errors === "object" ? Object.values(e.errors).flat().join(" ") : "") ??
+        "Could not link transfer.";
       setCreateError(msg || "Could not link transfer.");
     } finally {
       setBusy(false);
@@ -118,21 +122,25 @@ export default function BankTransactionConfirmModal({ bankTxn, budgetPk, categor
     setBusy(true);
     setCreateError(null);
     try {
-      const data = await jsonFetch<{ bank_transaction: BankTransaction; transaction: Transaction; partner: Transaction }>(
-        `/budgets/${budgetPk}/bank-transactions/${bankTxn.id}/confirm-as-transfer/`,
-        "POST",
-        { partner_id: partner.id },
-      );
-      if (data) onResolved({
-        bankTxn: data.bank_transaction,
-        transaction: data.transaction,
-        partner: data.partner,
+      const data = await jsonFetch<{
+        bank_transaction: BankTransaction;
+        transaction: Transaction;
+        partner: Transaction;
+      }>(`/budgets/${budgetPk}/bank-transactions/${bankTxn.id}/confirm-as-transfer/`, "POST", {
+        partner_id: partner.id,
       });
+      if (data)
+        onResolved({
+          bankTxn: data.bank_transaction,
+          transaction: data.transaction,
+          partner: data.partner,
+        });
     } catch (err: unknown) {
       const e = err as { error?: string; errors?: Record<string, string[]> };
-      const msg = e.error
-        ?? (e.errors && typeof e.errors === "object" ? Object.values(e.errors).flat().join(" ") : "")
-        ?? "Could not link transfer.";
+      const msg =
+        e.error ??
+        (e.errors && typeof e.errors === "object" ? Object.values(e.errors).flat().join(" ") : "") ??
+        "Could not link transfer.";
       setCreateError(msg || "Could not link transfer.");
     } finally {
       setBusy(false);
@@ -148,14 +156,28 @@ export default function BankTransactionConfirmModal({ bankTxn, budgetPk, categor
           "POST",
           { category_id: s.category_id, description: bankTxn.payee || bankTxn.description },
         );
-        if (data) onResolved({ bankTxn: data.bank_transaction, transaction: data.transaction, transferCandidates: (data as { transfer_candidates?: Transaction[] }).transfer_candidates });
+        if (data)
+          onResolved({
+            bankTxn: data.bank_transaction,
+            transaction: data.transaction,
+            transferCandidates: (data as { transfer_candidates?: Transaction[] }).transfer_candidates,
+          });
         return;
       }
       if (s.transaction_id !== null) {
-        const data = await jsonFetch<{ bank_transaction: BankTransaction; transaction: Transaction }>(`/budgets/${budgetPk}/bank-transactions/${bankTxn.id}/link/`, "POST", {
-          transaction_id: s.transaction_id,
-        });
-        if (data) onResolved({ bankTxn: data.bank_transaction, transaction: data.transaction, transferCandidates: (data as { transfer_candidates?: Transaction[] }).transfer_candidates });
+        const data = await jsonFetch<{ bank_transaction: BankTransaction; transaction: Transaction }>(
+          `/budgets/${budgetPk}/bank-transactions/${bankTxn.id}/link/`,
+          "POST",
+          {
+            transaction_id: s.transaction_id,
+          },
+        );
+        if (data)
+          onResolved({
+            bankTxn: data.bank_transaction,
+            transaction: data.transaction,
+            transferCandidates: (data as { transfer_candidates?: Transaction[] }).transfer_candidates,
+          });
         return;
       }
     } finally {
@@ -179,18 +201,28 @@ export default function BankTransactionConfirmModal({ bankTxn, budgetPk, categor
     setBusy(true);
     setCreateError(null);
     try {
-      const data = await jsonFetch<{ bank_transaction: BankTransaction; transaction: Transaction }>(`/budgets/${budgetPk}/bank-transactions/${bankTxn.id}/create-transaction/`, "POST", {
-        description: newDescription,
-        lines: newLines.map((l) => ({
-          category_id: Number(l.category),
-          amount: l.amount,
-          description: l.description,
-        })),
-      });
-      if (data) onResolved({ bankTxn: data.bank_transaction, transaction: data.transaction, transferCandidates: (data as { transfer_candidates?: Transaction[] }).transfer_candidates });
+      const data = await jsonFetch<{ bank_transaction: BankTransaction; transaction: Transaction }>(
+        `/budgets/${budgetPk}/bank-transactions/${bankTxn.id}/create-transaction/`,
+        "POST",
+        {
+          description: newDescription,
+          lines: newLines.map((l) => ({
+            category_id: Number(l.category),
+            amount: l.amount,
+            description: l.description,
+          })),
+        },
+      );
+      if (data)
+        onResolved({
+          bankTxn: data.bank_transaction,
+          transaction: data.transaction,
+          transferCandidates: (data as { transfer_candidates?: Transaction[] }).transfer_candidates,
+        });
     } catch (err: unknown) {
       const errs = err as Record<string, string[]>;
-      const msg = errs && typeof errs === "object" ? Object.values(errs).flat().join(" ") : "Could not create transaction.";
+      const msg =
+        errs && typeof errs === "object" ? Object.values(errs).flat().join(" ") : "Could not create transaction.";
       setCreateError(msg || "Could not create transaction.");
     } finally {
       setBusy(false);
@@ -200,9 +232,13 @@ export default function BankTransactionConfirmModal({ bankTxn, budgetPk, categor
   async function ignore() {
     setBusy(true);
     try {
-      const data = await jsonFetch<{ bank_transaction: BankTransaction }>(`/budgets/${budgetPk}/bank-transactions/${bankTxn.id}/ignore/`, "POST", {
-        reason: ignoreReason.trim(),
-      });
+      const data = await jsonFetch<{ bank_transaction: BankTransaction }>(
+        `/budgets/${budgetPk}/bank-transactions/${bankTxn.id}/ignore/`,
+        "POST",
+        {
+          reason: ignoreReason.trim(),
+        },
+      );
       if (data) onResolved({ bankTxn: data.bank_transaction });
     } finally {
       setBusy(false);
@@ -258,7 +294,9 @@ export default function BankTransactionConfirmModal({ bankTxn, budgetPk, categor
               placeholder="e.g. duplicate of #123 · refund · personal · not budgeted here"
               autoFocus
             />
-            <p className="text-xs text-ink-quiet">This will move the transaction to the Ignored card. You can restore it later.</p>
+            <p className="text-xs text-ink-quiet">
+              This will move the transaction to the Ignored card. You can restore it later.
+            </p>
           </div>
         )}
 
@@ -268,7 +306,8 @@ export default function BankTransactionConfirmModal({ bankTxn, budgetPk, categor
               Looks like a transfer
             </div>
             <p className="text-xs text-ink-quiet">
-              Same amount on the opposite side, within ±3 days, on a different account. Linking skips the category step — both halves become a paired transfer.
+              Same amount on the opposite side, within ±3 days, on a different account. Linking skips the category step
+              — both halves become a paired transfer.
             </p>
             {transferCandidatesBank.map((b) => {
               const amt = Number.parseFloat(b.amount);
@@ -286,9 +325,7 @@ export default function BankTransactionConfirmModal({ bankTxn, budgetPk, categor
                       {fmtDate(b.posted_date)} · {b.bank_account_name} · pending
                     </div>
                   </div>
-                  <div className="text-sm tabular-nums whitespace-nowrap">
-                    {fmtSigned(amt, symbol)}
-                  </div>
+                  <div className="text-sm tabular-nums whitespace-nowrap">{fmtSigned(amt, symbol)}</div>
                 </button>
               );
             })}
@@ -352,7 +389,9 @@ export default function BankTransactionConfirmModal({ bankTxn, budgetPk, categor
         {createMode && !ignoreMode && (
           <div className="flex flex-col gap-3">
             {createError && (
-              <Alert variant="destructive"><AlertDescription>{createError}</AlertDescription></Alert>
+              <Alert variant="destructive">
+                <AlertDescription>{createError}</AlertDescription>
+              </Alert>
             )}
             <div>
               <Label htmlFor="bt-desc">Description</Label>
@@ -373,31 +412,46 @@ export default function BankTransactionConfirmModal({ bankTxn, budgetPk, categor
               </div>
 
               {newLines.map((line, idx) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: rows are fully controlled and addressed by index
                 <div key={idx} className="grid grid-cols-12 gap-2 items-center">
                   <div className="col-span-6">
                     <Select value={line.category} onValueChange={(v) => updateLine(idx, { category: v })}>
-                      <SelectTrigger size="sm" className="w-full"><SelectValue placeholder="Pick a category" /></SelectTrigger>
+                      <SelectTrigger size="sm" className="w-full">
+                        <SelectValue placeholder="Pick a category" />
+                      </SelectTrigger>
                       <SelectContent>
                         <SelectGroup>
                           <SelectLabel>Expense</SelectLabel>
-                          {categories.filter((c) => c.category_type === "expense" && !c.is_goal).map((c) => (
-                            <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
-                          ))}
+                          {categories
+                            .filter((c) => c.category_type === "expense" && !c.is_goal)
+                            .map((c) => (
+                              <SelectItem key={c.id} value={String(c.id)}>
+                                {c.name}
+                              </SelectItem>
+                            ))}
                         </SelectGroup>
                         <SelectGroup>
                           <SelectLabel>Income</SelectLabel>
-                          {categories.filter((c) => c.category_type === "income" && !c.is_goal).map((c) => (
-                            <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
-                          ))}
+                          {categories
+                            .filter((c) => c.category_type === "income" && !c.is_goal)
+                            .map((c) => (
+                              <SelectItem key={c.id} value={String(c.id)}>
+                                {c.name}
+                              </SelectItem>
+                            ))}
                         </SelectGroup>
                         {categories.some((c) => c.is_goal) && (
                           <>
                             <SelectSeparator />
                             <SelectGroup>
                               <SelectLabel>Goals</SelectLabel>
-                              {categories.filter((c) => c.is_goal).map((c) => (
-                                <SelectItem key={c.id} value={String(c.id)}>◎ {c.name}</SelectItem>
-                              ))}
+                              {categories
+                                .filter((c) => c.is_goal)
+                                .map((c) => (
+                                  <SelectItem key={c.id} value={String(c.id)}>
+                                    ◎ {c.name}
+                                  </SelectItem>
+                                ))}
                             </SelectGroup>
                           </>
                         )}

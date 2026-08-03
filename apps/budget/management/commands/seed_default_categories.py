@@ -63,6 +63,9 @@ class Command(BaseCommand):
                     else:
                         skipped += 1
 
-        self.stdout.write(self.style.SUCCESS(
-            f"Seeded budget {budget.pk}: {created_root} root + {created_sub} subcategories created, {skipped} already existed."
-        ))
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"Seeded budget {budget.pk}: {created_root} root + {created_sub} subcategories "
+                f"created, {skipped} already existed."
+            )
+        )

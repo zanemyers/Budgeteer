@@ -6,10 +6,19 @@
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="icon" type="image/x-icon" href="/public/static/favicon2/favicon.ico">
-    <link rel="icon" type="image/svg+xml" href="/public/static/favicon2/favicon.svg">
-    <link rel="icon" type="image/png" sizes="96x96" href="/public/static/favicon2/favicon-96x96.png">
-    <link rel="apple-touch-icon" sizes="180x180" href="/public/static/favicon2/apple-touch-icon.png">
+    <link rel="icon"
+          type="image/x-icon"
+          href="/public/static/favicon2/favicon.ico">
+    <link rel="icon"
+          type="image/svg+xml"
+          href="/public/static/favicon2/favicon.svg">
+    <link rel="icon"
+          type="image/png"
+          sizes="96x96"
+          href="/public/static/favicon2/favicon-96x96.png">
+    <link rel="apple-touch-icon"
+          sizes="180x180"
+          href="/public/static/favicon2/apple-touch-icon.png">
     <link rel="manifest" href="/public/static/favicon2/site.webmanifest">
     {% block title_tag %}
       <title>
@@ -23,15 +32,15 @@
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;600;700&display=swap"
+          rel="stylesheet">
     <script>
-      (function () {
+      (function() {
         var t = localStorage.getItem("theme") || "auto";
         var e = t === "auto" ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : t;
         if (e === "dark") document.documentElement.classList.add("dark");
       })();
     </script>
-
     {% block style %}
       {% vite_asset 'css/main.css' %}
     {% endblock style %}
@@ -59,13 +68,11 @@
           {% block content %}
           {% endblock content %}
         </main>
-
         <footer class="footer border-top px-4 py-2">
           <p class="text-sm text-secondary mb-0">© {{ SITE_NAME }} {% now "Y" %}</p>
         </footer>
       </div>
     </div>
-
     {% block bottom_script %}
       {% vite_hmr_client %}
     {% endblock bottom_script %}

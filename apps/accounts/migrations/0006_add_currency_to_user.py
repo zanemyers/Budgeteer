@@ -4,15 +4,14 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('accounts', '0005_add_timezone_and_avatar_to_user'),
+        ("accounts", "0005_add_timezone_and_avatar_to_user"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='user',
-            name='currency',
-            field=models.CharField(default='USD', max_length=3),
+            model_name="user",
+            name="currency",
+            field=models.CharField(default="USD", max_length=3),
         ),
     ]

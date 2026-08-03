@@ -20,7 +20,7 @@ export async function jsonFetch<T = unknown>(url: string, method: string, body?:
     throw { error: "Your session expired. Please reload the page and sign in again.", status: 401 };
   }
   if (!res.ok && res.status !== 204) {
-    const data = await res.json().catch(() => ({})) as { errors?: unknown };
+    const data = (await res.json().catch(() => ({}))) as { errors?: unknown };
     throw data.errors ?? data;
   }
   if (res.status === 204) return null;

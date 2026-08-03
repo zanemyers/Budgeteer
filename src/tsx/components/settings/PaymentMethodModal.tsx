@@ -2,24 +2,12 @@ import { useState } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import type { PaymentMethod } from "./PaymentMethodsPanel";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getCsrfToken } from "@/lib/api";
+import type { PaymentMethod } from "./PaymentMethodsPanel";
 
 interface TypeChoice {
   value: string;
@@ -66,13 +54,15 @@ export function PaymentMethodModal({ budgetPk, typeChoices, paymentMethod, onClo
         body: JSON.stringify(body),
       });
       if (!res.ok) {
-        const data = await res.json() as { errors?: Record<string, string[]> };
-        const flat = Object.values(data.errors ?? data).flat().join(" ");
+        const data = (await res.json()) as { errors?: Record<string, string[]> };
+        const flat = Object.values(data.errors ?? data)
+          .flat()
+          .join(" ");
         setError(flat || "Could not save.");
         setSaving(false);
         return;
       }
-      const pm = await res.json() as PaymentMethod;
+      const pm = (await res.json()) as PaymentMethod;
       onSaved(pm);
     } catch {
       setError("Network error.");
@@ -81,7 +71,12 @@ export function PaymentMethodModal({ budgetPk, typeChoices, paymentMethod, onClo
   }
 
   return (
-    <Dialog open onOpenChange={(open) => { if (!open && !saving) onClose(); }}>
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open && !saving) onClose();
+      }}
+    >
       <DialogContent>
         <form onSubmit={handleSubmit}>
           <DialogHeader>
@@ -105,10 +100,14 @@ export function PaymentMethodModal({ budgetPk, typeChoices, paymentMethod, onClo
               <div className="flex flex-col gap-2">
                 <Label htmlFor="pm-type">Type</Label>
                 <Select value={paymentType} onValueChange={setPaymentType}>
-                  <SelectTrigger id="pm-type" className="w-full"><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="pm-type" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
                     {typeChoices.map((t) => (
-                      <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                      <SelectItem key={t.value} value={t.value}>
+                        {t.label}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -130,12 +129,10 @@ export function PaymentMethodModal({ budgetPk, typeChoices, paymentMethod, onClo
 
             {isEdit && (
               <div className="flex items-center gap-2">
-                <Checkbox
-                  id="pm-active"
-                  checked={isActive}
-                  onCheckedChange={(c) => setIsActive(c === true)}
-                />
-                <Label htmlFor="pm-active" className="font-normal">Active</Label>
+                <Checkbox id="pm-active" checked={isActive} onCheckedChange={(c) => setIsActive(c === true)} />
+                <Label htmlFor="pm-active" className="font-normal">
+                  Active
+                </Label>
               </div>
             )}
 
@@ -147,7 +144,9 @@ export function PaymentMethodModal({ budgetPk, typeChoices, paymentMethod, onClo
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
+            <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
+              Cancel
+            </Button>
             <Button type="submit" disabled={saving || !name.trim()}>
               {saving ? "Saving…" : "Save"}
             </Button>

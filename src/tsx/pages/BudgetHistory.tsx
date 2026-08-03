@@ -41,14 +41,14 @@ function YearStrip({ budgetId, year, activeMonths }: { budgetId: number; year: n
           const monthStr = `${year}-${String(monthIdx).padStart(2, "0")}`;
           if (!isActive) {
             return (
-              <div key={idx} className="archive-month archive-month--empty" aria-hidden>
+              <div key={monthStr} className="archive-month archive-month--empty" aria-hidden>
                 <span>{MONTH_ABBR[idx]}</span>
               </div>
             );
           }
           return (
             <button
-              key={idx}
+              key={monthStr}
               type="button"
               className="archive-month archive-month--active"
               onClick={() => router.visit(`/budgets/${budgetId}/transactions/?month=${monthStr}`)}
@@ -79,7 +79,9 @@ function BudgetSection({ budget, index }: { budget: BudgetEntry; index: number }
         <h2 className="archive-title">{budget.name}</h2>
         <p className="archive-meta">
           {monthCount} {monthCount === 1 ? "month" : "months"}
-          <span className="archive-dot" aria-hidden>·</span>
+          <span className="archive-dot" aria-hidden>
+            ·
+          </span>
           {yearCount} {yearCount === 1 ? "year" : "years"} of records
         </p>
       </header>
@@ -341,8 +343,8 @@ export default function BudgetHistory({ budgets }: Props) {
             Every month, <em>shelved.</em>
           </h1>
           <p className="archive-subhead">
-            A chronicle of every budget you've kept. Each tile is a month with transactions —
-            click one to revisit its ledger.
+            A chronicle of every budget you've kept. Each tile is a month with transactions — click one to revisit its
+            ledger.
           </p>
         </header>
 
@@ -352,7 +354,10 @@ export default function BudgetHistory({ budgets }: Props) {
             <a
               href="/budgets/"
               className="text-primary hover:underline"
-              onClick={(e) => { e.preventDefault(); router.visit("/budgets/"); }}
+              onClick={(e) => {
+                e.preventDefault();
+                router.visit("/budgets/");
+              }}
             >
               Start one
             </a>{" "}

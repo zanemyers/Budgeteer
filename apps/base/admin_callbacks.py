@@ -49,9 +49,7 @@ def _sync_health(now):
         "pending": counts["pending"],
         "last_ok_when": _humanize_delta(last_ok.last_synced_at) if last_ok else "never",
         "recent_errors": recent_errors,
-        "status_color": (
-            "danger" if counts["error"] else "success" if counts["ok"] else "warning"
-        ),
+        "status_color": ("danger" if counts["error"] else "success" if counts["ok"] else "warning"),
     }
 
 
@@ -84,25 +82,15 @@ def _system_totals(now):
 
     # "True" spend: expense-category lines, paid, excluding sinking-fund deposits
     # and transfer transactions — matches the activity logic in apps/budget/data.py.
-    real_expense_lines = (
-        TransactionLine.objects.filter(
-            category__category_type="expense",
-            category__goal__isnull=True,
-            transaction__paid_date__isnull=False,
-        )
-        .exclude(transaction__transaction_type="transfer")
-    )
-    spend_lifetime = (
-        real_expense_lines.aggregate(total=Sum("amount_usd"))["total"] or Decimal("0")
-    )
-    spend_30d = (
-        real_expense_lines.annotate(
-            effective_date=Coalesce("transaction__paid_date", "transaction__due_date")
-        )
-        .filter(effective_date__gte=thirty_days_ago.date())
-        .aggregate(total=Sum("amount_usd"))["total"]
-        or Decimal("0")
-    )
+    real_expense_lines = TransactionLine.objects.filter(
+        category__category_type="expense",
+        category__goal__isnull=True,
+        transaction__paid_date__isnull=False,
+    ).exclude(transaction__transaction_type="transfer")
+    spend_lifetime = real_expense_lines.aggregate(total=Sum("amount_usd"))["total"] or Decimal("0")
+    spend_30d = real_expense_lines.annotate(
+        effective_date=Coalesce("transaction__paid_date", "transaction__due_date")
+    ).filter(effective_date__gte=thirty_days_ago.date()).aggregate(total=Sum("amount_usd"))["total"] or Decimal("0")
 
     return {
         "users": User.objects.count(),
@@ -126,9 +114,7 @@ def _spend_trend(now, months=6):
             transaction__paid_date__isnull=False,
         )
         .exclude(transaction__transaction_type="transfer")
-        .annotate(
-            effective_date=Coalesce("transaction__paid_date", "transaction__due_date")
-        )
+        .annotate(effective_date=Coalesce("transaction__paid_date", "transaction__due_date"))
         .filter(effective_date__gte=start_of_window.date())
         .annotate(month=TruncMonth("effective_date"))
         .values("month")
@@ -167,9 +153,7 @@ def _spend_by_category(now, top_n=7):
             transaction__paid_date__isnull=False,
         )
         .exclude(transaction__transaction_type="transfer")
-        .annotate(
-            effective_date=Coalesce("transaction__paid_date", "transaction__due_date")
-        )
+        .annotate(effective_date=Coalesce("transaction__paid_date", "transaction__due_date"))
         .filter(effective_date__gte=start_of_month)
         .values("category__name")
         .annotate(total=Sum("amount_usd"))
@@ -186,15 +170,9 @@ def _spend_by_category(now, top_n=7):
 
 def _recent_activity(now):
     User = get_user_model()
-    recent_users = list(
-        User.objects.filter(last_login__isnull=False)
-        .order_by("-last_login")[:5]
-    )
+    recent_users = list(User.objects.filter(last_login__isnull=False).order_by("-last_login")[:5])
     return {
-        "users": [
-            {"email": u.email, "when": _humanize_delta(u.last_login)}
-            for u in recent_users
-        ],
+        "users": [{"email": u.email, "when": _humanize_delta(u.last_login)} for u in recent_users],
     }
 
 

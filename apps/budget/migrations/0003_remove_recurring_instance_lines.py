@@ -4,14 +4,13 @@ from django.db import migrations
 
 
 def remove_recurring_instance_lines(apps, schema_editor):
-    TransactionLine = apps.get_model('budget', 'TransactionLine')
+    TransactionLine = apps.get_model("budget", "TransactionLine")
     TransactionLine.objects.filter(transaction__recurring__isnull=False).delete()
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('budget', '0002_remove_budget_name_description'),
+        ("budget", "0002_remove_budget_name_description"),
     ]
 
     operations = [

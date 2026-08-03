@@ -4,13 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { jsonFetch } from "@/lib/api";
 
 export interface Membership {
@@ -78,7 +72,9 @@ export function MembersPanel({ budgetPk, memberships, roleChoices, onChange }: P
     <div>
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-base font-semibold">Members</h2>
-        <Button size="sm" onClick={() => setShowForm(true)}>+ Invite</Button>
+        <Button size="sm" onClick={() => setShowForm(true)}>
+          + Invite
+        </Button>
       </div>
 
       {showForm && (
@@ -97,15 +93,31 @@ export function MembersPanel({ budgetPk, memberships, roleChoices, onChange }: P
                   />
                 </div>
                 <Select value={inviteRole} onValueChange={setInviteRole}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
                     {roleChoices.map((r) => (
-                      <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                      <SelectItem key={r.value} value={r.value}>
+                        {r.label}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                <Button size="sm" disabled={saving}>Invite</Button>
-                <Button type="button" variant="outline" size="sm" onClick={() => { setShowForm(false); setFormError(""); }}>Cancel</Button>
+                <Button size="sm" disabled={saving}>
+                  Invite
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setShowForm(false);
+                    setFormError("");
+                  }}
+                >
+                  Cancel
+                </Button>
               </div>
               {formError && <p className="text-destructive text-sm mt-2">{formError}</p>}
             </form>
@@ -141,7 +153,9 @@ export function MembersPanel({ budgetPk, memberships, roleChoices, onChange }: P
                 </div>
               </div>
               <div className="flex items-center gap-3 shrink-0">
-                <Badge variant="secondary" className="capitalize">{m.role}</Badge>
+                <Badge variant="secondary" className="capitalize">
+                  {m.role}
+                </Badge>
                 {removeError[m.id] && <small className="text-destructive">{removeError[m.id]}</small>}
                 {m.role !== "owner" && <ConfirmButton onConfirm={() => handleRemove(m)} />}
               </div>
