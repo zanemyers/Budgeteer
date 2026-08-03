@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Budgeteer is a Django 6 + Inertia.js + React SPA, styled with Tailwind CSS v4. The backend serves data via `inertia_render()`; the frontend is a persistent React app with no full-page reloads. Authentication is handled by Django Allauth with all views overridden to return Inertia responses.
 
+It is a personal, self-hosted app — one owner managing their own money, not multi-tenant SaaS — which drives choices like SimpleFIN over Plaid. `PRODUCT.md` (scope/features) and `DESIGN.md` (visual direction) at the repo root are authoritative for product and design decisions. Deeper authored docs live in `docs/` — notably `architecture.md`, `models.md`, and `database.md` (with a rendered `database.svg` ERD); serve them locally with `just docs`.
+
 ## Development Commands
 
 All commands run inside Docker containers by default. Override with `PYTHON_CMD_PREFIX` / `NODE_CMD_PREFIX` env vars to run locally.
@@ -48,12 +50,17 @@ Every page is a React component rendered server-side via Inertia. Django views c
 # views.py pattern
 from inertia import render as inertia_render
 
+
 class MyView(BudgetMemberMixin, View):
     def get(self, request, budget_pk):
-        return inertia_render(request, "MyPage", {
-            "budget_pk": self.budget.pk,
-            "items": lambda: [...],  # lambdas are evaluated lazily
-        })
+        return inertia_render(
+            request,
+            "MyPage",
+            {
+                "budget_pk": self.budget.pk,
+                "items": lambda: [...],  # lambdas are evaluated lazily
+            },
+        )
 ```
 
 ### Shared Props via Middleware
@@ -75,6 +82,18 @@ All budget-scoped views use one of two mixins defined at the top of `apps/budget
 - **`BudgetOwnerMixin`** — extends `BudgetMemberMixin`, additionally requires `role=owner`.
 
 Never use `LoginRequiredMixin` alone for budget views — always use one of these mixins.
+
+### Domain Model (the ledger)
+
+All budget domain models live in `apps/budget/models.py`. The core shape is worth internalizing before touching budget logic:
+
+- **`Transaction` is a header; money lives on `TransactionLine` rows.** A transaction's amount is `total_amount` (sum of its lines), and each line carries a `category`, `amount`, and `amount_usd`. Nearly every transaction should have at least one line — generators backfill a canonical line so this holds. `transaction_type` is usually derived from the first line's category type (`derive_transaction_type`) rather than stored.
+- **Currency is per-transaction.** Amounts are stored in the transaction's own `currency` with an `exchange_rate_to_usd` captured at entry time; lines store both `amount` and `amount_usd`. Don't assume USD.
+- **`budget_month` (a first-of-month date) decides which month a transaction funds**, overriding `paid_date` bucketing. Income allocation is driven by `PaySchedule.allocation_offset_months` / `budget_month_for()` (0 = funds the received month, 1 = budget a month ahead).
+- **Pending vs. paid:** `paid_date IS NULL` means pending/upcoming; a set `paid_date` means it happened.
+- **`PaySchedule` and `RecurringTransaction` both generate `Transaction` instances** via `generate_instances_up_to(...)`, watermarked by `generated_through`; instances link back through the `pay_schedule` / `recurring` FKs (reverse name `instances`). The daily cron regenerates a lookahead window (`BUDGET_RECURRING_LOOKAHEAD_MONTHS`, default 3). These generators only *fill nulls* when backfilling fields onto existing unpaid instances — they never clobber a value set manually on a specific instance.
+- **Transfers** are two transactions linked via the self-referential `transfer_partner`; always mutate the link through `link_transfer()` / `unlink_transfer()` so both sides stay consistent.
+- **`CategoryBudget`** is the per-category, per-month assigned target (`unique_together` on budget/category/month); categories support monthly rollover.
 
 ### Allauth Override Pattern
 
