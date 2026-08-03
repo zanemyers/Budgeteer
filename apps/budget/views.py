@@ -1,21 +1,26 @@
 import calendar
+import contextlib
 import datetime
 from decimal import Decimal, InvalidOperation
 
 from django.conf import settings as django_settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db import IntegrityError, transaction as db_transaction
+from django.db import IntegrityError
+from django.db import transaction as db_transaction
 from django.db.models import ProtectedError, Q
 from django.db.models.functions import Coalesce
 from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
-from django.urls import reverse, reverse_lazy
+from django.urls import reverse
 from django.views import View
-from django.views import generic
 
 from inertia import render as inertia_render
 
+from apps.accounts.models import User
+from apps.banking.models import BankTransaction
+from apps.base.http import parse_json_body
+from apps.base.models import Currency as CurrencyModel
 from apps.budget.data import (
     find_pending_bank_transfer_candidates,
     find_transfer_candidates,
@@ -36,20 +41,15 @@ from apps.budget.models import (
     BudgetMembership,
     Category,
     CategoryBudget,
+    Goal,
     PaymentMethod,
     PaySchedule,
     RecurringTransaction,
-    Goal,
     Transaction,
     TransactionLine,
     default_income_budget_month,
     match_pay_schedule,
 )
-from apps.accounts.models import User
-from apps.banking.models import BankTransaction
-from apps.base.http import parse_json_body
-from apps.base.models import Currency as CurrencyModel
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -101,7 +101,7 @@ class BudgetMemberMixin(LoginRequiredMixin):
         try:
             self.budget = Budget.objects.get(pk=budget_pk)
         except Budget.DoesNotExist:
-            raise Http404
+            raise Http404 from None
         if not self.budget.members.filter(pk=request.user.pk).exists():
             raise Http404
         self.check_budget_permissions(request)
@@ -111,7 +111,7 @@ class BudgetMemberMixin(LoginRequiredMixin):
         return super().dispatch(request, *args, **kwargs)
 
     def check_budget_permissions(self, request):
-        """Hook for subclasses to add extra permission checks after self.budget is set."""
+        """Add extra permission checks after self.budget is set; override in subclasses."""
 
 
 class BudgetOwnerMixin(BudgetMemberMixin):
@@ -198,20 +198,51 @@ class BudgetHistoryView(LoginRequiredMixin, View):
         return inertia_render(request, "BudgetHistory", {"budgets": result})
 
 
+def get_or_create_home_budget(user):
+    """Return the user's default budget, or their first, creating an empty one if they have none."""
+    budget = None
+    if user.default_budget_id and Budget.objects.filter(pk=user.default_budget_id, members=user).exists():
+        budget = user.default_budget
+    if not budget:
+        budget = Budget.objects.filter(members=user).first()
+    if not budget:
+        budget = Budget.objects.create(created_by=user)
+        BudgetMembership.objects.create(budget=budget, user=user, role=BudgetMembership.ROLE_OWNER)
+    return budget
+
+
+class SiteIndexView(View):
+    """Root URL. Logged-out visitors get the public landing page; members go to their budget."""
+
+    def get(self, request):
+        if not request.user.is_authenticated:
+            return inertia_render(
+                request,
+                "Landing",
+                {"github_url": "https://github.com/zanemyers/Budgeteer"},
+            )
+        return BudgetHomeView.as_view()(request)
+
+
 class BudgetHomeView(LoginRequiredMixin, View):
     """Redirect to the user's default budget, or their first budget, creating one if needed."""
 
     def get(self, request):
-        user = request.user
-        budget = None
-        if user.default_budget_id and Budget.objects.filter(pk=user.default_budget_id, members=user).exists():
-            budget = user.default_budget
-        if not budget:
-            budget = Budget.objects.filter(members=user).first()
-        if not budget:
-            budget = Budget.objects.create(created_by=user)
-            BudgetMembership.objects.create(budget=budget, user=user, role=BudgetMembership.ROLE_OWNER)
+        budget = get_or_create_home_budget(request.user)
         return redirect(reverse("budget:detail", kwargs={"budget_pk": budget.pk}))
+
+
+class OnboardingView(LoginRequiredMixin, View):
+    """Mark the first-run product tour complete. POSTed once the user finishes or skips the tour."""
+
+    def post(self, request):
+        user = request.user
+        if not user.onboarding_completed:
+            user.onboarding_completed = True
+            if not user.default_budget_id:
+                user.default_budget = get_or_create_home_budget(user)
+            user.save(update_fields=["onboarding_completed", "default_budget"])
+        return JsonResponse({"ok": True})
 
 
 class BudgetListView(LoginRequiredMixin, View):
@@ -362,6 +393,7 @@ class BudgetDetailView(BudgetMemberMixin, View):
                 "pending_count": lambda: get_pending_count(budget, month_str),
                 "currencies": _serialize_currencies,
                 "user_currency": request.user.currency or "USD",
+                "start_onboarding_tour": not request.user.onboarding_completed,
             },
         )
 
@@ -426,6 +458,12 @@ def _apply_pay_schedule_fields(schedule, data):
     else:
         schedule.category = None
 
+    pm_id = data.get("payment_method")
+    if pm_id:
+        schedule.payment_method = PaymentMethod.objects.filter(pk=pm_id, budget=schedule.budget).first()
+    else:
+        schedule.payment_method = None
+
     frequency = data.get("frequency")
     if frequency in dict(PaySchedule.FREQ_CHOICES):
         schedule.frequency = frequency
@@ -478,6 +516,14 @@ class PayScheduleDetailView(BudgetOwnerMixin, View):
         if not schedule.name:
             return JsonResponse({"errors": {"name": ["Name is required."]}}, status=400)
         schedule.save()
+
+        # Reflect the deposit account on existing unpaid paychecks now, rather than waiting
+        # for the nightly generation. Only fills nulls, preserving any account set manually.
+        if schedule.payment_method_id is not None:
+            Transaction.objects.filter(
+                pay_schedule=schedule, paid_date__isnull=True, payment_method__isnull=True
+            ).update(payment_method_id=schedule.payment_method_id)
+
         return JsonResponse(serialize_pay_schedule(schedule))
 
     def delete(self, request, budget_pk, pk):
@@ -542,7 +588,7 @@ class BudgetSettingsView(BudgetMemberMixin, View):
 
         recurring_qs = RecurringTransaction.objects.filter(budget=budget).select_related("category", "payment_method")
 
-        pay_schedules = PaySchedule.objects.filter(budget=budget).select_related("category")
+        pay_schedules = PaySchedule.objects.filter(budget=budget).select_related("category", "payment_method")
 
         return inertia_render(
             request,
@@ -556,15 +602,17 @@ class BudgetSettingsView(BudgetMemberMixin, View):
                     "is_owner": is_owner,
                 },
                 "pay_schedules": [serialize_pay_schedule(ps) for ps in pay_schedules],
-                "pay_schedule_freq_choices": [{"value": v, "label": l} for v, l in PaySchedule.FREQ_CHOICES],
+                "pay_schedule_freq_choices": [{"value": v, "label": label} for v, label in PaySchedule.FREQ_CHOICES],
                 "categories": [_serialize_cat(c) for c in categories],
-                "category_type_choices": [{"value": v, "label": l} for v, l in Category.TYPE_CHOICES],
+                "category_type_choices": [{"value": v, "label": label} for v, label in Category.TYPE_CHOICES],
                 "payment_methods": [serialize_payment_method(pm) for pm in PaymentMethod.objects.filter(budget=budget)],
-                "payment_method_type_choices": [{"value": v, "label": l} for v, l in PaymentMethod.TYPE_CHOICES],
+                "payment_method_type_choices": [
+                    {"value": v, "label": label} for v, label in PaymentMethod.TYPE_CHOICES
+                ],
                 "memberships": memberships,
-                "role_choices": [{"value": v, "label": l} for v, l in BudgetMembership.ROLE_CHOICES],
+                "role_choices": [{"value": v, "label": label} for v, label in BudgetMembership.ROLE_CHOICES],
                 "recurring": lambda: [serialize_recurring(rt) for rt in recurring_qs],
-                "freq_choices": [{"value": v, "label": l} for v, l in RecurringTransaction.FREQ_CHOICES],
+                "freq_choices": [{"value": v, "label": label} for v, label in RecurringTransaction.FREQ_CHOICES],
             },
         )
 
@@ -884,16 +932,12 @@ class TransactionListView(BudgetMemberMixin, View):
                 except (ValueError, TypeError):
                     pass
             if method_filter:
-                try:
+                with contextlib.suppress(ValueError, TypeError):
                     qs = qs.filter(payment_method_id=int(method_filter))
-                except (ValueError, TypeError):
-                    pass
             for value, lookup in ((date_from, "effective_date__gte"), (date_to, "effective_date__lte")):
                 if value:
-                    try:
+                    with contextlib.suppress(ValueError, TypeError):
                         qs = qs.filter(**{lookup: datetime.date.fromisoformat(value)})
-                    except (ValueError, TypeError):
-                        pass
             return [serialize_transaction(t) for t in qs.order_by("-effective_date")]
 
         return inertia_render(
@@ -960,7 +1004,7 @@ class TransactionCreateView(BudgetMemberMixin, View):
         if not lines_data:
             errors["lines"] = ["At least one line item is required."]
         else:
-            line_cat_ids = [l.get("category") for l in lines_data if l.get("category")]
+            line_cat_ids = [line.get("category") for line in lines_data if line.get("category")]
             cat_info = list(Category.objects.filter(pk__in=line_cat_ids).values_list("category_type", "goal"))
             non_goal_types = {ct for ct, g in cat_info if g is None}
             if len(non_goal_types) > 1:
@@ -978,7 +1022,7 @@ class TransactionCreateView(BudgetMemberMixin, View):
         if explicit_txn_type == "income":
             budget_month = _parse_month_first(data.get("budget_month"))
             if budget_month is None:
-                total = sum((Decimal(str(l.get("amount", "0"))) for l in lines_data), Decimal("0"))
+                total = sum((Decimal(str(line.get("amount", "0"))) for line in lines_data), Decimal("0"))
                 budget_month = default_income_budget_month(
                     self.budget, paid_date or due_date, amount=total, description=description
                 )
@@ -1068,7 +1112,7 @@ class TransactionUpdateView(BudgetMemberMixin, View):
         if not explicit_budget_month and txn.transaction_type == "income" and txn.budget_month is None:
             new_lines = data.get("lines")
             match_amount = (
-                sum((Decimal(str(l.get("amount", "0"))) for l in new_lines), Decimal("0"))
+                sum((Decimal(str(line.get("amount", "0"))) for line in new_lines), Decimal("0"))
                 if new_lines is not None
                 else txn.total_amount
             )
@@ -1176,7 +1220,8 @@ class TransferCandidatesView(BudgetMemberMixin, View):
 
 
 class TransferLinkView(BudgetMemberMixin, View):
-    """Link or unlink a transaction's transfer partner.
+    """
+    Link or unlink a transaction's transfer partner.
 
     PATCH body: `{"partner_id": <int>}` to link, `{"partner_id": null}` to unlink.
     """
@@ -1243,10 +1288,8 @@ class RecurringCreateView(BudgetMemberMixin, View):
         category = get_object_or_404(Category, pk=data["category"], budget=self.budget)
         end_date = None
         if data.get("end_date"):
-            try:
+            with contextlib.suppress(ValueError, TypeError):
                 end_date = datetime.date.fromisoformat(data["end_date"])
-            except (ValueError, TypeError):
-                pass
         rt = RecurringTransaction.objects.create(
             budget=self.budget,
             created_by=request.user,
@@ -1363,8 +1406,12 @@ class RecurringDetailView(BudgetMemberMixin, View):
 
 
 def _bank_txn_for_budget(request, budget, pk) -> BankTransaction:
-    """Fetch a BankTransaction that belongs to (a) the requesting user and (b) the given budget
-    via its bank account's payment_method mapping."""
+    """
+    Fetch a BankTransaction.
+
+    It must belong to (a) the requesting user and (b) the given budget, via its bank
+    account's payment_method mapping.
+    """
     qs = BankTransaction.objects.select_related("bank_account__payment_method", "bank_account__connection").filter(
         bank_account__connection__user=request.user
     )
@@ -1455,7 +1502,8 @@ class BankTransactionLinkView(BudgetMemberMixin, View):
 
 
 class BankTransactionCreateTxnView(BudgetMemberMixin, View):
-    """Create a new Transaction from a BankTransaction and link them.
+    """
+    Create a new Transaction from a BankTransaction and link them.
 
     Accepts either:
     - `lines: [{category_id, amount, description?}]` — explicit splits; must sum to abs(bt.amount)
@@ -1585,7 +1633,8 @@ class BankTransactionCreateTxnView(BudgetMemberMixin, View):
 
 
 class BankTransactionConfirmAsTransferView(BudgetMemberMixin, View):
-    """Confirm a BankTransaction as one leg of a transfer.
+    """
+    Confirm a BankTransaction as one leg of a transfer.
 
     Body accepts either:
       - `partner_id` — an existing budget Transaction. Creates one new

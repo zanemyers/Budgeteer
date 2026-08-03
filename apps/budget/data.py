@@ -52,6 +52,8 @@ def serialize_pay_schedule(schedule) -> dict:
         "name": schedule.name,
         "category": schedule.category_id,
         "category_name": schedule.category.name if schedule.category else None,
+        "payment_method": schedule.payment_method_id,
+        "payment_method_name": str(schedule.payment_method) if schedule.payment_method else None,
         "frequency": schedule.frequency,
         "anchor_1": schedule.anchor_1,
         "anchor_2": schedule.anchor_2,
@@ -85,9 +87,12 @@ def serialize_transaction_line(line) -> dict:
 
 
 def serialize_bank_transaction(bt) -> dict:
-    """Canonical serializer for a BankTransaction. Used everywhere the frontend
-    needs bank-row data — linked-display in modals, the Pending/Ignored tabs on
-    the Transactions page, and the Banking page."""
+    """
+    Canonical serializer for a BankTransaction.
+
+    Used everywhere the frontend needs bank-row data — linked-display in modals,
+    the Pending/Ignored tabs on the Transactions page, and the Banking page.
+    """
     return {
         "id": bt.pk,
         "simplefin_id": bt.simplefin_id,
@@ -144,7 +149,8 @@ def serialize_transaction(txn) -> dict:
 
 
 def find_transfer_candidates(txn: Transaction, *, day_window: int = 3) -> list[Transaction]:
-    """Return likely transfer-partner Transactions for `txn`.
+    """
+    Return likely transfer-partner Transactions for `txn`.
 
     Match criteria: same budget, different payment_method, paid in opposite
     direction (one expense + one income/transfer), absolute total matches,
@@ -188,7 +194,8 @@ def find_transfer_candidates(txn: Transaction, *, day_window: int = 3) -> list[T
 
 
 def find_pending_bank_transfer_candidates(bt, budget, *, day_window: int = 3) -> list:
-    """Other pending BankTransactions that look like the matching leg of a transfer.
+    """
+    Other pending BankTransactions that look like the matching leg of a transfer.
 
     Same |amount|, opposite sign, ±day_window from this bank txn's posted date,
     different bank account, both still pending (neither yet promoted to a budget
@@ -218,7 +225,8 @@ def find_pending_bank_transfer_candidates(bt, budget, *, day_window: int = 3) ->
 
 
 def find_transfer_candidates_for_bank_txn(bt, budget, *, day_window: int = 3) -> list[Transaction]:
-    """Like find_transfer_candidates but for an as-yet-unconfirmed BankTransaction.
+    """
+    Like find_transfer_candidates but for an as-yet-unconfirmed BankTransaction.
 
     Determines direction from the signed bank amount (negative = outflow, treat
     like expense; positive = inflow, treat like income/transfer).
@@ -563,7 +571,8 @@ def get_upcoming_transactions(budget) -> list:
 
 
 def get_pending_count(budget, month_str: str | None) -> int:
-    """Count transactions in the given month that need user review.
+    """
+    Count transactions in the given month that need user review.
 
     Mirrors the Transactions page's Pending section logic: a transaction is
     pending if it has no paid_date OR if it's recurring and not yet marked paid.

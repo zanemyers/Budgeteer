@@ -1,9 +1,7 @@
-import { usePage, router } from "@inertiajs/react";
-import { useState } from "react";
+import { router, usePage } from "@inertiajs/react";
 import { Menu } from "lucide-react";
-import ThemeToggle from "../components/ThemeToggle";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Toaster } from "@/components/ui/sonner";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,6 +9,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Toaster } from "@/components/ui/sonner";
+import ThemeToggle from "../components/ThemeToggle";
+import { startFullTour } from "../lib/onboardingTour";
 
 interface AuthUser {
   id: number;
@@ -35,16 +36,19 @@ function NavLink({
   active,
   children,
   useInertia = true,
+  dataTour,
 }: {
   href: string;
   active?: boolean;
   children: React.ReactNode;
   useInertia?: boolean;
+  dataTour?: string;
 }) {
   return (
     <a
       className={`sidebar-link${active ? " active" : ""}`}
       href={href}
+      data-tour={dataTour}
       onClick={
         useInertia
           ? (e) => {
@@ -66,11 +70,11 @@ function logout() {
   }).then(() => router.visit("/accounts/login/"));
 }
 
-function UserMenu({ user }: { user: AuthUser }) {
+function UserMenu({ user, budgetPk }: { user: AuthUser; budgetPk?: number }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="sidebar-user" type="button">
+        <button className="sidebar-user" type="button" data-tour="account">
           <span className="shrink-0">
             <img src={user.gravatar} alt={user.name} width="26" height="26" className="rounded-full" />
           </span>
@@ -79,25 +83,18 @@ function UserMenu({ user }: { user: AuthUser }) {
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="start" className="w-56">
-        <DropdownMenuItem onClick={() => router.visit("/budgets/")}>
-          My Budgets
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => router.visit("/accounts/history/")}>
-          Budget History
-        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => router.visit("/budgets/")}>My Budgets</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => router.visit("/accounts/history/")}>Budget History</DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => router.visit("/accounts/settings/")}>
-          Account Settings
-        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => router.visit("/accounts/settings/")}>Account Settings</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setTimeout(() => startFullTour(budgetPk), 50)}>Replay tour</DropdownMenuItem>
         {user.is_staff && (
           <DropdownMenuItem asChild>
             <a href="/admin/">Administration</a>
           </DropdownMenuItem>
         )}
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => logout()}>
-          Sign Out
-        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => logout()}>Sign Out</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -120,7 +117,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <Toaster position="bottom-right" richColors closeButton />
       {/* Mobile overlay */}
       {sidebarOpen && (
-        <div
+        <button
+          type="button"
+          aria-label="Close menu"
           className="fixed inset-0 z-40 bg-black/50 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
@@ -157,7 +156,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             />
             Budgeteer
           </a>
-          <ThemeToggle />
+          <ThemeToggle className="text-[var(--moss-foreground)] hover:text-[var(--moss-foreground)] hover:bg-[color-mix(in_oklch,var(--moss-foreground)_12%,transparent)] dark:hover:bg-[color-mix(in_oklch,var(--moss-foreground)_12%,transparent)]" />
         </div>
 
         {/* Nav */}
@@ -169,46 +168,73 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   <span className="sidebar-group-label">Budgets</span>
                   <a
                     href="/budgets/"
-                    onClick={(e) => { e.preventDefault(); router.visit("/budgets/"); }}
+                    data-tour="budget"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      router.visit("/budgets/");
+                    }}
                     className="flex items-center justify-between gap-2 px-3 py-1.5 mb-1 rounded-md text-sm font-medium text-ink hover:bg-muted/60 focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
                     title={`${sidebarBudget?.name ?? "Budget"} — switch budget`}
                   >
                     <span className="truncate">{sidebarBudget?.name || "Current Budget"}</span>
-                    <span aria-hidden className="text-ink-quiet text-xs shrink-0">▾</span>
+                    <span aria-hidden className="text-ink-quiet text-xs shrink-0">
+                      ▾
+                    </span>
                   </a>
                   <NavLink
                     href={`/budgets/${sidebarBudgetPk}/`}
                     active={path === `/budgets/${sidebarBudgetPk}/` || path === `/budgets/${sidebarBudgetPk}`}
+                    dataTour="dashboard"
                   >
                     Dashboard
                   </NavLink>
-                  <NavLink href={txnHref} active={isAt(`/budgets/${sidebarBudgetPk}/transactions`)}>
+                  <NavLink
+                    href={txnHref}
+                    active={isAt(`/budgets/${sidebarBudgetPk}/transactions`)}
+                    dataTour="transactions"
+                  >
                     Transactions
                   </NavLink>
-                  <NavLink href={`/budgets/${sidebarBudgetPk}/goals/`} active={isAt(`/budgets/${sidebarBudgetPk}/goals`)}>
+                  <NavLink
+                    href={`/budgets/${sidebarBudgetPk}/goals/`}
+                    active={isAt(`/budgets/${sidebarBudgetPk}/goals`)}
+                    dataTour="goals"
+                  >
                     Goals
                   </NavLink>
-                  <NavLink href={`/budgets/${sidebarBudgetPk}/settings/`} active={isAt(`/budgets/${sidebarBudgetPk}/settings`)}>
+                  <NavLink
+                    href={`/budgets/${sidebarBudgetPk}/settings/`}
+                    active={isAt(`/budgets/${sidebarBudgetPk}/settings`)}
+                    dataTour="settings"
+                  >
                     Settings
                   </NavLink>
                 </div>
               ) : (
                 <div className="sidebar-group">
                   <span className="sidebar-group-label">Budgets</span>
-                  <NavLink href="/budgets/" active>My Budgets</NavLink>
+                  <NavLink href="/budgets/" active>
+                    My Budgets
+                  </NavLink>
                 </div>
               )}
               <div className="sidebar-group">
                 <span className="sidebar-group-label">Accounts</span>
-                <NavLink href="/banking/" active={isAt("/banking")}>Banking</NavLink>
+                <NavLink href="/banking/" active={isAt("/banking")} dataTour="banking">
+                  Banking
+                </NavLink>
                 {props.has_investments && (
-                  <NavLink href="/investments/" active={isAt("/investments")}>Investments</NavLink>
+                  <NavLink href="/investments/" active={isAt("/investments")}>
+                    Investments
+                  </NavLink>
                 )}
               </div>
             </>
           ) : (
             <div className="sidebar-group">
-              <NavLink href="/accounts/login/" useInertia={false}>Sign In</NavLink>
+              <NavLink href="/accounts/login/" useInertia={false}>
+                Sign In
+              </NavLink>
             </div>
           )}
         </nav>
@@ -216,7 +242,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         {/* Footer */}
         {user && (
           <div className="sidebar-footer">
-            <UserMenu user={user} />
+            <UserMenu user={user} budgetPk={sidebarBudgetPk} />
           </div>
         )}
       </div>
@@ -225,23 +251,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <div className="flex flex-col grow min-w-0 min-h-screen">
         {/* Mobile top bar */}
         <header className="shrink-0 flex lg:hidden items-center border-b px-4 py-2 gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setSidebarOpen(true)}
-            aria-label="Open navigation"
-          >
+          <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(true)} aria-label="Open navigation">
             <Menu />
           </Button>
-          <a className="font-semibold no-underline text-foreground" href="/">Budgeteer</a>
+          <a className="font-semibold no-underline text-foreground" href="/">
+            Budgeteer
+          </a>
         </header>
 
         <main className="grow flex flex-col p-4 lg:p-6">{children}</main>
 
         <footer className="shrink-0 border-t px-4 py-2">
-          <p className="text-sm text-muted-foreground">
-            © Budgeteer {new Date().getFullYear()}
-          </p>
+          <p className="text-sm text-muted-foreground">© Budgeteer {new Date().getFullYear()}</p>
         </footer>
       </div>
     </div>

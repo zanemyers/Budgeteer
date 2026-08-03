@@ -20,7 +20,7 @@
 
   /* Semantic data colors */
   --income: oklch(52% 0.06 145);
-  --expense: oklch(50% 0.10 25);
+  --expense: oklch(50% 0.1 25);
   --expense-soft: oklch(90% 0.045 25);
   --fund: oklch(60% 0.08 70);
   --fund-soft: oklch(90% 0.06 70);
@@ -45,7 +45,7 @@
   --destructive: var(--alarm);
   --destructive-foreground: var(--moss-foreground);
   --border: var(--rule);
-  --border-strong: oklch(82% 0.010 110);
+  --border-strong: oklch(82% 0.01 110);
   --input: var(--rule);
   --ring: var(--moss);
 
@@ -62,19 +62,19 @@
 .dark {
   --paper: oklch(23% 0.008 130);
   --ink: oklch(94% 0.008 100);
-  --ink-quiet: oklch(68% 0.010 110);
+  --ink-quiet: oklch(68% 0.01 110);
   --rule: oklch(32% 0.012 130);
-  --surface: oklch(27% 0.010 130);
+  --surface: oklch(27% 0.01 130);
   --surface-strong: oklch(30% 0.012 130);
 
   --moss: oklch(72% 0.09 130);
   --moss-soft: oklch(36% 0.07 130);
-  --moss-foreground: oklch(15% 0.010 130);
+  --moss-foreground: oklch(15% 0.01 130);
 
   --income: oklch(72% 0.07 145);
-  --expense: oklch(72% 0.10 25);
+  --expense: oklch(72% 0.1 25);
   --expense-soft: oklch(34% 0.06 25);
-  --fund: oklch(75% 0.10 70);
+  --fund: oklch(75% 0.1 70);
   --fund-soft: oklch(34% 0.07 70);
   --ongoing: oklch(72% 0.08 250);
   --alarm: oklch(65% 0.14 25);
@@ -184,7 +184,9 @@ input[type="number"],
   transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
 }
 @media (min-width: 1024px) {
-  .sidebar { position: sticky; }
+  .sidebar {
+    position: sticky;
+  }
 }
 
 .sidebar-brand-wrap {
@@ -205,7 +207,9 @@ input[type="number"],
   text-decoration: none !important;
   letter-spacing: -0.02em;
 }
-.sidebar-brand:hover { color: var(--moss-foreground) !important; }
+.sidebar-brand:hover {
+  color: var(--moss-foreground) !important;
+}
 
 .sidebar-nav {
   flex: 1;
@@ -213,7 +217,9 @@ input[type="number"],
   overflow-y: auto;
 }
 
-.sidebar-group { margin-bottom: 1.5rem; }
+.sidebar-group {
+  margin-bottom: 1.5rem;
+}
 
 .sidebar-group-label {
   display: block;
@@ -240,8 +246,9 @@ input[type="number"],
   background: none;
   border: none;
   border-radius: 0.375rem;
-  transition: color 120ms cubic-bezier(0.22, 1, 0.36, 1),
-              background-color 120ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition:
+    color 120ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 120ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .sidebar-link:hover {
   color: var(--moss-foreground);
@@ -270,8 +277,9 @@ input[type="number"],
   background: transparent;
   border: none;
   border-radius: 0.375rem;
-  transition: color 120ms cubic-bezier(0.22, 1, 0.36, 1),
-              background-color 120ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition:
+    color 120ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 120ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .sidebar-user:hover {
   color: var(--moss-foreground);
@@ -296,8 +304,12 @@ input[type="number"],
 }
 
 @media (max-width: 1023px) {
-  .sidebar { transform: translateX(-100%); }
-  .sidebar[data-sidebar-open] { transform: translateX(0); }
+  .sidebar {
+    transform: translateX(-100%);
+  }
+  .sidebar[data-sidebar-open] {
+    transform: translateX(0);
+  }
 }
 
 /* ── Reduced motion ──────────────────────────────────────────────────── */
@@ -327,20 +339,51 @@ input[type="number"],
   background-color: transparent;
   border: 1px solid transparent;
   border-radius: 0.375rem;
-  transition: background-color 120ms cubic-bezier(0.22, 1, 0.36, 1),
-              border-color 120ms cubic-bezier(0.22, 1, 0.36, 1),
-              color 120ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition:
+    background-color 120ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 120ms cubic-bezier(0.22, 1, 0.36, 1),
+    color 120ms cubic-bezier(0.22, 1, 0.36, 1);
 }
-.btn:disabled { cursor: not-allowed; opacity: 0.6; }
-.btn-sm { padding: 0.25rem 0.625rem; font-size: 0.8125rem; }
-.btn-primary { color: var(--moss-foreground); background-color: var(--moss); border-color: var(--moss); }
-.btn-primary:hover:not(:disabled) { background-color: oklch(from var(--moss) calc(l - 0.05) c h); }
-.btn-success { color: var(--moss-foreground); background-color: var(--moss); border-color: var(--moss); }
-.btn-success:hover:not(:disabled) { background-color: oklch(from var(--moss) calc(l - 0.05) c h); }
-.btn-danger { color: var(--moss-foreground); background-color: var(--alarm); border-color: var(--alarm); }
-.btn-danger:hover:not(:disabled) { background-color: oklch(from var(--alarm) calc(l - 0.05) c h); }
-.btn-default { color: var(--ink); background-color: var(--paper); border-color: var(--border-strong); }
-.btn-default:hover:not(:disabled) { background-color: var(--surface); }
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.btn-sm {
+  padding: 0.25rem 0.625rem;
+  font-size: 0.8125rem;
+}
+.btn-primary {
+  color: var(--moss-foreground);
+  background-color: var(--moss);
+  border-color: var(--moss);
+}
+.btn-primary:hover:not(:disabled) {
+  background-color: oklch(from var(--moss) calc(l - 0.05) c h);
+}
+.btn-success {
+  color: var(--moss-foreground);
+  background-color: var(--moss);
+  border-color: var(--moss);
+}
+.btn-success:hover:not(:disabled) {
+  background-color: oklch(from var(--moss) calc(l - 0.05) c h);
+}
+.btn-danger {
+  color: var(--moss-foreground);
+  background-color: var(--alarm);
+  border-color: var(--alarm);
+}
+.btn-danger:hover:not(:disabled) {
+  background-color: oklch(from var(--alarm) calc(l - 0.05) c h);
+}
+.btn-default {
+  color: var(--ink);
+  background-color: var(--paper);
+  border-color: var(--border-strong);
+}
+.btn-default:hover:not(:disabled) {
+  background-color: var(--surface);
+}
 .btn-close {
   display: inline-flex;
   align-items: center;
@@ -355,7 +398,9 @@ input[type="number"],
   border: 0;
   border-radius: 0.375rem;
 }
-.btn-close::before { content: "×"; }
+.btn-close::before {
+  content: "×";
+}
 
 .form-control {
   display: block;
@@ -380,8 +425,12 @@ input[type="number"],
   font-weight: 500;
   color: var(--ink-quiet);
 }
-.text-danger { color: var(--alarm); }
-.text-secondary { color: var(--ink-quiet); }
+.text-danger {
+  color: var(--alarm);
+}
+.text-secondary {
+  color: var(--ink-quiet);
+}
 
 .alert {
   padding: 0.5rem 0.875rem;
@@ -390,6 +439,57 @@ input[type="number"],
   border: 1px solid transparent;
   border-radius: 0.375rem;
 }
-.alert-success { color: var(--moss); background-color: var(--moss-soft); border-color: color-mix(in oklch, var(--moss) 25%, transparent); }
-.alert-danger { color: var(--alarm); background-color: color-mix(in oklch, var(--alarm) 8%, transparent); border-color: color-mix(in oklch, var(--alarm) 25%, transparent); }
-.alert-warning { color: var(--fund); background-color: var(--fund-soft); border-color: color-mix(in oklch, var(--fund) 25%, transparent); }
+.alert-success {
+  color: var(--moss);
+  background-color: var(--moss-soft);
+  border-color: color-mix(in oklch, var(--moss) 25%, transparent);
+}
+.alert-danger {
+  color: var(--alarm);
+  background-color: color-mix(in oklch, var(--alarm) 8%, transparent);
+  border-color: color-mix(in oklch, var(--alarm) 25%, transparent);
+}
+.alert-warning {
+  color: var(--fund);
+  background-color: var(--fund-soft);
+  border-color: color-mix(in oklch, var(--fund) 25%, transparent);
+}
+
+/* ── Product tour (driver.js) — quiet/moss theming ───────────────────── */
+.driver-popover.budgeteer-tour {
+  background-color: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  box-shadow: 0 8px 30px color-mix(in oklch, var(--ink) 14%, transparent);
+  max-width: 320px;
+}
+.driver-popover.budgeteer-tour .driver-popover-title {
+  color: var(--ink);
+  font-weight: 600;
+}
+.driver-popover.budgeteer-tour .driver-popover-description {
+  color: var(--ink-quiet);
+}
+.driver-popover.budgeteer-tour .driver-popover-progress-text {
+  color: var(--ink-quiet);
+}
+.driver-popover.budgeteer-tour .driver-popover-arrow {
+  display: none;
+}
+.driver-popover.budgeteer-tour button.driver-popover-next-btn {
+  background-color: var(--moss);
+  color: var(--moss-foreground);
+  border: none;
+  text-shadow: none;
+  border-radius: 6px;
+}
+.driver-popover.budgeteer-tour button.driver-popover-prev-btn {
+  background-color: transparent;
+  color: var(--ink-quiet);
+  border: none;
+  text-shadow: none;
+}
+.driver-popover.budgeteer-tour button.driver-popover-close-btn {
+  color: var(--ink-quiet);
+}

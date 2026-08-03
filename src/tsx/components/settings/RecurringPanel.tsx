@@ -1,24 +1,17 @@
-import { Fragment, useState } from "react";
 import { router } from "@inertiajs/react";
 import { Pause, Pencil, RotateCcw } from "lucide-react";
-import { fmt, useCurrencySymbol } from "@/utils/currency";
-import { fmtDate } from "@/utils/date";
-import { getCsrfToken } from "@/lib/api";
+import { Fragment, useState } from "react";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { getCsrfToken } from "@/lib/api";
+import { fmt, useCurrencySymbol } from "@/utils/currency";
+import { fmtDate } from "@/utils/date";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  RecurringFormModal,
   type RecurringFormCategory,
   type RecurringFormChoice,
+  RecurringFormModal,
   type RecurringFormPaymentMethod,
   type RecurringRecord,
 } from "./RecurringFormModal";
@@ -78,9 +71,7 @@ export function RecurringPanel({ budgetPk, recurring, categories, paymentMethods
     if (res.ok || res.status === 204) {
       onChange(
         recurring.map((r) =>
-          r.id === rt.id
-            ? { ...r, is_active: false, end_date: new Date().toISOString().split("T")[0] }
-            : r,
+          r.id === rt.id ? { ...r, is_active: false, end_date: new Date().toISOString().split("T")[0] } : r,
         ),
       );
     }
@@ -93,9 +84,7 @@ export function RecurringPanel({ budgetPk, recurring, categories, paymentMethods
       body: JSON.stringify({ is_active: true, end_date: null }),
     });
     if (!res.ok) return;
-    onChange(
-      recurring.map((r) => (r.id === rt.id ? { ...r, is_active: true, end_date: null } : r)),
-    );
+    onChange(recurring.map((r) => (r.id === rt.id ? { ...r, is_active: true, end_date: null } : r)));
   }
 
   async function handleDelete(rt: RecurringPanelItem) {
@@ -114,7 +103,15 @@ export function RecurringPanel({ budgetPk, recurring, categories, paymentMethods
     <div>
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-base font-semibold">Recurring Transactions</h2>
-        <Button size="sm" onClick={() => { setEditing(null); setShowForm(true); }}>+ Add</Button>
+        <Button
+          size="sm"
+          onClick={() => {
+            setEditing(null);
+            setShowForm(true);
+          }}
+        >
+          + Add
+        </Button>
       </div>
 
       {recurring.length === 0 ? (
@@ -127,21 +124,26 @@ export function RecurringPanel({ budgetPk, recurring, categories, paymentMethods
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[28%]">Name</TableHead>
-                  <TableHead className="w-[20%]">Frequency</TableHead>
-                  <TableHead className="w-[12%] text-right">Amount</TableHead>
-                  <TableHead className="w-[14%]">Start</TableHead>
-                  <TableHead className="w-[10%]">Status</TableHead>
-                  <TableHead className="w-[16%] text-right">Actions</TableHead>
+                  <TableHead className="w-[24%]">Name</TableHead>
+                  <TableHead className="w-[15%]">Frequency</TableHead>
+                  <TableHead className="w-[16%]">Payment Method</TableHead>
+                  <TableHead className="w-[11%] text-right">Amount</TableHead>
+                  <TableHead className="w-[12%]">Start</TableHead>
+                  <TableHead className="w-[9%]">Status</TableHead>
+                  <TableHead className="w-[13%] text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {groups.map((group) => (
                   <Fragment key={group.category_name}>
                     <TableRow className="bg-moss-soft hover:bg-moss-soft">
-                      <TableCell colSpan={6} className="py-1.5">
-                        <span className="text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-ink">{group.category_name}</span>
-                        <span className="text-ink-quiet text-xs ml-2">{group.category_type === "income" ? "Income" : "Expense"}</span>
+                      <TableCell colSpan={7} className="py-1.5">
+                        <span className="text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-ink">
+                          {group.category_name}
+                        </span>
+                        <span className="text-ink-quiet text-xs ml-2">
+                          {group.category_type === "income" ? "Income" : "Expense"}
+                        </span>
                       </TableCell>
                     </TableRow>
                     {group.items.map((rt) => (
@@ -150,21 +152,32 @@ export function RecurringPanel({ budgetPk, recurring, categories, paymentMethods
                           <span className="font-medium">{rt.name}</span>
                         </TableCell>
                         <TableCell className="text-sm">{freqLabel(rt)}</TableCell>
-                        <TableCell className={`text-right text-sm tabular-nums ${rt.category_type === "income" ? "text-income" : "text-expense"}`}>
-                          {rt.category_type === "expense" ? "−" : ""}{fmt(rt.amount, symbol)}
+                        <TableCell className="text-sm">
+                          {rt.payment_method_name ?? <span className="text-ink-quiet">—</span>}
+                        </TableCell>
+                        <TableCell
+                          className={`text-right text-sm tabular-nums ${rt.category_type === "income" ? "text-income" : "text-expense"}`}
+                        >
+                          {rt.category_type === "expense" ? "−" : ""}
+                          {fmt(rt.amount, symbol)}
                         </TableCell>
                         <TableCell className="text-sm tabular-nums">{fmtDate(rt.start_date)}</TableCell>
                         <TableCell>
-                          {rt.is_active
-                            ? <span className="text-xs text-moss font-medium">Active</span>
-                            : <span className="text-xs italic text-ink-quiet">inactive</span>}
+                          {rt.is_active ? (
+                            <span className="text-xs text-moss font-medium">Active</span>
+                          ) : (
+                            <span className="text-xs italic text-ink-quiet">inactive</span>
+                          )}
                         </TableCell>
                         <TableCell className="text-right whitespace-nowrap">
                           <div className="inline-flex gap-1 items-center opacity-60 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                             <Button
                               variant="ghost"
                               size="icon-sm"
-                              onClick={() => { setEditing(rt); setShowForm(true); }}
+                              onClick={() => {
+                                setEditing(rt);
+                                setShowForm(true);
+                              }}
                               aria-label="Edit recurring transaction"
                             >
                               <Pencil />
@@ -178,11 +191,7 @@ export function RecurringPanel({ budgetPk, recurring, categories, paymentMethods
                                 <RotateCcw className="size-3" /> Reactivate
                               </Button>
                             )}
-                            <ConfirmButton
-                              size="xs"
-                              onConfirm={() => handleDelete(rt)}
-                              label="Delete"
-                            />
+                            <ConfirmButton size="xs" onConfirm={() => handleDelete(rt)} label="Delete" />
                           </div>
                         </TableCell>
                       </TableRow>
@@ -202,7 +211,10 @@ export function RecurringPanel({ budgetPk, recurring, categories, paymentMethods
           categories={categories}
           paymentMethods={paymentMethods}
           freqChoices={freqChoices}
-          onClose={() => { setShowForm(false); setEditing(null); }}
+          onClose={() => {
+            setShowForm(false);
+            setEditing(null);
+          }}
           onSaved={() => {
             setShowForm(false);
             setEditing(null);

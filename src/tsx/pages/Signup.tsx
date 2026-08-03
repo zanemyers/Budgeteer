@@ -14,21 +14,21 @@ interface Props {
   next: string;
 }
 
-export default function Login({ errors: initialErrors, next }: Props) {
+export default function Signup({ errors: initialErrors, next }: Props) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [errors, setErrors] = useState(initialErrors);
   const [loading, setLoading] = useState(false);
 
-  const error = errors.__all__ ?? errors.login ?? errors.password ?? null;
+  const error = errors.__all__ ?? errors.email ?? errors.password1 ?? null;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setErrors({});
     try {
-      const body = new URLSearchParams({ login: email, password, next });
-      const res = await fetch("/accounts/login/", {
+      const body = new URLSearchParams({ email, password1: password, next });
+      const res = await fetch("/accounts/signup/", {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
@@ -37,30 +37,32 @@ export default function Login({ errors: initialErrors, next }: Props) {
         },
         body: body.toString(),
       });
-      // Older allauth / non-AJAX path: fetch followed an HTTP redirect.
+      // Non-AJAX path: fetch followed an HTTP redirect.
       if (res.redirected) {
         router.visit(res.url);
         return;
       }
-      // Modern allauth returns its AJAX shape: 200 with {location, form: {errors}, html}
-      // on both success AND enumeration-protected failure. Success sets a sessionid cookie
-      // that we can't read (HttpOnly), so trust `location` and let the server bounce us
-      // back to login if auth didn't actually take.
+      // allauth AJAX shape: success is {location}. On failure, per-field messages live under
+      // form.fields.<name>.errors, and non-field ones under form.errors.
       const data = (await res.json().catch(() => null)) as {
         location?: string;
-        form?: { errors?: unknown[] };
+        form?: { errors?: string[]; fields?: Record<string, { errors?: string[] }> };
         errors?: Record<string, string>;
       } | null;
       if (res.ok && data?.location) {
-        // Full navigation so the session cookie initializes auth state cleanly.
+        // Full navigation so the new session cookie initializes auth state cleanly.
         window.location.assign(data.location);
         return;
       }
-      const formErrors =
-        Array.isArray(data?.form?.errors) && data.form.errors.length > 0
-          ? { __all__: String(data.form.errors[0]) }
-          : null;
-      setErrors(data?.errors ?? formErrors ?? { __all__: "Invalid email or password." });
+      const collected: Record<string, string> = { ...(data?.errors ?? {}) };
+      for (const [field, info] of Object.entries(data?.form?.fields ?? {})) {
+        const msg = info?.errors?.[0];
+        if (msg) collected[field] = msg;
+      }
+      if (data?.form?.errors?.length) collected.__all__ = data.form.errors[0];
+      setErrors(
+        Object.keys(collected).length ? collected : { __all__: "Could not create your account. Please try again." },
+      );
     } finally {
       setLoading(false);
     }
@@ -69,7 +71,7 @@ export default function Login({ errors: initialErrors, next }: Props) {
   return (
     <Card>
       <CardContent>
-        <h1 className="mb-6 text-2xl font-semibold">Sign in</h1>
+        <h1 className="mb-6 text-2xl font-semibold">Create account</h1>
 
         {error && (
           <Alert variant="destructive" className="mb-4">
@@ -90,28 +92,26 @@ export default function Login({ errors: initialErrors, next }: Props) {
             />
           </div>
           <div className="flex flex-col gap-2">
-            <div className="flex justify-between items-center">
-              <Label htmlFor="password">Password</Label>
-              <a href="/accounts/password/reset/" className="text-sm text-muted-foreground hover:underline">
-                Forgot password?
-              </a>
-            </div>
+            <Label htmlFor="password">Password</Label>
             <PasswordInput
               id="password"
-              autoComplete="current-password"
+              autoComplete="new-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
+            <p className="mt-1 text-xs text-muted-foreground">
+              At least 8 characters. Not a common or all-numeric password.
+            </p>
           </div>
           <Button className="w-full mt-2" disabled={loading}>
-            {loading ? "Signing in…" : "Sign in"}
+            {loading ? "Creating account…" : "Create account"}
           </Button>
         </form>
 
         <p className="mt-6 text-sm text-muted-foreground text-center">
-          New to Budgeteer?{" "}
-          <a href="/accounts/signup/" className="text-moss hover:underline">
-            Create an account
+          Already have an account?{" "}
+          <a href="/accounts/login/" className="text-moss hover:underline">
+            Sign in
           </a>
         </p>
       </CardContent>
@@ -119,4 +119,4 @@ export default function Login({ errors: initialErrors, next }: Props) {
   );
 }
 
-Login.layout = (page: React.ReactNode) => createElement(AuthLayout, null, page);
+Signup.layout = (page: React.ReactNode) => createElement(AuthLayout, null, page);

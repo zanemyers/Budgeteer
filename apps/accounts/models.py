@@ -33,6 +33,7 @@ class User(AbstractUser):
     timezone = models.CharField(max_length=63, default="America/Chicago", choices=TIMEZONE_CHOICES)
     currency = models.CharField(max_length=3, default="USD")
     avatar_thumbnail = models.ImageField(upload_to=avatar_thumbnail_path, blank=True)
+    onboarding_completed = models.BooleanField(default=False)
 
     @property
     def avatar_url(self):

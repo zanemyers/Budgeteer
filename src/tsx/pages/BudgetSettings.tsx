@@ -1,5 +1,6 @@
 import { router } from "@inertiajs/react";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { PageTourButton } from "@/components/PageTourButton";
 import { BudgetPanel, type BudgetSummary } from "@/components/settings/BudgetPanel";
 import { CategoriesPanel, type CategoryType } from "@/components/settings/CategoriesPanel";
 import { type Membership, MembersPanel } from "@/components/settings/MembersPanel";
@@ -8,6 +9,7 @@ import { type PaySchedule, PaySchedulePanel } from "@/components/settings/PaySch
 import type { RecurringFormChoice } from "@/components/settings/RecurringFormModal";
 import { RecurringPanel, type RecurringPanelItem } from "@/components/settings/RecurringPanel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { SELECT_TAB_EVENT, usePageTour } from "@/lib/onboardingTour";
 
 interface TypeChoice {
   value: string;
@@ -51,6 +53,7 @@ export default function BudgetSettings({
   pay_schedules,
   pay_schedule_freq_choices,
 }: Props) {
+  usePageTour("settings", budget_pk);
   const [tab, setTab] = useState<Tab>(readTabFromUrl());
   const [budget, setBudget] = useState(initialBudget);
   const [categories, setCategories] = useState(initialCategories);
@@ -58,13 +61,20 @@ export default function BudgetSettings({
   const [memberships, setMemberships] = useState(initialMemberships);
   const [recurring, setRecurring] = useState(initialRecurring);
 
-  function changeTab(next: string) {
+  const changeTab = useCallback((next: string) => {
     const t = (VALID_TABS as readonly string[]).includes(next) ? (next as Tab) : "budget";
     setTab(t);
     const url = new URL(window.location.href);
     url.searchParams.set("tab", t);
     window.history.replaceState({}, "", url.toString());
-  }
+  }, []);
+
+  // The product tour switches tabs by dispatching this event as it highlights each one.
+  useEffect(() => {
+    const handler = (e: Event) => changeTab((e as CustomEvent<string>).detail);
+    window.addEventListener(SELECT_TAB_EVENT, handler);
+    return () => window.removeEventListener(SELECT_TAB_EVENT, handler);
+  }, [changeTab]);
 
   return (
     <div className="max-w-4xl flex flex-col flex-1 min-h-0">
@@ -75,27 +85,46 @@ export default function BudgetSettings({
             {budget.name || "This budget"}: categories, payment methods, members.
           </p>
         </div>
-        <a
-          href={`/budgets/${budget_pk}/`}
-          className="text-sm text-muted-foreground hover:text-foreground mt-1"
-          onClick={(e) => {
-            e.preventDefault();
-            router.visit(`/budgets/${budget_pk}/`);
-          }}
-        >
-          ← Back to budget
-        </a>
+        <div className="flex items-center gap-2 mt-1">
+          <PageTourButton stage="settings" />
+          <a
+            href={`/budgets/${budget_pk}/`}
+            className="text-sm text-muted-foreground hover:text-foreground"
+            onClick={(e) => {
+              e.preventDefault();
+              router.visit(`/budgets/${budget_pk}/`);
+            }}
+          >
+            ← Back to budget
+          </a>
+        </div>
       </header>
 
       <Tabs value={tab} onValueChange={changeTab} className="gap-6 flex-1">
-        <TabsList variant="folder" className="w-full justify-start">
-          <TabsTrigger value="budget">Budget</TabsTrigger>
-          <TabsTrigger value="pay-schedule">Pay Schedule</TabsTrigger>
-          <TabsTrigger value="expense">Expense Categories</TabsTrigger>
-          <TabsTrigger value="income">Income Categories</TabsTrigger>
-          <TabsTrigger value="payment-methods">Payment Methods</TabsTrigger>
-          <TabsTrigger value="recurring">Recurring Transactions</TabsTrigger>
-          {budget.is_owner && <TabsTrigger value="members">Members</TabsTrigger>}
+        <TabsList variant="folder" className="w-full justify-start" data-tour="settings-tabs">
+          <TabsTrigger value="budget" data-tour="tab-budget">
+            Budget
+          </TabsTrigger>
+          <TabsTrigger value="pay-schedule" data-tour="tab-pay-schedule">
+            Pay Schedule
+          </TabsTrigger>
+          <TabsTrigger value="expense" data-tour="tab-expense">
+            Expense Categories
+          </TabsTrigger>
+          <TabsTrigger value="income" data-tour="tab-income">
+            Income Categories
+          </TabsTrigger>
+          <TabsTrigger value="payment-methods" data-tour="tab-payment-methods">
+            Payment Methods
+          </TabsTrigger>
+          <TabsTrigger value="recurring" data-tour="tab-recurring">
+            Recurring Transactions
+          </TabsTrigger>
+          {budget.is_owner && (
+            <TabsTrigger value="members" data-tour="tab-members">
+              Members
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="budget" className="mt-2">
@@ -108,6 +137,7 @@ export default function BudgetSettings({
             paySchedules={pay_schedules}
             freqChoices={pay_schedule_freq_choices}
             incomeCategories={categories.filter((c) => c.category_type === "income")}
+            paymentMethods={paymentMethods}
             isOwner={budget.is_owner}
           />
         </TabsContent>

@@ -1,15 +1,24 @@
 import { router } from "@inertiajs/react";
-import { useState } from "react";
 import { Check, ChevronLeft, ChevronRight, Pencil, RotateCcw } from "lucide-react";
-import GoalModal, { type GoalCategory } from "../components/GoalModal";
-import TransactionModal from "../components/TransactionModal";
-import type { BudgetOverview, BudgetOverviewCategory, Category, CurrencyOption, PaymentMethod, Transaction } from "../types";
-import { fmt, useCurrencySymbol } from "../utils/currency";
-import { formatMonth, getDefaultMonth, nextMonth, prevMonth } from "../utils/month";
-import { getCsrfToken } from "../lib/api";
+import { useState } from "react";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import GoalModal, { type GoalCategory } from "../components/GoalModal";
+import { PageTourButton } from "../components/PageTourButton";
+import TransactionModal from "../components/TransactionModal";
+import { getCsrfToken } from "../lib/api";
+import { usePageTour } from "../lib/onboardingTour";
+import type {
+  BudgetOverview,
+  BudgetOverviewCategory,
+  Category,
+  CurrencyOption,
+  PaymentMethod,
+  Transaction,
+} from "../types";
+import { fmt, useCurrencySymbol } from "../utils/currency";
+import { formatMonth, getDefaultMonth, nextMonth, prevMonth } from "../utils/month";
 
 const SECTION_LABEL_CLASS = "text-[0.6875rem] font-semibold uppercase tracking-[0.08em]";
 
@@ -40,7 +49,16 @@ function toGoalCategory(cat: BudgetOverviewCategory): GoalCategory {
   };
 }
 
-export default function Goals({ budget_pk, month, overview, categories, payment_methods, currencies, user_currency }: Props) {
+export default function Goals({
+  budget_pk,
+  month,
+  overview,
+  categories,
+  payment_methods,
+  currencies,
+  user_currency,
+}: Props) {
+  usePageTour("goals", budget_pk);
   const symbol = useCurrencySymbol();
   const [addTransactionType, setAddTransactionType] = useState<"deposit" | "expense" | null>(null);
   const [adding, setAdding] = useState(false);
@@ -60,7 +78,7 @@ export default function Goals({ budget_pk, month, overview, categories, payment_
       body: JSON.stringify(data),
     });
     if (!res.ok) {
-      const json = await res.json() as { errors?: Record<string, string[]> };
+      const json = (await res.json()) as { errors?: Record<string, string[]> };
       throw json.errors ?? json;
     }
     router.reload({ only: ["overview"] });
@@ -88,10 +106,15 @@ export default function Goals({ budget_pk, month, overview, categories, payment_
     const pct = isComplete ? 100 : target > 0 ? Math.min((saved / target) * 100, 100) : 0;
 
     const activity = parseFloat(cat.activity);
-    const dueDate = !isOngoing && cat.goal_due_date ? new Date(cat.goal_due_date + "T00:00:00") : null;
-    const dueMeta = !isOngoing && dueDate
-      ? (isComplete ? "" : `due ${dueDate.toLocaleDateString("en-US", { month: "short", year: "numeric" })} · ${cat.goal_months_remaining}mo left`)
-      : isOngoing ? "↺ ongoing" : "";
+    const dueDate = !isOngoing && cat.goal_due_date ? new Date(`${cat.goal_due_date}T00:00:00`) : null;
+    const dueMeta =
+      !isOngoing && dueDate
+        ? isComplete
+          ? ""
+          : `due ${dueDate.toLocaleDateString("en-US", { month: "short", year: "numeric" })} · ${cat.goal_months_remaining}mo left`
+        : isOngoing
+          ? "↺ ongoing"
+          : "";
 
     const showMonthly = monthly > 0 && !isComplete;
     const barColor = isComplete ? "bg-moss" : isOngoing ? "bg-ongoing" : "bg-fund";
@@ -101,7 +124,10 @@ export default function Goals({ budget_pk, month, overview, categories, payment_
         <div className="flex justify-between items-start gap-4">
           <div className="grow min-w-0">
             <div className="flex items-center gap-2 mb-1.5">
-              <a href={`/budgets/${budget_pk}/transactions/?month=${month}&category=${cat.id}`} className="no-underline hover:underline font-medium text-sm">
+              <a
+                href={`/budgets/${budget_pk}/transactions/?month=${month}&category=${cat.id}`}
+                className="no-underline hover:underline font-medium text-sm"
+              >
                 {cat.name}
               </a>
               {isComplete && <Check className="size-3.5 text-moss" aria-label="Complete" />}
@@ -114,13 +140,10 @@ export default function Goals({ budget_pk, month, overview, categories, payment_
           </div>
           <div className="text-right shrink-0 w-44">
             <div className="text-sm font-medium tabular-nums">
-              {fmt(String(saved), symbol)} <span className="text-ink-quiet font-normal">/ {fmt(String(target), symbol)}</span>
+              {fmt(String(saved), symbol)}{" "}
+              <span className="text-ink-quiet font-normal">/ {fmt(String(target), symbol)}</span>
             </div>
-            {showMonthly && (
-              <div className="text-sm text-fund tabular-nums">
-                {fmt(String(monthly), symbol)}/mo
-              </div>
-            )}
+            {showMonthly && <div className="text-sm text-fund tabular-nums">{fmt(String(monthly), symbol)}/mo</div>}
             {activity !== 0 && (
               <div className="text-ink-quiet text-[0.7rem] tabular-nums">
                 {fmt(String(activity), symbol)} spent total
@@ -129,7 +152,9 @@ export default function Goals({ budget_pk, month, overview, categories, payment_
             {dueMeta && <div className="text-ink-quiet text-[0.7rem]">{dueMeta}</div>}
           </div>
           <div className="flex items-center gap-1 shrink-0 opacity-60 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-            <Button variant="ghost" size="icon-sm" onClick={() => setEditing(cat)} aria-label="Edit goal"><Pencil /></Button>
+            <Button variant="ghost" size="icon-sm" onClick={() => setEditing(cat)} aria-label="Edit goal">
+              <Pencil />
+            </Button>
             <ConfirmButton size="xs" onConfirm={() => handleDelete(cat)} label="Delete" />
           </div>
         </div>
@@ -146,14 +171,28 @@ export default function Goals({ budget_pk, month, overview, categories, payment_
       <header className="mb-8 flex items-center justify-between gap-4 flex-wrap">
         <h1 className="text-3xl font-semibold tracking-tight">Goals</h1>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon-sm" onClick={() => navigateMonth(prevMonth(month))} aria-label="Previous month">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => navigateMonth(prevMonth(month))}
+            aria-label="Previous month"
+          >
             <ChevronLeft />
           </Button>
           <span className="text-sm text-ink-quiet tabular-nums">{formatMonth(month)}</span>
-          <Button variant="ghost" size="icon-sm" onClick={() => navigateMonth(nextMonth(month))} disabled={isCurrentMonth} aria-label="Next month">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => navigateMonth(nextMonth(month))}
+            disabled={isCurrentMonth}
+            aria-label="Next month"
+          >
             <ChevronRight />
           </Button>
-          <Button onClick={() => setAdding(true)} className="ml-2">+ Add Goal</Button>
+          <PageTourButton stage="goals" />
+          <Button data-tour="goal-add" onClick={() => setAdding(true)} className="ml-2">
+            + Add Goal
+          </Button>
         </div>
       </header>
 
@@ -164,12 +203,16 @@ export default function Goals({ budget_pk, month, overview, categories, payment_
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-          <Card className="md:col-span-8 p-0 gap-0 overflow-hidden border-rule shadow-none">
+          <Card data-tour="goal-card" className="md:col-span-8 p-0 gap-0 overflow-hidden border-rule shadow-none">
             <div className="bg-fund-soft px-4 py-2 flex justify-between items-center">
               <span className={`${SECTION_LABEL_CLASS} text-ink`}>All Goals</span>
               <div className="flex gap-2">
-                <Button variant="ghost" size="xs" onClick={() => setAddTransactionType("deposit")}>+ Deposit</Button>
-                <Button variant="ghost" size="xs" onClick={() => setAddTransactionType("expense")}>− Spend</Button>
+                <Button variant="ghost" size="xs" onClick={() => setAddTransactionType("deposit")}>
+                  + Deposit
+                </Button>
+                <Button variant="ghost" size="xs" onClick={() => setAddTransactionType("expense")}>
+                  − Spend
+                </Button>
               </div>
             </div>
             <div>{goals.map((cat) => renderGoalCard(cat))}</div>
@@ -214,7 +257,10 @@ export default function Goals({ budget_pk, month, overview, categories, payment_
         <GoalModal
           budgetPk={budget_pk}
           goal={editing ? toGoalCategory(editing) : null}
-          onClose={() => { setAdding(false); setEditing(null); }}
+          onClose={() => {
+            setAdding(false);
+            setEditing(null);
+          }}
           onSaved={() => {
             setAdding(false);
             setEditing(null);

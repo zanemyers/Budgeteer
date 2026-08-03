@@ -10,6 +10,7 @@ import AssignModal from "../components/AssignModal";
 import CleanupAssignedModal from "../components/CleanupAssignedModal";
 import TransactionModal from "../components/TransactionModal";
 import { getCsrfToken } from "../lib/api";
+import { usePageTour } from "../lib/onboardingTour";
 import type {
   BudgetOverview,
   BudgetOverviewCategory,
@@ -30,6 +31,7 @@ interface Props {
   pending_count: number;
   currencies: CurrencyOption[];
   user_currency: string;
+  start_onboarding_tour?: boolean;
 }
 
 const SECTION_LABEL_CLASS = "text-[0.6875rem] font-semibold uppercase tracking-[0.08em]";
@@ -111,6 +113,7 @@ export default function Dashboard({
   pending_count,
   currencies,
   user_currency,
+  start_onboarding_tour,
 }: Props) {
   const symbol = useCurrencySymbol();
   const [editingAssigned, setEditingAssigned] = useState<Record<number, string>>({});
@@ -120,6 +123,9 @@ export default function Dashboard({
   const [addTransactionType, setAddTransactionType] = useState<"income" | "expense" | null>(null);
   const [assigning, setAssigning] = useState(false);
   const [cleaning, setCleaning] = useState(false);
+
+  // First-run product tour: seeds the chained walkthrough (sidebar overview → each page).
+  usePageTour("dashboard", budget_pk, { firstRun: !!start_onboarding_tour });
 
   const isCurrentMonth = month === getDefaultMonth();
 
@@ -235,7 +241,12 @@ export default function Dashboard({
             {cat.name}
           </a>
           {cat.rollover && !cat.is_goal && (
-            <span className="ml-1.5 text-moss" title="Leftover rolls over to next month" aria-label="Rolls over">
+            <span
+              className="ml-1.5 text-moss"
+              title="Leftover rolls over to next month"
+              role="img"
+              aria-label="Rolls over"
+            >
               ↻
             </span>
           )}

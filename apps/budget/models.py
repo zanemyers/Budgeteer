@@ -4,7 +4,8 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.db import models, transaction as db_transaction
+from django.db import models
+from django.db import transaction as db_transaction
 from django.db.models import Q, Sum
 from django.db.models.constraints import UniqueConstraint
 
@@ -68,7 +69,8 @@ class BudgetMembership(models.Model):
 
 
 class PaySchedule(models.Model):
-    """A named income source (a job) and which budget month its paychecks fund.
+    """
+    A named income source (a job) and which budget month its paychecks fund.
 
     A budget can have several — e.g. one per job or per spouse. `frequency` and the
     anchor fields describe *how* the user is paid (for payday projection and UI).
@@ -109,6 +111,14 @@ class PaySchedule(models.Model):
         on_delete=models.SET_NULL,
         related_name="pay_schedules",
         help_text="Income category a matched paycheck should be recorded under.",
+    )
+    payment_method = models.ForeignKey(
+        "PaymentMethod",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="pay_schedules",
+        help_text="Account a paycheck from this schedule is deposited into.",
     )
     frequency = models.CharField(max_length=20, choices=FREQ_CHOICES, default=FREQ_MONTHLY)
     anchor_1 = models.CharField(
@@ -168,7 +178,8 @@ class PaySchedule(models.Model):
         return None
 
     def budget_month_for(self, received_date: datetime.date) -> datetime.date:
-        """First-of-month a paycheck received on `received_date` should fund.
+        """
+        First-of-month a paycheck received on `received_date` should fund.
 
         For a twice-a-month schedule that budgets a month ahead, only the *later*
         paycheck of the month carries the offset — the earlier (e.g. mid-month) one
@@ -218,7 +229,8 @@ class PaySchedule(models.Model):
         return sorted(dates)
 
     def generate_instances_up_to(self, through_date: datetime.date, since: datetime.date) -> list["Transaction"]:
-        """Create pending income Transactions for each payday up to `through_date`.
+        """
+        Create pending income Transactions for each payday up to `through_date`.
 
         Requires a category (an income line needs one). The amount is optional: with no
         `expected_amount` — e.g. variable part-time pay — paychecks are generated as
@@ -254,6 +266,7 @@ class PaySchedule(models.Model):
                     "created_by": creator,
                     "description": self.name,
                     "transaction_type": "income",
+                    "payment_method": self.payment_method,
                     "budget_month": self.budget_month_for(payday),
                     "currency": currency_code,
                     "exchange_rate_to_usd": exchange_rate,
@@ -271,17 +284,26 @@ class PaySchedule(models.Model):
 
         self.generated_through = paydays[-1]
         self.save(update_fields=["generated_through"])
+
+        # Backfill the deposit account onto existing unpaid paychecks generated before this
+        # schedule had one assigned. Only fills nulls, preserving any account set manually.
+        if self.payment_method_id is not None:
+            Transaction.objects.filter(pay_schedule=self, paid_date__isnull=True, payment_method__isnull=True).update(
+                payment_method_id=self.payment_method_id
+            )
+
         return created
 
 
 def _amount_close(a: Decimal, b: Decimal) -> bool:
-    """True if two amounts are within ~5% (or $1) of each other, ignoring sign."""
+    """Return True if two amounts are within ~5% (or $1) of each other, ignoring sign."""
     a, b = abs(a), abs(b)
     return abs(a - b) <= max(b * Decimal("0.05"), Decimal("1"))
 
 
 def match_pay_schedule(budget, *, amount: "Decimal | None" = None, description: str = "") -> "PaySchedule | None":
-    """Pick the pay schedule a paycheck belongs to, by amount and/or description.
+    """
+    Pick the pay schedule a paycheck belongs to, by amount and/or description.
 
     A schedule with no match criteria acts as a weak default; one with criteria only
     wins when they match. Returns None when nothing matches (caller falls back to the
@@ -406,7 +428,7 @@ class Category(models.Model):
 
     @classmethod
     def get_or_create_transfers(cls, budget) -> "Category":
-        """The per-budget system category used as the placeholder line for transfer transactions."""
+        """Return the per-budget system category used as the placeholder line for transfers."""
         cat, _ = cls.objects.get_or_create(
             budget=budget,
             is_system=True,
@@ -520,7 +542,8 @@ class RecurringTransaction(models.Model):
         return datetime.date(year, month, day)
 
     def generate_instances_up_to(self, through_date: datetime.date) -> list["Transaction"]:
-        """Generate Transaction instances (with TransactionLines) up to through_date.
+        """
+        Generate Transaction instances (with TransactionLines) up to through_date.
 
         Returns new instances created. Existing instances without lines have a line backfilled
         so every Transaction in the system has a canonical line structure.
@@ -533,9 +556,8 @@ class RecurringTransaction(models.Model):
         due_dates: list[datetime.date] = []
         candidate = self.start_date
         while candidate <= through_date:
-            if candidate > start:
-                if self.end_date is None or candidate <= self.end_date:
-                    due_dates.append(candidate)
+            if candidate > start and (self.end_date is None or candidate <= self.end_date):
+                due_dates.append(candidate)
             candidate = self._advance(candidate)
 
         # RecurringTransaction.amount is stored in the creator's currency. Resolve once.
@@ -580,6 +602,14 @@ class RecurringTransaction(models.Model):
         if due_dates:
             self.generated_through = due_dates[-1]
             self.save(update_fields=["generated_through"])
+
+        # Backfill the payment method onto existing unpaid instances that were generated
+        # before this schedule had one assigned. Only fills nulls, so a payment method set
+        # manually on a specific instance is preserved.
+        if self.payment_method_id is not None:
+            Transaction.objects.filter(recurring=self, paid_date__isnull=True, payment_method__isnull=True).update(
+                payment_method_id=self.payment_method_id
+            )
 
         return created
 

@@ -12,10 +12,11 @@ from apps.accounts.views import (
     PasswordResetFromKeyView,
     PasswordResetView,
     SignInView,
+    SignUpView,
 )
 from apps.banking.views import BankAccountUpdateView, BankingView, banking_sync
 from apps.base.views import http_404, http_500, refresh_exchange_rates
-from apps.budget.views import BudgetHistoryView, BudgetHomeView
+from apps.budget.views import BudgetHistoryView, OnboardingView, SiteIndexView
 from apps.investments.views import InvestmentsView
 
 # Includes
@@ -26,7 +27,8 @@ urlpatterns: list[URLResolver | URLPattern] = [
 
 # Project Urls
 urlpatterns += [
-    path("", BudgetHomeView.as_view(), name="site_index"),
+    path("", SiteIndexView.as_view(), name="site_index"),
+    path("onboarding/", OnboardingView.as_view(), name="onboarding"),
     path("-/", include("django_alive.urls")),
     path("500/", http_500),
     path("404/", http_404),
@@ -36,10 +38,19 @@ urlpatterns += [
     path("accounts/name/", AccountSettingsView.as_view(), name="account_change_name"),
     # Override allauth URLs with Inertia versions (must come before allauth.urls)
     path("accounts/login/", SignInView.as_view(), name="account_login"),
+    path("accounts/signup/", SignUpView.as_view(), name="account_signup"),
     path("accounts/password/reset/", PasswordResetView.as_view(), name="account_reset_password"),
     path("accounts/password/reset/done/", PasswordResetDoneView.as_view(), name="account_reset_password_done"),
-    path("accounts/password/reset/key/<uidb36>-<key>/", PasswordResetFromKeyView.as_view(), name="account_reset_password_from_key"),
-    path("accounts/password/reset/key/done/", PasswordResetFromKeyDoneView.as_view(), name="account_reset_password_from_key_done"),
+    path(
+        "accounts/password/reset/key/<uidb36>-<key>/",
+        PasswordResetFromKeyView.as_view(),
+        name="account_reset_password_from_key",
+    ),
+    path(
+        "accounts/password/reset/key/done/",
+        PasswordResetFromKeyDoneView.as_view(),
+        name="account_reset_password_from_key_done",
+    ),
     path("accounts/confirm-email/<key>/", ConfirmEmailView.as_view(), name="account_confirm_email"),
     path("accounts/", include("allauth.urls")),
     path("banking/", BankingView.as_view(), name="banking"),

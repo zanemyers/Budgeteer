@@ -265,6 +265,7 @@ SITE_NAME = "Budgeteer"
 if DEBUG is True:
     INSTALLED_APPS += ["debug_toolbar"]
     MIDDLEWARE += ["debug_toolbar.middleware.DebugToolbarMiddleware"]
+
     # Under Docker (esp. Docker Desktop on macOS) the browser's request reaches
     # the container with a SNAT'd source IP that isn't reliably in INTERNAL_IPS,
     # so the default show-callback hides the toolbar. Drop the IP check but keep
@@ -334,7 +335,10 @@ ACCOUNT_EMAIL_VERIFICATION = "optional"
 
 # CUSTOM Django Base Site ALLAUTH settings used in the custom adapter (apps.accounts.auth_adapter)
 ACCOUNT_ADAPTER = "apps.accounts.auth_adapter.AccountAdapter"
-ACCOUNT_SIGNUP_OPEN = False
+# Public signup is open so visitors from the landing page can create an account. On a self-hosted
+# instance reachable from the internet, consider setting ACCOUNT_EMAIL_VERIFICATION = "mandatory"
+# above to keep anonymous account creation in check.
+ACCOUNT_SIGNUP_OPEN = True
 
 if INSTANCE != "prod":
     # See https://github.com/migonzalvar/dj-email-url for more examples on how to set the EMAIL_URL

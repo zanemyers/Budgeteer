@@ -12,6 +12,8 @@ export interface PaySchedule {
   name: string;
   category: number | null;
   category_name: string | null;
+  payment_method: number | null;
+  payment_method_name: string | null;
   frequency: string;
   anchor_1: string;
   anchor_2: string;
@@ -29,6 +31,13 @@ export interface PayScheduleChoice {
 export interface PayScheduleCategory {
   id: number;
   name: string;
+}
+
+export interface PaySchedulePaymentMethod {
+  id: number;
+  name: string;
+  last_four: string;
+  is_active: boolean;
 }
 
 const ANCHOR_LABELS: Record<string, string> = {
@@ -68,15 +77,25 @@ interface Props {
   schedule: PaySchedule | null;
   freqChoices: PayScheduleChoice[];
   incomeCategories: PayScheduleCategory[];
+  paymentMethods: PaySchedulePaymentMethod[];
   onClose: () => void;
   onSaved: () => void;
 }
 
-export function PayScheduleFormModal({ budgetPk, schedule, freqChoices, incomeCategories, onClose, onSaved }: Props) {
+export function PayScheduleFormModal({
+  budgetPk,
+  schedule,
+  freqChoices,
+  incomeCategories,
+  paymentMethods,
+  onClose,
+  onSaved,
+}: Props) {
   const isEdit = schedule !== null;
 
   const [name, setName] = useState(schedule?.name ?? "");
   const [category, setCategory] = useState(schedule?.category ? String(schedule.category) : "");
+  const [paymentMethod, setPaymentMethod] = useState(schedule?.payment_method ? String(schedule.payment_method) : "");
   const [frequency, setFrequency] = useState(schedule?.frequency ?? freqChoices[0]?.value ?? "monthly");
   const [anchor1, setAnchor1] = useState(schedule?.anchor_1 ?? "");
   const [anchor2, setAnchor2] = useState(schedule?.anchor_2 ?? "");
@@ -103,6 +122,7 @@ export function PayScheduleFormModal({ budgetPk, schedule, freqChoices, incomeCa
     const payload: Record<string, string | number | null> = {
       name,
       category: category ? Number(category) : null,
+      payment_method: paymentMethod ? Number(paymentMethod) : null,
       frequency,
       allocation_offset_months: Number(offset),
       anchor_1: usesDays ? anchor1 : "",
@@ -183,6 +203,29 @@ export function PayScheduleFormModal({ budgetPk, schedule, freqChoices, incomeCa
             </Select>
             <p className="text-xs text-muted-foreground">
               Paychecks matched to this schedule are recorded here (e.g. when created from a bank deposit).
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="ps-payment-method">Deposit account</Label>
+            <Select value={paymentMethod || "none"} onValueChange={(v) => setPaymentMethod(v === "none" ? "" : v)}>
+              <SelectTrigger id="ps-payment-method" className="w-full">
+                <SelectValue placeholder="None" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">— None —</SelectItem>
+                {paymentMethods
+                  .filter((m) => m.is_active)
+                  .map((m) => (
+                    <SelectItem key={m.id} value={String(m.id)}>
+                      {m.name}
+                      {m.last_four ? ` ···${m.last_four}` : ""}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              The account paychecks land in. Pre-fills the payment method on generated paychecks.
             </p>
           </div>
 

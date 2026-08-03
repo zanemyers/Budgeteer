@@ -30,8 +30,10 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import BankTransactionConfirmModal from "../components/BankTransactionConfirmModal";
+import { PageTourButton } from "../components/PageTourButton";
 import TransactionModal from "../components/TransactionModal";
 import { jsonFetch } from "../lib/api";
+import { usePageTour } from "../lib/onboardingTour";
 import type {
   BankTransaction,
   Category,
@@ -101,6 +103,7 @@ export default function Transactions({
   currencies,
   user_currency,
 }: Props) {
+  usePageTour("transactions", budget_pk);
   const symbol = useCurrencySymbol();
   const userRate = useCurrencyRate();
   const userCurrencyCode = useCurrencyCode();
@@ -375,7 +378,7 @@ export default function Transactions({
                 </button>
               )}
               {!opts.suppressStateMarkers && txn.recurring !== null && (
-                <span className="text-xs italic text-ink-quiet" aria-label="Recurring">
+                <span className="text-xs italic text-ink-quiet" role="img" aria-label="Recurring">
                   recurring
                 </span>
               )}
@@ -383,6 +386,7 @@ export default function Transactions({
                 <span
                   className="inline-flex items-center gap-1 text-xs text-ink-quiet"
                   title="Linked to a bank transaction"
+                  role="img"
                   aria-label="Linked to bank"
                 >
                   <Landmark className="size-3" />
@@ -450,7 +454,7 @@ export default function Transactions({
           </TableCell>
 
           <TableCell className={`text-right font-medium tabular-nums ${amountClass}`}>
-            <span aria-label={isIncome ? "Income" : isTransfer ? "Transfer" : "Expense"}>
+            <span role="img" aria-label={isIncome ? "Income" : isTransfer ? "Transfer" : "Expense"}>
               {isExpense ? "−" : isIncome ? "+" : ""}
               {fmtConverted(txn.total_amount, txn.exchange_rate_to_usd, userRate, symbol)}
             </span>
@@ -574,7 +578,7 @@ export default function Transactions({
     <div className="max-w-[1200px]">
       {/* Page header */}
       <header className="mb-6 flex justify-between items-center flex-wrap gap-4">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3" data-tour="month-nav">
           <Button
             variant="ghost"
             size="icon-sm"
@@ -595,7 +599,12 @@ export default function Transactions({
             <ChevronRight />
           </Button>
         </div>
-        <Button onClick={() => setAddType("expense")}>+ Add Transaction</Button>
+        <div className="flex items-center gap-2">
+          <PageTourButton stage="transactions" />
+          <Button data-tour="txn-add" onClick={() => setAddType("expense")}>
+            + Add Transaction
+          </Button>
+        </div>
       </header>
 
       {/* Filter row */}
@@ -684,7 +693,7 @@ export default function Transactions({
           const defaultTab = pendingCount > 0 ? "pending" : "logged";
           return (
             <Tabs defaultValue={defaultTab} className="gap-4">
-              <TabsList>
+              <TabsList data-tour="txn-tabs">
                 <TabsTrigger value="pending" disabled={pendingCount === 0}>
                   Pending {pendingCount > 0 && `(${pendingCount})`}
                 </TabsTrigger>
@@ -725,6 +734,7 @@ export default function Transactions({
                                     <span
                                       className="inline-flex items-center gap-1 text-xs text-ink-quiet"
                                       title={`From ${sourceLabel}`}
+                                      role="img"
                                       aria-label="Pending from bank"
                                     >
                                       <Landmark className="size-3" />

@@ -16,6 +16,7 @@ from allauth.account.views import (
 )
 from allauth.account.views import (
     LoginView,
+    SignupView,
 )
 from allauth.account.views import (
     PasswordResetDoneView as AllAuthPasswordResetDoneView,
@@ -44,7 +45,8 @@ from apps.base.models import Currency
 
 
 class InertiaAllauthMixin:
-    """Intercept allauth's render_to_response to return Inertia or JSON.
+    """
+    Intercept allauth's render_to_response to return Inertia or JSON.
 
     Each concrete subclass is wrapped with @ensure_csrf_cookie so every GET to
     an auth page seeds the csrftoken cookie — the SPA reads it via JS to set
@@ -81,6 +83,14 @@ class InertiaAllauthMixin:
 @method_decorator(ensure_csrf_cookie, name="dispatch")
 class SignInView(InertiaAllauthMixin, LoginView):
     inertia_component = "Login"
+
+    def get_inertia_props(self, context: dict) -> dict:
+        return {"next": self.request.GET.get("next") or self.request.POST.get("next") or ""}  # type: ignore[attr-defined]
+
+
+@method_decorator(ensure_csrf_cookie, name="dispatch")
+class SignUpView(InertiaAllauthMixin, SignupView):
+    inertia_component = "Signup"
 
     def get_inertia_props(self, context: dict) -> dict:
         return {"next": self.request.GET.get("next") or self.request.POST.get("next") or ""}  # type: ignore[attr-defined]
@@ -152,19 +162,22 @@ class AccountSettingsView(LoginRequiredMixin, View):
     def get(self, request):
         user = request.user
 
-        return inertia_render(request, "AccountSettings", {
-            "first_name": user.first_name,
-            "last_name": user.last_name,
-            "email_addresses": list(EmailAddress.objects.filter(user=user).values()),
-            "timezone": user.timezone,
-            "avatar_url": user.avatar_url,
-            "currency": user.currency,
-            "currencies": list(Currency.objects.values().order_by("code")),
-            "simplefin_connections": [
-                _serialize_simplefin_connection(c)
-                for c in SimpleFINConnection.objects.filter(user=user)
-            ],
-        })
+        return inertia_render(
+            request,
+            "AccountSettings",
+            {
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "email_addresses": list(EmailAddress.objects.filter(user=user).values()),
+                "timezone": user.timezone,
+                "avatar_url": user.avatar_url,
+                "currency": user.currency,
+                "currencies": list(Currency.objects.values().order_by("code")),
+                "simplefin_connections": [
+                    _serialize_simplefin_connection(c) for c in SimpleFINConnection.objects.filter(user=user)
+                ],
+            },
+        )
 
     def patch(self, request):
         data = parse_json_body(request)
@@ -260,11 +273,14 @@ class AccountSettingsView(LoginRequiredMixin, View):
             return JsonResponse(_serialize_simplefin_connection(conn), status=201)
 
         if action == "change_password":
-            form = ChangePasswordForm(user=user, data={
-                "oldpassword": data.get("old_password", ""),
-                "password1": data.get("new_password", ""),
-                "password2": data.get("confirm_password", ""),
-            })
+            form = ChangePasswordForm(
+                user=user,
+                data={
+                    "oldpassword": data.get("old_password", ""),
+                    "password1": data.get("new_password", ""),
+                    "password2": data.get("confirm_password", ""),
+                },
+            )
             if not form.is_valid():
                 return JsonResponse({"error": next(iter(form.errors.values()))[0]}, status=400)
             form.save()
