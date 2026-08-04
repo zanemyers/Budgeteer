@@ -108,6 +108,33 @@ function CurrencyEditCell({
   );
 }
 
+/**
+ * One figure in the month's summary strip.
+ *
+ * `accent` marks the box that carries an action rather than just a number, so the four don't
+ * read as an identical tiled row — DESIGN.md calls that out as the default-finance-dashboard
+ * reflex and asks for size and emphasis to vary deliberately.
+ */
+function SummaryBox({
+  label,
+  accent,
+  children,
+}: {
+  label: string;
+  accent?: "moss" | "alarm";
+  children: React.ReactNode;
+}) {
+  const band = accent === "moss" ? "bg-moss-soft" : accent === "alarm" ? "bg-expense-soft" : "";
+  return (
+    <Card className="p-0 gap-0 overflow-hidden">
+      <div className={`px-4 py-2 ${band}`}>
+        <span className={`${SECTION_LABEL_CLASS} ${accent ? "text-ink" : "text-ink-quiet"}`}>{label}</span>
+      </div>
+      <div className="px-4 py-3">{children}</div>
+    </Card>
+  );
+}
+
 export default function Dashboard({
   budget_pk,
   month,
@@ -335,10 +362,6 @@ export default function Dashboard({
   // SF spending is shown on its own line and excluded from Kept, since it draws
   // from previously-saved funds, not this month's budget.
   const totalSpent = expense.reduce((sum, c) => sum + parseFloat(c.activity), 0);
-  const sfSaved = parseFloat(overview.saved_to_goals_total);
-  const incomeTotal = parseFloat(overview.income_total);
-  const netAmount = incomeTotal - totalSpent - sfSaved;
-  const netPositive = netAmount >= 0;
   const rta = parseFloat(overview.ready_to_assign);
 
   return (
@@ -366,42 +389,65 @@ export default function Dashboard({
         </Button>
       </header>
 
-      {/* Ready to Assign — this month's income minus what's assigned and saved to goals. */}
-      {(incomeTotal > 0 || parseFloat(overview.expense_assigned) > 0) && Math.abs(rta) >= 0.005 && (
-        <Alert
-          variant={rta >= 0 ? "success" : "destructive"}
-          className={isCurrentMonth && pending_count > 0 ? "mb-4" : "mb-8"}
-        >
-          <AlertDescription>
-            <div className="flex justify-between items-center w-full gap-4 flex-wrap">
-              <div>
-                <strong className="font-semibold">Ready to Assign</strong>
-                <div className="text-sm text-muted-foreground">
-                  Income {fmt(overview.income_total, symbol)} &minus; Assigned {fmt(overview.expense_assigned, symbol)}
-                  {parseFloat(overview.saved_to_goals_total) > 0 && (
-                    <> &minus; Saved {fmt(overview.saved_to_goals_total, symbol)}</>
-                  )}
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-2xl font-semibold tracking-tight tabular-nums">
-                  {fmt(overview.ready_to_assign, symbol)}
-                </span>
-                {rta > 0 && (
-                  <Button size="sm" onClick={() => setAssigning(true)}>
-                    Assign
-                  </Button>
-                )}
-                {rta < 0 && (
-                  <Button size="sm" onClick={() => setCleaning(true)}>
-                    Reduce
-                  </Button>
-                )}
-              </div>
+      {/* This month at a glance. Previously a card in the income column — which meant a budget
+          with no income categories rendered no summary at all — plus a separate Ready to Assign
+          alert saying the same thing twice. */}
+      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <SummaryBox label="Total income">
+          <span className="text-2xl font-semibold tracking-tight tabular-nums text-income">
+            {fmt(overview.income_total, symbol)}
+          </span>
+        </SummaryBox>
+
+        <SummaryBox label="Total expenses">
+          <span className="text-2xl font-semibold tracking-tight tabular-nums text-expense">
+            {fmt(totalSpent, symbol)}
+          </span>
+        </SummaryBox>
+
+        <SummaryBox label="Goals">
+          <dl className="flex flex-col gap-1">
+            <div className="flex items-baseline justify-between gap-2">
+              <dt className="text-xs text-ink-quiet">Saved to</dt>
+              <dd className="tabular-nums text-fund">{fmt(overview.saved_to_goals_total, symbol)}</dd>
             </div>
-          </AlertDescription>
-        </Alert>
-      )}
+            <div className="flex items-baseline justify-between gap-2">
+              <dt
+                className="text-xs text-ink-quiet"
+                title="Drawn from previously-saved balances, not this month's budget"
+              >
+                Spent from
+              </dt>
+              <dd className="tabular-nums text-fund">{fmt(sfMonthlySpending, symbol)}</dd>
+            </div>
+          </dl>
+        </SummaryBox>
+
+        <SummaryBox label="Unused / assignable" accent={rta < -0.005 ? "alarm" : "moss"}>
+          <div className="flex items-center justify-between gap-3">
+            <span
+              className={`text-2xl font-semibold tracking-tight tabular-nums ${
+                rta < -0.005 ? "text-expense" : "text-moss"
+              }`}
+            >
+              {fmt(overview.ready_to_assign, symbol)}
+            </span>
+            {rta > 0.005 && (
+              <Button size="sm" onClick={() => setAssigning(true)}>
+                Assign
+              </Button>
+            )}
+            {rta < -0.005 && (
+              <Button size="sm" variant="destructive" onClick={() => setCleaning(true)}>
+                Reduce
+              </Button>
+            )}
+          </div>
+          <p className="mt-1 text-xs text-ink-quiet">
+            Income &minus; assigned{parseFloat(overview.saved_to_goals_total) > 0 ? " − saved to goals" : ""}
+          </p>
+        </SummaryBox>
+      </div>
 
       {/* Pending review */}
       {isCurrentMonth && pending_count > 0 && (
@@ -489,48 +535,6 @@ export default function Dashboard({
                     })()}
                   </TableBody>
                 </Table>
-              </Card>
-
-              {/* This month summary — single coherent card, plain header */}
-              <Card>
-                <div className="px-5 py-4 flex flex-col gap-2.5">
-                  <span className={`${SECTION_LABEL_CLASS} text-ink-quiet`}>This month</span>
-                  <dl className="flex flex-col gap-1.5">
-                    <div className="flex justify-between items-baseline">
-                      <dt className="text-sm text-ink-quiet">Total Income</dt>
-                      <dd className="text-income tabular-nums">{fmt(overview.income_total, symbol)}</dd>
-                    </div>
-                    <div className="flex justify-between items-baseline">
-                      <dt className="text-sm text-ink-quiet">Spent</dt>
-                      <dd className="text-expense tabular-nums">{fmt(totalSpent, symbol)}</dd>
-                    </div>
-                    <div className="flex justify-between items-baseline">
-                      <dt className="text-sm text-ink-quiet">Saved to goals</dt>
-                      <dd className="text-fund tabular-nums">{fmt(sfSaved, symbol)}</dd>
-                    </div>
-                    <hr className="border-rule my-1.5" />
-                    {sfMonthlySpending > 0 && (
-                      <div className="flex justify-between items-baseline">
-                        <dt
-                          className="text-sm text-ink-quiet"
-                          title="Drawn from previously-saved goal balances, not this month's budget"
-                        >
-                          Paid from goals
-                        </dt>
-                        <dd className="text-fund tabular-nums">{fmt(sfMonthlySpending, symbol)}</dd>
-                      </div>
-                    )}
-                    <div className="flex justify-between items-baseline">
-                      <dt className="text-sm font-medium">Kept</dt>
-                      <dd
-                        className={`text-xl font-semibold tracking-tight tabular-nums ${netPositive ? "text-moss" : "text-expense"}`}
-                      >
-                        {netPositive ? "" : "−"}
-                        {fmt(Math.abs(netAmount), symbol)}
-                      </dd>
-                    </div>
-                  </dl>
-                </div>
               </Card>
             </div>
           )}
