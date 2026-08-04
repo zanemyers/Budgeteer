@@ -31,7 +31,7 @@ interface Props {
   pay_schedule_freq_choices: { value: string; label: string }[];
 }
 
-const VALID_TABS = ["budget", "categories", "schedules", "payment-methods"] as const;
+const VALID_TABS = ["budget", "categories", "pay-schedule", "recurring", "payment-methods"] as const;
 type Tab = (typeof VALID_TABS)[number];
 
 /**
@@ -41,8 +41,6 @@ type Tab = (typeof VALID_TABS)[number];
 const LEGACY_TABS: Record<string, Tab> = {
   expense: "categories",
   income: "categories",
-  "pay-schedule": "schedules",
-  recurring: "schedules",
   members: "budget",
 };
 
@@ -123,8 +121,11 @@ export default function BudgetSettings({
           <TabsTrigger value="categories" data-tour="tab-categories">
             Categories
           </TabsTrigger>
-          <TabsTrigger value="schedules" data-tour="tab-schedules">
-            Schedules
+          <TabsTrigger value="pay-schedule" data-tour="tab-pay-schedule">
+            Pay Schedule
+          </TabsTrigger>
+          <TabsTrigger value="recurring" data-tour="tab-recurring">
+            Recurring Transactions
           </TabsTrigger>
           <TabsTrigger value="payment-methods" data-tour="tab-payment-methods">
             Payment Methods
@@ -144,46 +145,44 @@ export default function BudgetSettings({
           </BudgetPanel>
         </TabsContent>
 
-        {/* Expense first: it is the longer list and the one reached for most. */}
+        {/* Income first: money arrives before it is assigned anywhere. */}
         <TabsContent value="categories" className="mt-2">
           <div className="flex flex-col gap-10">
-            <CategoriesPanel
-              budgetPk={budget_pk}
-              type="expense"
-              categories={categories}
-              onCategoriesChange={setCategories}
-            />
             <CategoriesPanel
               budgetPk={budget_pk}
               type="income"
               categories={categories}
               onCategoriesChange={setCategories}
             />
+            <CategoriesPanel
+              budgetPk={budget_pk}
+              type="expense"
+              categories={categories}
+              onCategoriesChange={setCategories}
+            />
           </div>
         </TabsContent>
 
-        {/* Pay schedules and recurring transactions are the same mechanism — both watermarked by
-            generated_through and materialized into Transactions by the same nightly job. Money in
-            is listed before money out. */}
-        <TabsContent value="schedules" className="mt-2">
-          <div className="flex flex-col gap-10">
-            <PaySchedulePanel
-              budgetPk={budget_pk}
-              paySchedules={pay_schedules}
-              freqChoices={pay_schedule_freq_choices}
-              incomeCategories={categories.filter((c) => c.category_type === "income")}
-              paymentMethods={paymentMethods}
-              isOwner={budget.is_owner}
-            />
-            <RecurringPanel
-              budgetPk={budget_pk}
-              recurring={recurring}
-              categories={categories}
-              paymentMethods={paymentMethods}
-              freqChoices={freq_choices}
-              onChange={setRecurring}
-            />
-          </div>
+        <TabsContent value="pay-schedule" className="mt-2">
+          <PaySchedulePanel
+            budgetPk={budget_pk}
+            paySchedules={pay_schedules}
+            freqChoices={pay_schedule_freq_choices}
+            incomeCategories={categories.filter((c) => c.category_type === "income")}
+            paymentMethods={paymentMethods}
+            isOwner={budget.is_owner}
+          />
+        </TabsContent>
+
+        <TabsContent value="recurring" className="mt-2">
+          <RecurringPanel
+            budgetPk={budget_pk}
+            recurring={recurring}
+            categories={categories}
+            paymentMethods={paymentMethods}
+            freqChoices={freq_choices}
+            onChange={setRecurring}
+          />
         </TabsContent>
 
         <TabsContent value="payment-methods" className="mt-2">

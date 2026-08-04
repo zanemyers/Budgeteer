@@ -103,12 +103,17 @@ const TOURS: Record<TourStage, DriveStep[]> = {
     tabStep(
       "categories",
       "Categories",
-      "Your spending envelopes and the places income is recorded. Group them and set a monthly target for each.",
+      "Where income is recorded, and the spending envelopes it gets assigned to. Group them and set a monthly target for each.",
     ),
     tabStep(
-      "schedules",
-      "Schedules",
-      "How you are paid, so income lands in the right month, plus the bills and subscriptions that repeat. Budgeteer puts both on the calendar for you.",
+      "pay-schedule",
+      "Pay schedule",
+      "Describe how you are paid so income lands in the right month and matches automatically.",
+    ),
+    tabStep(
+      "recurring",
+      "Recurring transactions",
+      "Bills and subscriptions that repeat. Budgeteer schedules them for you.",
     ),
     tabStep("payment-methods", "Payment methods", "The accounts and cards you spend from."),
   ],

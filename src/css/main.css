@@ -9,6 +9,17 @@
    hiding controls on devices that can't hover. */
 @custom-variant touch (@media (pointer: coarse));
 
+/* A strip that can scroll sideways on a narrow viewport without drawing a scrollbar. Used by
+   the tab lists: the bar sits inside a fixed-height strip, and with macOS set to "Show scroll
+   bars: Always" it is painted even when nothing overflows. Swipe and trackpad scrolling still
+   work. */
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 /* ── Design tokens (OKLCH paper / moss palette) ──────────────────────── */
 :root {
   /* Paper neutrals — warm off-white tinted toward moss */
