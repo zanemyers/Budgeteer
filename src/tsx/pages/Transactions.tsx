@@ -406,6 +406,16 @@ export default function Transactions({
                 </button>
               )}
             </div>
+            {/* Stands in for the Category and Method columns, which are hidden below md. */}
+            <div className="md:hidden mt-1 text-xs text-muted-foreground flex items-center gap-1.5 flex-wrap">
+              <span>{isSplit ? "Split" : (primaryCategory?.category_name ?? "—")}</span>
+              {txn.payment_method_name && (
+                <>
+                  <span aria-hidden>·</span>
+                  <span>{txn.payment_method_name}</span>
+                </>
+              )}
+            </div>
           </TableCell>
 
           {opts.includeDueColumn && (
@@ -448,7 +458,7 @@ export default function Transactions({
             )}
           </TableCell>
 
-          <TableCell className="text-sm text-muted-foreground">
+          <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
             {isSplit ? <span className="italic">Split</span> : primaryCategory ? primaryCategory.category_name : "—"}
           </TableCell>
 
@@ -469,7 +479,7 @@ export default function Transactions({
             )}
           </TableCell>
 
-          <TableCell>
+          <TableCell className="hidden md:table-cell">
             {isEditingPM ? (
               <Select
                 defaultValue={txn.payment_method ? String(txn.payment_method) : "none"}
@@ -503,7 +513,7 @@ export default function Transactions({
           </TableCell>
 
           <TableCell className="text-right whitespace-nowrap">
-            <div className="inline-flex items-center gap-1 opacity-60 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+            <div className="inline-flex items-center gap-1 opacity-60 group-hover:opacity-100 touch:opacity-100 focus-within:opacity-100 transition-opacity">
               <Button
                 variant="ghost"
                 size="icon-sm"
@@ -719,9 +729,9 @@ export default function Transactions({
                         <TableRow>
                           <TableHead>Description</TableHead>
                           <TableHead>Paid</TableHead>
-                          <TableHead>Category</TableHead>
+                          <TableHead className="hidden md:table-cell">Category</TableHead>
                           <TableHead className="text-right">Amount</TableHead>
-                          <TableHead>Method</TableHead>
+                          <TableHead className="hidden md:table-cell">Method</TableHead>
                           <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -753,17 +763,19 @@ export default function Transactions({
                                 </div>
                               </TableCell>
                               <TableCell className="tabular-nums">{fmtDate(bt.posted_date)}</TableCell>
-                              <TableCell className="text-sm text-muted-foreground italic">Unassigned</TableCell>
+                              <TableCell className="hidden md:table-cell text-sm text-muted-foreground italic">
+                                Unassigned
+                              </TableCell>
                               <TableCell
                                 className={`text-right font-medium tabular-nums ${negative ? "text-expense" : "text-income"}`}
                               >
                                 {fmtSigned(amt, symbol)}
                               </TableCell>
-                              <TableCell>
+                              <TableCell className="hidden md:table-cell">
                                 <span className="text-muted-foreground italic">—</span>
                               </TableCell>
                               <TableCell className="text-right whitespace-nowrap">
-                                <div className="inline-flex items-center gap-1 opacity-60 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                                <div className="inline-flex items-center gap-1 opacity-60 group-hover:opacity-100 touch:opacity-100 focus-within:opacity-100 transition-opacity">
                                   <Button
                                     variant="ghost"
                                     size="icon-sm"
@@ -802,7 +814,7 @@ export default function Transactions({
                         <TableRow>
                           <TableHead>Description</TableHead>
                           <TableHead>Paid</TableHead>
-                          <TableHead>Category</TableHead>
+                          <TableHead className="hidden md:table-cell">Category</TableHead>
                           <TableHead>Reason</TableHead>
                           <TableHead className="text-right">Amount</TableHead>
                           <TableHead className="text-right">Actions</TableHead>
@@ -836,7 +848,7 @@ export default function Transactions({
                                 </div>
                               </TableCell>
                               <TableCell className="tabular-nums">{fmtDate(bt.posted_date)}</TableCell>
-                              <TableCell className="text-sm italic">Ignored</TableCell>
+                              <TableCell className="hidden md:table-cell text-sm italic">Ignored</TableCell>
                               <TableCell className="max-w-[220px]">
                                 {bt.id in editReason ? (
                                   <Input
@@ -884,7 +896,7 @@ export default function Transactions({
                                 {fmtSigned(amt, symbol)}
                               </TableCell>
                               <TableCell className="text-right whitespace-nowrap">
-                                <div className="inline-flex items-center gap-1 opacity-60 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                                <div className="inline-flex items-center gap-1 opacity-60 group-hover:opacity-100 touch:opacity-100 focus-within:opacity-100 transition-opacity">
                                   <Button
                                     variant="ghost"
                                     size="icon-sm"

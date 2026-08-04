@@ -287,7 +287,7 @@ export default function BudgetList({ budgets: initial }: Props) {
                 </div>
 
                 {budget.is_owner && (
-                  <div className="flex items-center gap-2 shrink-0 opacity-60 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                  <div className="flex items-center gap-2 shrink-0 opacity-60 group-hover:opacity-100 touch:opacity-100 focus-within:opacity-100 transition-opacity">
                     {!budget.is_default && (
                       <Button
                         variant="ghost"

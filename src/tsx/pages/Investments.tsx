@@ -174,32 +174,32 @@ export default function Investments({ accounts, portfolio }: Props) {
                         <TableHeader>
                           <TableRow>
                             <TableHead>Symbol</TableHead>
-                            <TableHead>Description</TableHead>
+                            <TableHead className="hidden lg:table-cell">Description</TableHead>
                             <TableHead className="text-right">Shares</TableHead>
-                            <TableHead className="text-right">Price</TableHead>
-                            <TableHead className="text-right">Cost basis</TableHead>
+                            <TableHead className="text-right hidden md:table-cell">Price</TableHead>
+                            <TableHead className="text-right hidden lg:table-cell">Cost basis</TableHead>
                             <TableHead className="text-right">Market value</TableHead>
                             <TableHead className="text-right">Gain</TableHead>
-                            <TableHead className="text-right">Return</TableHead>
-                            <TableHead className="text-right">Weight</TableHead>
+                            <TableHead className="text-right hidden md:table-cell">Return</TableHead>
+                            <TableHead className="text-right hidden lg:table-cell">Weight</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {acct.holdings.map((h) => (
                             <TableRow key={h.id}>
                               <TableCell className="font-medium tabular-nums">{h.symbol || "—"}</TableCell>
-                              <TableCell className="text-sm text-ink-quiet">{h.description || "—"}</TableCell>
+                              <TableCell className="hidden lg:table-cell text-sm text-ink-quiet">{h.description || "—"}</TableCell>
                               <TableCell className="text-right tabular-nums">{fmtQuantity(h.shares)}</TableCell>
-                              <TableCell className="text-right tabular-nums">{fmt(h.purchase_price, symbol)}</TableCell>
-                              <TableCell className="text-right tabular-nums">{fmt(h.cost_basis, symbol)}</TableCell>
+                              <TableCell className="text-right tabular-nums hidden md:table-cell">{fmt(h.purchase_price, symbol)}</TableCell>
+                              <TableCell className="text-right tabular-nums hidden lg:table-cell">{fmt(h.cost_basis, symbol)}</TableCell>
                               <TableCell className="text-right tabular-nums">{fmt(h.market_value, symbol)}</TableCell>
                               <TableCell className={`text-right tabular-nums ${gainClass(h.unrealized_gain)}`}>
                                 {fmt(h.unrealized_gain, symbol)}
                               </TableCell>
-                              <TableCell className={`text-right tabular-nums ${gainClass(h.unrealized_gain_pct)}`}>
+                              <TableCell className={`text-right tabular-nums hidden md:table-cell ${gainClass(h.unrealized_gain_pct)}`}>
                                 {fmtPct(h.unrealized_gain_pct)}
                               </TableCell>
-                              <TableCell className="text-right tabular-nums text-ink-quiet">
+                              <TableCell className="text-right tabular-nums text-ink-quiet hidden lg:table-cell">
                                 {h.weight_pct === null ? "—" : `${h.weight_pct.toFixed(1)}%`}
                               </TableCell>
                             </TableRow>

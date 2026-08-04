@@ -110,7 +110,7 @@ export function PaySchedulePanel({
                     <TableCell className="text-sm text-ink-quiet">{matchSummary(schedule, symbol)}</TableCell>
                     {isOwner && (
                       <TableCell className="text-right whitespace-nowrap">
-                        <div className="inline-flex gap-1 items-center opacity-60 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                        <div className="inline-flex gap-1 items-center opacity-60 group-hover:opacity-100 touch:opacity-100 focus-within:opacity-100 transition-opacity">
                           <Button
                             variant="ghost"
                             size="icon-sm"

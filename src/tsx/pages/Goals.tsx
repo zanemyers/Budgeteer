@@ -149,7 +149,7 @@ export default function Goals({
             )}
             {dueMeta && <div className="text-ink-quiet text-[0.7rem]">{dueMeta}</div>}
           </div>
-          <div className="flex items-center gap-1 shrink-0 opacity-60 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+          <div className="flex items-center gap-1 shrink-0 opacity-60 group-hover:opacity-100 touch:opacity-100 focus-within:opacity-100 transition-opacity">
             <Button variant="ghost" size="icon-sm" onClick={() => setEditing(cat)} aria-label="Edit goal">
               <Pencil />
             </Button>

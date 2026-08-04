@@ -3,6 +3,12 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Touch input, keyed on pointer type rather than viewport width — a tablet is coarse-pointer
+   but wider than any breakpoint, and a narrow desktop window is still a mouse. Used for the
+   44px minimum target size PRODUCT.md commits to, and to stop hover-only affordances from
+   hiding controls on devices that can't hover. */
+@custom-variant touch (@media (pointer: coarse));
+
 /* ── Design tokens (OKLCH paper / moss palette) ──────────────────────── */
 :root {
   /* Paper neutrals — warm off-white tinted toward moss */
