@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useCurrencySymbol } from "../utils/currency";
+import { fmt, fmtPct, fmtQuantity, useCurrencySymbol } from "../utils/currency";
 import { fmtDate } from "../utils/date";
 
 interface Holding {
@@ -45,27 +45,6 @@ interface Portfolio {
 interface Props {
   accounts: InvestmentAccount[];
   portfolio: Portfolio;
-}
-
-function fmtMoney(val: string | number | null, symbol = "$"): string {
-  if (val === null || val === undefined || val === "") return "—";
-  const n = typeof val === "string" ? Number.parseFloat(val) : val;
-  if (Number.isNaN(n)) return "—";
-  const sign = n < 0 ? "-" : "";
-  return `${sign}${symbol}${Math.abs(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
-function fmtPct(val: number | null): string {
-  if (val === null || val === undefined || Number.isNaN(val)) return "—";
-  const sign = val > 0 ? "+" : "";
-  return `${sign}${val.toFixed(2)}%`;
-}
-
-function fmtShares(val: string | null): string {
-  if (val === null) return "—";
-  const n = Number.parseFloat(val);
-  if (Number.isNaN(n)) return "—";
-  return n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 6 });
 }
 
 function gainClass(val: string | number | null): string {
@@ -116,22 +95,20 @@ export default function Investments({ accounts, portfolio }: Props) {
                 <div className="text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-ink-quiet">
                   Portfolio value
                 </div>
-                <div className="text-2xl font-semibold tabular-nums mt-1">
-                  {fmtMoney(portfolio.market_value, symbol)}
-                </div>
+                <div className="text-2xl font-semibold tabular-nums mt-1">{fmt(portfolio.market_value, symbol)}</div>
               </div>
               <div>
                 <div className="text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-ink-quiet">
                   Cost basis
                 </div>
-                <div className="text-2xl font-semibold tabular-nums mt-1">{fmtMoney(portfolio.cost_basis, symbol)}</div>
+                <div className="text-2xl font-semibold tabular-nums mt-1">{fmt(portfolio.cost_basis, symbol)}</div>
               </div>
               <div>
                 <div className="text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-ink-quiet">
                   Unrealized gain
                 </div>
                 <div className={`text-2xl font-semibold tabular-nums mt-1 ${gainClass(portfolio.unrealized_gain)}`}>
-                  {fmtMoney(portfolio.unrealized_gain, symbol)}
+                  {fmt(portfolio.unrealized_gain, symbol)}
                 </div>
               </div>
               <div>
@@ -175,14 +152,14 @@ export default function Investments({ accounts, portfolio }: Props) {
                         <div className="text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-ink-quiet">
                           Market value
                         </div>
-                        <div className="font-semibold tabular-nums">{fmtMoney(acct.market_value, symbol)}</div>
+                        <div className="font-semibold tabular-nums">{fmt(acct.market_value, symbol)}</div>
                       </div>
                       <div className="text-right">
                         <div className="text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-ink-quiet">
                           Gain
                         </div>
                         <div className={`font-semibold tabular-nums ${gainClass(acct.unrealized_gain)}`}>
-                          {fmtMoney(acct.unrealized_gain, symbol)}
+                          {fmt(acct.unrealized_gain, symbol)}
                           {acct.unrealized_gain_pct !== null && (
                             <span className="ml-2 text-xs">({fmtPct(acct.unrealized_gain_pct)})</span>
                           )}
@@ -212,18 +189,12 @@ export default function Investments({ accounts, portfolio }: Props) {
                             <TableRow key={h.id}>
                               <TableCell className="font-medium tabular-nums">{h.symbol || "—"}</TableCell>
                               <TableCell className="text-sm text-ink-quiet">{h.description || "—"}</TableCell>
-                              <TableCell className="text-right tabular-nums">{fmtShares(h.shares)}</TableCell>
-                              <TableCell className="text-right tabular-nums">
-                                {fmtMoney(h.purchase_price, symbol)}
-                              </TableCell>
-                              <TableCell className="text-right tabular-nums">
-                                {fmtMoney(h.cost_basis, symbol)}
-                              </TableCell>
-                              <TableCell className="text-right tabular-nums">
-                                {fmtMoney(h.market_value, symbol)}
-                              </TableCell>
+                              <TableCell className="text-right tabular-nums">{fmtQuantity(h.shares)}</TableCell>
+                              <TableCell className="text-right tabular-nums">{fmt(h.purchase_price, symbol)}</TableCell>
+                              <TableCell className="text-right tabular-nums">{fmt(h.cost_basis, symbol)}</TableCell>
+                              <TableCell className="text-right tabular-nums">{fmt(h.market_value, symbol)}</TableCell>
                               <TableCell className={`text-right tabular-nums ${gainClass(h.unrealized_gain)}`}>
-                                {fmtMoney(h.unrealized_gain, symbol)}
+                                {fmt(h.unrealized_gain, symbol)}
                               </TableCell>
                               <TableCell className={`text-right tabular-nums ${gainClass(h.unrealized_gain_pct)}`}>
                                 {fmtPct(h.unrealized_gain_pct)}

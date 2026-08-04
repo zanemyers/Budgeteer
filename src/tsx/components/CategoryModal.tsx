@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { errorMessage, jsonFetch } from "@/lib/api";
+import { useCurrencySymbol } from "@/utils/currency";
 
 interface CategoryShape {
   id: number;
@@ -66,6 +67,8 @@ export default function CategoryModal({
   const [newChildName, setNewChildName] = useState("");
   const [addingChild, setAddingChild] = useState(false);
   const [childError, setChildError] = useState("");
+  // Was a hard-coded "$" on the rollover base amount field.
+  const symbol = useCurrencySymbol();
 
   const eligibleParents = categories.filter(
     (c) => c.category_type === type && !c.is_goal && c.parent_id === null && (!isEdit || c.id !== category!.id),
@@ -208,7 +211,7 @@ export default function CategoryModal({
                     <Label htmlFor="cat-base">Base amount / month</Label>
                     <div className="flex">
                       <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-input bg-muted text-muted-foreground text-sm">
-                        $
+                        {symbol}
                       </span>
                       <Input
                         id="cat-base"

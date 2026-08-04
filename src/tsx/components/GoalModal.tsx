@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { errorMessage, jsonFetch } from "@/lib/api";
+import { useCurrencySymbol } from "@/utils/currency";
 
 export interface GoalCategory {
   id: number;
@@ -48,10 +49,13 @@ function CurrencyInput({
   min?: string;
   step?: string;
 }) {
+  // Was a hard-coded "$": every other money field uses the user's symbol, so a non-USD user
+  // saw dollars on the goal amount fields alone.
+  const symbol = useCurrencySymbol();
   return (
     <div className="flex">
       <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-input bg-muted text-muted-foreground text-sm">
-        $
+        {symbol}
       </span>
       <Input
         id={id}

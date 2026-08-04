@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { errorMessage, jsonFetch } from "../lib/api";
+import { fmtInCurrency } from "../utils/currency";
 import { fmtDate, fmtDateTime } from "../utils/date";
 
 interface BankTransactionLite {
@@ -67,17 +68,6 @@ interface PaymentMethodOption {
 interface Props {
   connections: Connection[];
   payment_methods: PaymentMethodOption[];
-}
-
-function fmtMoney(amount: string | null, currency: string): string {
-  if (amount === null) return "—";
-  const n = Number.parseFloat(amount);
-  if (Number.isNaN(n)) return amount;
-  try {
-    return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(n);
-  } catch {
-    return `${amount} ${currency}`;
-  }
 }
 
 function AccountCard({
@@ -138,11 +128,11 @@ function AccountCard({
           </div>
           <div className="text-right">
             <div className="text-2xl font-semibold tracking-tight tabular-nums">
-              {fmtMoney(account.balance, account.currency)}
+              {fmtInCurrency(account.balance, account.currency)}
             </div>
             {account.available_balance && account.available_balance !== account.balance && (
               <div className="text-ink-quiet text-sm tabular-nums">
-                Avail. {fmtMoney(account.available_balance, account.currency)}
+                Avail. {fmtInCurrency(account.available_balance, account.currency)}
               </div>
             )}
           </div>
@@ -207,7 +197,7 @@ function AccountCard({
                         {t.status === "ignored" && <span className="text-xs text-ink-quiet">Ignored</span>}
                       </TableCell>
                       <TableCell className={`text-right tabular-nums ${negative ? "text-expense" : "text-income"}`}>
-                        {fmtMoney(t.amount, account.currency)}
+                        {fmtInCurrency(t.amount, account.currency)}
                       </TableCell>
                     </TableRow>
                   );
