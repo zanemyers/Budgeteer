@@ -1,4 +1,4 @@
-import { Check } from "lucide-react";
+import { Check, PiggyBank } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -596,7 +596,8 @@ export default function TransactionModal({
                                 <SelectLabel>Goals</SelectLabel>
                                 {goals.map((c) => (
                                   <SelectItem key={c.id} value={String(c.id)}>
-                                    ◎ {c.name}
+                                    <PiggyBank aria-hidden />
+                                    {c.name}
                                   </SelectItem>
                                 ))}
                               </SelectGroup>

@@ -111,7 +111,7 @@ export default function Goals({
           ? ""
           : `due ${dueDate.toLocaleDateString("en-US", { month: "short", year: "numeric" })} · ${cat.goal_months_remaining}mo left`
         : isOngoing
-          ? "↺ ongoing"
+          ? "ongoing"
           : "";
 
     const showMonthly = monthly > 0 && !isComplete;

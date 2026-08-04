@@ -1,5 +1,5 @@
 import { router, usePage } from "@inertiajs/react";
-import { Menu } from "lucide-react";
+import { ChevronDown, Menu } from "lucide-react";
 import { useEffect, useState } from "react";
 import { FlashToaster } from "@/components/FlashToaster";
 import { Button } from "@/components/ui/button";
@@ -88,7 +88,7 @@ function UserMenu({ user, budgetPk }: { user: AuthUser; budgetPk?: number }) {
             <img src={user.gravatar} alt={user.name} width="26" height="26" className="rounded-full" />
           </span>
           <span className="sidebar-user-name">{user.email}</span>
-          <span className="sidebar-user-chevron">▾</span>
+          <ChevronDown aria-hidden className="sidebar-user-chevron size-3.5" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="start" className="w-56">
@@ -195,9 +195,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     title={`${sidebarBudget?.name ?? "Budget"} — switch budget`}
                   >
                     <span className="truncate">{sidebarBudget?.name || "Current Budget"}</span>
-                    <span aria-hidden className="text-ink-quiet text-xs shrink-0">
-                      ▾
-                    </span>
+                    <ChevronDown aria-hidden className="size-3.5 text-ink-quiet shrink-0" />
                   </a>
                   <NavLink
                     href={`/budgets/${sidebarBudgetPk}/`}

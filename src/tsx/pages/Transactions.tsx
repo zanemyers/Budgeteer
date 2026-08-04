@@ -8,6 +8,7 @@ import {
   ChevronUp,
   Landmark,
   Pencil,
+  PiggyBank,
   Undo2,
 } from "lucide-react";
 import { Fragment, useMemo, useState } from "react";
@@ -649,7 +650,8 @@ export default function Transactions({
                   .filter((c) => c.is_goal)
                   .map((c) => (
                     <SelectItem key={c.id} value={String(c.id)}>
-                      ◎ {c.name}
+                      <PiggyBank aria-hidden />
+                      {c.name}
                     </SelectItem>
                   ))}
               </SelectGroup>

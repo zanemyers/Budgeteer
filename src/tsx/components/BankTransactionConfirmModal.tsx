@@ -1,4 +1,4 @@
-import { Plus, Trash2 } from "lucide-react";
+import { PiggyBank, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -449,7 +449,8 @@ export default function BankTransactionConfirmModal({ bankTxn, budgetPk, categor
                                 .filter((c) => c.is_goal)
                                 .map((c) => (
                                   <SelectItem key={c.id} value={String(c.id)}>
-                                    ◎ {c.name}
+                                    <PiggyBank aria-hidden />
+                                    {c.name}
                                   </SelectItem>
                                 ))}
                             </SelectGroup>
