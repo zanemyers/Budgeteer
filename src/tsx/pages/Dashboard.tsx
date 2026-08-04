@@ -389,6 +389,29 @@ export default function Dashboard({
         </Button>
       </header>
 
+      {/* Pending review */}
+      {isCurrentMonth && pending_count > 0 && (
+        <Alert className="mb-4 border-fund/30 bg-fund-soft text-ink *:data-[slot=alert-description]:text-ink">
+          <AlertDescription>
+            <div className="flex justify-between items-center w-full gap-4">
+              <div>
+                <strong className="font-semibold">
+                  {pending_count} transaction{pending_count === 1 ? "" : "s"} awaiting review
+                </strong>
+                <div className="text-sm text-ink-quiet">Recurring transactions or entries without a paid date.</div>
+              </div>
+              <Button
+                size="sm"
+                onClick={() => router.visit(`/budgets/${budget_pk}/transactions/?month=${month}`)}
+                className="bg-fund/20 text-ink hover:bg-fund/30 border-fund/40 dark:hover:bg-fund/35"
+              >
+                Review
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* This month at a glance. Previously a card in the income column — which meant a budget
           with no income categories rendered no summary at all — plus a separate Ready to Assign
           alert saying the same thing twice. */}
@@ -448,29 +471,6 @@ export default function Dashboard({
           </p>
         </SummaryBox>
       </div>
-
-      {/* Pending review */}
-      {isCurrentMonth && pending_count > 0 && (
-        <Alert className="mb-8 border-fund/30 bg-fund-soft text-ink *:data-[slot=alert-description]:text-ink">
-          <AlertDescription>
-            <div className="flex justify-between items-center w-full gap-4">
-              <div>
-                <strong className="font-semibold">
-                  {pending_count} transaction{pending_count === 1 ? "" : "s"} awaiting review
-                </strong>
-                <div className="text-sm text-ink-quiet">Recurring transactions or entries without a paid date.</div>
-              </div>
-              <Button
-                size="sm"
-                onClick={() => router.visit(`/budgets/${budget_pk}/transactions/?month=${month}`)}
-                className="bg-fund/20 text-ink hover:bg-fund/30 border-fund/40 dark:hover:bg-fund/35"
-              >
-                Review
-              </Button>
-            </div>
-          </AlertDescription>
-        </Alert>
-      )}
 
       {/* Budget Grid */}
       {overview.categories.length === 0 ? (
