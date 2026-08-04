@@ -1348,7 +1348,6 @@ class RecurringCreateView(BudgetMemberMixin, View):
             interval=int(data.get("interval", 1)),
             start_date=datetime.date.fromisoformat(data["start_date"]),
             end_date=end_date,
-            is_active=data.get("is_active", True),
         )
         through_date = timezone.localdate() + datetime.timedelta(days=django_settings.BUDGET_RECURRING_LOOKAHEAD_DAYS)
         rt.generate_instances_up_to(through_date)
@@ -1359,7 +1358,7 @@ class RecurringDetailView(BudgetMemberMixin, View):
     def patch(self, request, budget_pk, pk):
         rt = get_object_or_404(RecurringTransaction, pk=pk, budget=self.budget)
         data = parse_json_body(request)
-        updatable = ("name", "description", "amount", "frequency", "interval", "start_date", "end_date", "is_active")
+        updatable = ("name", "description", "amount", "frequency", "interval", "start_date", "end_date")
         errors: dict[str, list[str]] = {}
         if "interval" in data:
             try:
@@ -1404,11 +1403,10 @@ class RecurringDetailView(BudgetMemberMixin, View):
         Transaction.objects.filter(recurring=rt, paid_date__isnull=True, due_date__gt=today).delete()
         rt.generated_through = None
         rt.save(update_fields=["generated_through"])
-        # Only regenerate for a live schedule. Pausing one used to delete its future
-        # instances and then immediately recreate them, so the pause did nothing.
-        if rt.is_active:
-            through_date = today + datetime.timedelta(days=django_settings.BUDGET_RECURRING_LOOKAHEAD_DAYS)
-            rt.generate_instances_up_to(through_date)
+        # No is_active guard needed: generate_instances_up_to skips any occurrence past
+        # end_date, so a schedule that has been ended regenerates nothing.
+        through_date = today + datetime.timedelta(days=django_settings.BUDGET_RECURRING_LOOKAHEAD_DAYS)
+        rt.generate_instances_up_to(through_date)
 
         return JsonResponse(serialize_recurring(rt))
 
@@ -1452,16 +1450,17 @@ class RecurringDetailView(BudgetMemberMixin, View):
         return JsonResponse(serialize_transaction(txn), status=201)
 
     def delete(self, request, budget_pk, pk):
+        """
+        Delete the schedule outright.
+
+        Paid instances survive as ordinary transactions — Transaction.recurring is SET_NULL —
+        so history is never lost. Upcoming unpaid instances are placeholders for a schedule
+        that is about to stop existing, so they go with it; a past-due unpaid one stays,
+        because that is a bill still owed. To stop a schedule but keep it, set an end date.
+        """
         rt = get_object_or_404(RecurringTransaction, pk=pk, budget=self.budget)
-        if request.GET.get("permanent"):
-            rt.delete()
-            return JsonResponse({}, status=204)
-        today = timezone.localdate()
-        if request.GET.get("delete_future_unpaid"):
-            Transaction.objects.filter(recurring=rt, paid_date__isnull=True, due_date__gt=today).delete()
-        rt.is_active = False
-        rt.end_date = today
-        rt.save(update_fields=["is_active", "end_date"])
+        Transaction.objects.filter(recurring=rt, paid_date__isnull=True, due_date__gt=timezone.localdate()).delete()
+        rt.delete()
         return JsonResponse({}, status=204)
 
 

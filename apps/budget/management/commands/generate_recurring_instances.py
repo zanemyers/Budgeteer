@@ -56,9 +56,7 @@ class Command(BaseCommand):
         if options["prune"]:
             self.prune(through_date)
 
-        active_filter = (
-            Q(is_active=True) & Q(start_date__lte=through_date) & (Q(end_date__isnull=True) | Q(end_date__gte=today))
-        )
+        active_filter = Q(start_date__lte=through_date) & (Q(end_date__isnull=True) | Q(end_date__gte=today))
         schedules = RecurringTransaction.objects.filter(active_filter).select_related(
             "budget", "category", "created_by"
         )

@@ -267,7 +267,8 @@ def find_transfer_candidates_for_bank_txn(bt, budget, *, day_window: int = 3) ->
 
 
 def serialize_recurring(rt) -> dict:
-    next_due = rt.next_due_date_after(timezone.localdate() - datetime.timedelta(days=1)) if rt.is_active else None
+    # next_due_date_after already returns None once the schedule is past its end_date.
+    next_due = rt.next_due_date_after(timezone.localdate() - datetime.timedelta(days=1))
     return {
         "id": rt.pk,
         "name": rt.name,
@@ -282,7 +283,6 @@ def serialize_recurring(rt) -> dict:
         "interval": rt.interval,
         "start_date": str(rt.start_date),
         "end_date": str(rt.end_date) if rt.end_date else None,
-        "is_active": rt.is_active,
         "generated_through": str(rt.generated_through) if rt.generated_through else None,
         "next_due_date": str(next_due) if next_due else None,
         "created_at": rt.created_at.isoformat(),

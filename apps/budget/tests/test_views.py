@@ -277,16 +277,95 @@ class TestRecurringPatchValidation(BudgetViewTestCase):
         rt = RecurringTransaction(frequency=RecurringTransaction.FREQ_EVERY_N, interval=0)
         self.assertGreater(rt._advance(datetime.date(2026, 1, 1)), datetime.date(2026, 1, 1))
 
-    def test_pausing_does_not_regenerate_instances(self):
-        """Deactivating deleted the future instances and then immediately recreated them."""
+    def test_ending_a_schedule_does_not_regenerate_instances(self):
+        """
+        Stopping a schedule is an end date now, not an is_active flag.
+
+        patch() deletes unpaid future instances and regenerates so schedule edits propagate.
+        That must not resurrect the instances of a schedule that was just ended, which is what
+        the old is_active guard was there for — the work is now done by generate_instances_up_to
+        skipping occurrences past end_date.
+        """
         self.rt.generate_instances_up_to(datetime.date(2026, 12, 31))
         self.assertGreater(Transaction.objects.filter(recurring=self.rt, paid_date__isnull=True).count(), 0)
-        res = self._patch_json(self.url, {"is_active": False})
+
+        res = self._patch_json(self.url, {"end_date": timezone.localdate().isoformat()})
         self.assertEqual(res.status_code, 200)
+
         future = Transaction.objects.filter(
             recurring=self.rt, paid_date__isnull=True, due_date__gt=timezone.localdate()
         )
         self.assertEqual(future.count(), 0)
+        self.assertIsNone(res.json()["next_due_date"], "an ended schedule should report no next due date")
+
+    def test_clearing_the_end_date_restarts_a_stopped_schedule(self):
+        """The only way back from a stop, so a null end_date has to be accepted and act on it."""
+        self._patch_json(self.url, {"end_date": timezone.localdate().isoformat()})
+        self.rt.refresh_from_db()
+        self.assertIsNotNone(self.rt.end_date)
+
+        res = self._patch_json(self.url, {"end_date": None})
+        self.assertEqual(res.status_code, 200)
+        self.rt.refresh_from_db()
+        self.assertIsNone(self.rt.end_date)
+        self.assertIsNotNone(res.json()["next_due_date"], "a restarted schedule should have a next due date again")
+
+    def test_is_active_is_gone_from_the_payload(self):
+        res = self._patch_json(self.url, {"name": "Insurance"})
+        self.assertNotIn("is_active", res.json())
+
+
+class TestRecurringDelete(BudgetViewTestCase):
+    """
+    Deleting a schedule must not take history with it.
+
+    Transaction.recurring is SET_NULL, so paid instances survive as ordinary transactions —
+    that property is what made it safe to drop the is_active soft-delete. Upcoming unpaid
+    instances are placeholders for a schedule that will no longer exist, so they go too;
+    a past-due unpaid one stays, because that is a bill still owed.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(self.user)
+        self.rt = RecurringTransaction.objects.create(
+            budget=self.budget,
+            category=self.expense_cat,
+            created_by=self.user,
+            name="Rent",
+            amount=Decimal("100.00"),
+            frequency=RecurringTransaction.FREQ_MONTHLY,
+            start_date=datetime.date(2026, 1, 1),
+        )
+        self.url = reverse("budget:recurring-detail", kwargs={"budget_pk": self.budget.pk, "pk": self.rt.pk})
+
+    def test_delete_keeps_paid_history_and_overdue_bills_but_drops_upcoming(self):
+        today = timezone.localdate()
+        self.rt.generate_instances_up_to(today + datetime.timedelta(days=400))
+        instances = Transaction.objects.filter(recurring=self.rt)
+
+        paid = instances.filter(due_date__lt=today).first()
+        paid.paid_date = paid.due_date
+        paid.save(update_fields=["paid_date"])
+        overdue = instances.filter(due_date__lt=today, paid_date__isnull=True).exclude(pk=paid.pk).first()
+        upcoming = instances.filter(due_date__gt=today).first()
+        self.assertIsNotNone(overdue, "fixture needs an unpaid past-due instance")
+        self.assertIsNotNone(upcoming, "fixture needs an upcoming instance")
+
+        res = self.client.delete(self.url)
+        self.assertEqual(res.status_code, 204)
+        self.assertFalse(RecurringTransaction.objects.filter(pk=self.rt.pk).exists())
+
+        paid.refresh_from_db()
+        self.assertIsNone(paid.recurring_id, "paid instance should survive, detached from the schedule")
+        self.assertTrue(Transaction.objects.filter(pk=overdue.pk).exists(), "an overdue bill is still owed")
+        self.assertFalse(Transaction.objects.filter(pk=upcoming.pk).exists(), "upcoming placeholder should go")
+
+    def test_delete_no_longer_needs_a_permanent_flag(self):
+        """The soft path was only ever reached by Deactivate, which no longer exists."""
+        res = self.client.delete(self.url)
+        self.assertEqual(res.status_code, 204)
+        self.assertFalse(RecurringTransaction.objects.filter(pk=self.rt.pk).exists())
 
 
 class TestBudgetDelete(BudgetViewTestCase):

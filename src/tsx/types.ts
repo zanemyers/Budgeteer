@@ -122,7 +122,6 @@ export interface RecurringTransaction {
   interval: number;
   start_date: string;
   end_date: string | null;
-  is_active: boolean;
   generated_through: string | null;
   next_due_date: string | null;
   created_at: string;

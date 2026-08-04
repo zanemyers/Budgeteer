@@ -506,8 +506,10 @@ class RecurringTransaction(models.Model):
         help_text="Number of months between occurrences. Used only when frequency is 'Every N Months'.",
     )
     start_date = models.DateField(help_text="Date of the first occurrence.")
+    # Stopping a schedule is an end date, not a flag. `next_due_date_after` and
+    # `generate_instances_up_to` both already honour it, so a separate is_active boolean only
+    # gave two ways to express the same state — and PaySchedule never had one.
     end_date = models.DateField(null=True, blank=True, help_text="No new instances are generated after this date.")
-    is_active = models.BooleanField(default=True)
     generated_through = models.DateField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
