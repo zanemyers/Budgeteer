@@ -363,10 +363,12 @@ export default function Dashboard({
   // from previously-saved funds, not this month's budget.
   const totalSpent = expense.reduce((sum, c) => sum + parseFloat(c.activity), 0);
   const rta = parseFloat(overview.ready_to_assign);
-  // Money sitting in a category that hasn't been spent yet — a different kind of leftover from
-  // Ready to Assign, which has never been given a job at all. Goals are excluded: their rows
-  // carry a different meaning for `available`, and they have their own box.
-  const unspent = expense.reduce((sum, c) => sum + parseFloat(c.available), 0);
+  // Income that hasn't gone out the door, deliberately the difference between the first two
+  // boxes on this strip so the three can be checked against each other by eye. Not the same
+  // question as `rta`, which is income that hasn't been *assigned* — money can sit assigned but
+  // unspent in a category, and then assignable is the smaller of the two. When they coincide,
+  // every assigned dollar has already been spent and one number tells the whole story.
+  const unspent = parseFloat(overview.income_total) - totalSpent;
   const unspentDiffersFromRta = Math.abs(unspent - rta) >= 0.005;
 
   return (
@@ -474,8 +476,11 @@ export default function Dashboard({
           {/* Only worth a second line when the two actually differ — otherwise it restates the
               number directly above it. */}
           {unspentDiffersFromRta && (
-            <p className="mt-1 text-sm text-ink-quiet">
-              <span className="tabular-nums text-ink">{fmt(unspent, symbol)}</span> unspent in categories
+            <p
+              className="mt-1 text-sm text-ink-quiet"
+              title="Income − expenses. Larger than assignable when money is assigned but not yet spent."
+            >
+              <span className="tabular-nums text-ink">{fmt(unspent, symbol)}</span> unspent
             </p>
           )}
           <p className="mt-1 text-xs text-ink-quiet">
