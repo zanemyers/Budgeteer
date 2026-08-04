@@ -84,6 +84,7 @@ export function MembersPanel({ budgetPk, memberships, roleChoices, onChange }: P
               <div className="flex flex-wrap gap-2 items-end">
                 <div className="min-w-0 flex-1">
                   <Input
+                    aria-label="Invite by email address"
                     placeholder="Email address"
                     type="email"
                     value={inviteEmail}
@@ -93,7 +94,7 @@ export function MembersPanel({ budgetPk, memberships, roleChoices, onChange }: P
                   />
                 </div>
                 <Select value={inviteRole} onValueChange={setInviteRole}>
-                  <SelectTrigger>
+                  <SelectTrigger aria-label="Role for the invited member">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>

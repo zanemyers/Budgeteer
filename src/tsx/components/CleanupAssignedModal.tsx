@@ -189,6 +189,7 @@ export default function CleanupAssignedModal({ budgetPk, month, categories, over
                         step="0.01"
                         max={cat.assigned}
                         placeholder="0"
+                        aria-label={`Reduce ${cat.name} by`}
                         className="h-9 rounded-l-none tabular-nums"
                         value={draftVal}
                         onChange={(e) => setDraft(cat.id, e.target.value)}

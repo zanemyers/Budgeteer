@@ -149,6 +149,7 @@ export default function AssignModal({ budgetPk, month, categories, readyToAssign
                         min="0"
                         step="0.01"
                         placeholder="0"
+                        aria-label={`Assign to ${cat.name}`}
                         className="h-9 rounded-l-none tabular-nums"
                         value={drafts[cat.id] ?? ""}
                         onChange={(e) => setDraft(cat.id, e.target.value)}

@@ -249,6 +249,7 @@ export default function CategoryModal({
                 <div className="flex gap-2 items-center">
                   <Input
                     placeholder="Add a subcategory…"
+                    aria-label="New subcategory name"
                     value={newChildName}
                     onChange={(e) => setNewChildName(e.target.value)}
                     onKeyDown={(e) => {
