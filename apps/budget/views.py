@@ -13,6 +13,7 @@ from django.db.models.functions import Coalesce
 from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
+from django.utils import timezone
 from django.views import View
 
 from inertia import render as inertia_render
@@ -57,7 +58,7 @@ from apps.budget.models import (
 
 
 def _default_month() -> str:
-    today = datetime.date.today()
+    today = timezone.localdate()
     return f"{today.year}-{today.month:02d}"
 
 
@@ -437,7 +438,14 @@ class BudgetUpdateView(BudgetOwnerMixin, View):
 
 class BudgetDeleteView(BudgetOwnerMixin, View):
     def delete(self, request, budget_pk):
-        self.budget.delete()
+        # Budget → Category is CASCADE, but TransactionLine.category and
+        # RecurringTransaction.category are PROTECT, and Django's collector raises
+        # ProtectedError for those rows even though they'd also be cascade-deleted via
+        # Transaction. So clear the protected referrers first, in dependency order.
+        with db_transaction.atomic():
+            TransactionLine.objects.filter(transaction__budget=self.budget).delete()
+            RecurringTransaction.objects.filter(budget=self.budget).delete()
+            self.budget.delete()
         return JsonResponse({}, status=204)
 
 
@@ -551,6 +559,10 @@ class BudgetSettingsView(BudgetMemberMixin, View):
             .order_by("category_type", "name")
         )
         goal_ids = [c.pk for c in categories if c.is_goal]
+        # Aggregate amount_usd (not amount) and scale to the user's currency, matching
+        # get_goal_total_saved in data.py. Summing raw `amount` across transactions in
+        # different currencies would add unlike units and disagree with the Goals page.
+        user_rate = _get_user_currency_rate(request.user)
         income_saved = {
             row["category_id"]: row["total"]
             for row in TransactionLine.objects.filter(
@@ -559,7 +571,7 @@ class BudgetSettingsView(BudgetMemberMixin, View):
                 transaction__transaction_type__in=("income", "transfer"),
             )
             .values("category_id")
-            .annotate(total=Sum("amount"))
+            .annotate(total=Sum("amount_usd"))
         }
         expense_saved = {
             row["category_id"]: row["total"]
@@ -569,15 +581,14 @@ class BudgetSettingsView(BudgetMemberMixin, View):
                 transaction__transaction_type="expense",
             )
             .values("category_id")
-            .annotate(total=Sum("amount"))
+            .annotate(total=Sum("amount_usd"))
         }
 
         def _serialize_cat(c):
             d = serialize_category(c)
             if c.is_goal:
-                d["total_saved"] = str(
-                    income_saved.get(c.pk, Decimal("0.00")) - expense_saved.get(c.pk, Decimal("0.00"))
-                )
+                net = income_saved.get(c.pk, Decimal("0.00")) - expense_saved.get(c.pk, Decimal("0.00"))
+                d["total_saved"] = str(net * user_rate)
             return d
 
         memberships = []
@@ -731,7 +742,7 @@ class CategoryCreateView(BudgetMemberMixin, View):
                 category_type=category_type,
                 rollover=rollover,
                 base_amount=base_amount,
-                rollover_start=datetime.date.today().replace(day=1) if (rollover and base_amount) else None,
+                rollover_start=timezone.localdate().replace(day=1) if (rollover and base_amount) else None,
                 created_by=request.user,
             )
         except IntegrityError:
@@ -747,13 +758,16 @@ class CategoryCreateView(BudgetMemberMixin, View):
                 monthly_goal=data.get("goal_monthly") if is_ongoing else None,
             )
 
+        currency = request.user.currency or "USD"
+        exchange_rate = _get_user_currency_rate(request.user)
+
         # Create an opening balance transaction if an initial amount was provided
         if is_goal:
             initial = data.get("goal_initial_balance", "0") or "0"
             try:
                 amount = Decimal(str(initial))
                 if amount > 0:
-                    today = datetime.date.today()
+                    today = timezone.localdate()
                     txn = Transaction.objects.create(
                         budget=self.budget,
                         description=f"{cat.name} — opening balance",
@@ -761,14 +775,20 @@ class CategoryCreateView(BudgetMemberMixin, View):
                         paid_date=today,
                         transaction_type="income",
                         created_by=request.user,
+                        currency=currency,
+                        exchange_rate_to_usd=exchange_rate,
                     )
                     TransactionLine.objects.create(
-                        transaction=txn, category=cat, amount=amount, amount_usd=amount, description="Opening balance"
+                        transaction=txn,
+                        category=cat,
+                        amount=amount,
+                        amount_usd=amount / exchange_rate if exchange_rate else amount,
+                        description="Opening balance",
                     )
             except (ValueError, InvalidOperation):
                 pass
 
-        total_saved = get_goal_total_saved(self.budget, cat.pk) if is_goal else None
+        total_saved = get_goal_total_saved(self.budget, cat.pk, exchange_rate) if is_goal else None
         return JsonResponse(serialize_category(cat, total_saved=total_saved), status=201)
 
 
@@ -788,7 +808,7 @@ class CategoryUpdateView(BudgetMemberMixin, View):
                 category.base_amount = Decimal("0")
         # Begin accrual the month rollover is switched on with a base; clear it when turned off.
         if category.rollover and category.base_amount and not category.rollover_start:
-            category.rollover_start = datetime.date.today().replace(day=1)
+            category.rollover_start = timezone.localdate().replace(day=1)
         elif not category.rollover:
             category.rollover_start = None
 
@@ -837,7 +857,9 @@ class CategoryUpdateView(BudgetMemberMixin, View):
             add_amount = Decimal("0")
         if add_amount > 0:
             desc = data.get("add_description", "").strip() or f"{category.name} — balance adjustment"
-            today = datetime.date.today()
+            today = timezone.localdate()
+            currency = request.user.currency or "USD"
+            exchange_rate = _get_user_currency_rate(request.user)
             txn = Transaction.objects.create(
                 budget=self.budget,
                 description=desc,
@@ -845,12 +867,22 @@ class CategoryUpdateView(BudgetMemberMixin, View):
                 paid_date=today,
                 transaction_type="income",
                 created_by=request.user,
+                currency=currency,
+                exchange_rate_to_usd=exchange_rate,
             )
             TransactionLine.objects.create(
-                transaction=txn, category=category, amount=add_amount, amount_usd=add_amount, description=""
+                transaction=txn,
+                category=category,
+                amount=add_amount,
+                amount_usd=add_amount / exchange_rate if exchange_rate else add_amount,
+                description="",
             )
 
-        total_saved = get_goal_total_saved(self.budget, category.pk) if category.is_goal else None
+        total_saved = (
+            get_goal_total_saved(self.budget, category.pk, _get_user_currency_rate(request.user))
+            if category.is_goal
+            else None
+        )
         return JsonResponse(serialize_category(category, total_saved=total_saved))
 
 
@@ -887,7 +919,7 @@ class TransactionListView(BudgetMemberMixin, View):
                 last_day = calendar.monthrange(month_start.year, month_start.month)[1]
                 month_end = month_start.replace(day=last_day)
             except (ValueError, TypeError):
-                month_start = datetime.date.today().replace(day=1)
+                month_start = timezone.localdate().replace(day=1)
                 last_day = calendar.monthrange(month_start.year, month_start.month)[1]
                 month_end = month_start.replace(day=last_day)
             qs = (
@@ -914,7 +946,7 @@ class TransactionListView(BudgetMemberMixin, View):
                 last_day = calendar.monthrange(month_start.year, month_start.month)[1]
                 month_end = month_start.replace(day=last_day)
             except (ValueError, TypeError):
-                month_start = datetime.date.today().replace(day=1)
+                month_start = timezone.localdate().replace(day=1)
                 last_day = calendar.monthrange(month_start.year, month_start.month)[1]
                 month_end = month_start.replace(day=last_day)
 
@@ -993,7 +1025,7 @@ class TransactionCreateView(BudgetMemberMixin, View):
             due_date = datetime.date.fromisoformat(due_date_str)
         except (ValueError, TypeError):
             errors["due_date"] = ["Enter a valid date."]
-            due_date = datetime.date.today()
+            due_date = timezone.localdate()
         paid_date = None
         if paid_date_str:
             try:
@@ -1168,7 +1200,7 @@ class TransactionMarkPaidView(BudgetMemberMixin, View):
                 messages.error(request, message)
                 return redirect(request.POST.get("next") or reverse("budget:detail", kwargs={"budget_pk": budget_pk}))
             return JsonResponse({"errors": {"amount": [message]}}, status=400)
-        transaction.paid_date = None if clearing else datetime.date.today()
+        transaction.paid_date = None if clearing else timezone.localdate()
         update_fields = ["paid_date"]
         # When income first clears, allocate it to a budget month if it doesn't have one yet.
         if not clearing and transaction.transaction_type == "income" and transaction.budget_month is None:
@@ -1305,7 +1337,7 @@ class RecurringCreateView(BudgetMemberMixin, View):
             is_active=data.get("is_active", True),
         )
         lookahead = getattr(django_settings, "BUDGET_RECURRING_LOOKAHEAD_MONTHS", 3)
-        today = datetime.date.today()
+        today = timezone.localdate()
         year = today.year + (today.month + lookahead - 1) // 12
         month = (today.month + lookahead - 1) % 12 + 1
         through_date = today.replace(year=year, month=month, day=calendar.monthrange(year, month)[1])
@@ -1318,6 +1350,29 @@ class RecurringDetailView(BudgetMemberMixin, View):
         rt = get_object_or_404(RecurringTransaction, pk=pk, budget=self.budget)
         data = parse_json_body(request)
         updatable = ("name", "description", "amount", "frequency", "interval", "start_date", "end_date", "is_active")
+        errors: dict[str, list[str]] = {}
+        if "interval" in data:
+            try:
+                if int(data["interval"]) < 1:
+                    raise ValueError
+            except (ValueError, TypeError):
+                errors["interval"] = ["Interval must be at least 1 month."]
+        if "frequency" in data and data["frequency"] not in dict(RecurringTransaction.FREQ_CHOICES):
+            errors["frequency"] = ["Choose a valid frequency."]
+        if "amount" in data:
+            try:
+                Decimal(str(data["amount"]))
+            except (InvalidOperation, ValueError, TypeError):
+                errors["amount"] = ["Enter a valid amount."]
+        for field in ("start_date", "end_date"):
+            if data.get(field):
+                try:
+                    datetime.date.fromisoformat(data[field])
+                except (ValueError, TypeError):
+                    errors[field] = ["Enter a valid date."]
+        if errors:
+            return JsonResponse({"errors": errors}, status=400)
+
         for field in updatable:
             if field in data:
                 val = data[field]
@@ -1335,15 +1390,18 @@ class RecurringDetailView(BudgetMemberMixin, View):
 
         # Rebuild unpaid future instances so edits to amount/category/schedule/end_date
         # propagate. Paid instances are historical and stay untouched.
-        today = datetime.date.today()
+        today = timezone.localdate()
         Transaction.objects.filter(recurring=rt, paid_date__isnull=True, due_date__gt=today).delete()
         rt.generated_through = None
         rt.save(update_fields=["generated_through"])
-        lookahead = getattr(django_settings, "BUDGET_RECURRING_LOOKAHEAD_MONTHS", 3)
-        year = today.year + (today.month + lookahead - 1) // 12
-        month = (today.month + lookahead - 1) % 12 + 1
-        through_date = today.replace(year=year, month=month, day=calendar.monthrange(year, month)[1])
-        rt.generate_instances_up_to(through_date)
+        # Only regenerate for a live schedule. Pausing one used to delete its future
+        # instances and then immediately recreate them, so the pause did nothing.
+        if rt.is_active:
+            lookahead = getattr(django_settings, "BUDGET_RECURRING_LOOKAHEAD_MONTHS", 3)
+            year = today.year + (today.month + lookahead - 1) // 12
+            month = (today.month + lookahead - 1) % 12 + 1
+            through_date = today.replace(year=year, month=month, day=calendar.monthrange(year, month)[1])
+            rt.generate_instances_up_to(through_date)
 
         return JsonResponse(serialize_recurring(rt))
 
@@ -1391,7 +1449,7 @@ class RecurringDetailView(BudgetMemberMixin, View):
         if request.GET.get("permanent"):
             rt.delete()
             return JsonResponse({}, status=204)
-        today = datetime.date.today()
+        today = timezone.localdate()
         if request.GET.get("delete_future_unpaid"):
             Transaction.objects.filter(recurring=rt, paid_date__isnull=True, due_date__gt=today).delete()
         rt.is_active = False

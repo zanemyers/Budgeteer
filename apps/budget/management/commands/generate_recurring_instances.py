@@ -1,9 +1,9 @@
 import calendar
-import datetime
 
 from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.db.models import Q
+from django.utils import timezone
 
 
 class Command(BaseCommand):
@@ -13,7 +13,7 @@ class Command(BaseCommand):
         from apps.budget.models import PaySchedule, RecurringTransaction
 
         lookahead = getattr(settings, "BUDGET_RECURRING_LOOKAHEAD_MONTHS", 3)
-        today = datetime.date.today()
+        today = timezone.localdate()
 
         year = today.year + (today.month + lookahead - 1) // 12
         month = (today.month + lookahead - 1) % 12 + 1

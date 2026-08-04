@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/select";
 import { jsonFetch } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { todayLocal } from "@/utils/date";
 import type {
   Category,
   CurrencyOption,
@@ -91,8 +92,8 @@ function buildInitial(
   const defaultCategory = String(categories.find((c) => c.category_type === resolvedType)?.id ?? "");
   return {
     description: "",
-    due_date: new Date().toISOString().split("T")[0],
-    paid_date: new Date().toISOString().split("T")[0],
+    due_date: todayLocal(),
+    paid_date: todayLocal(),
     budget_month: "",
     notes: "",
     payment_method: "",

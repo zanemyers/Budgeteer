@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { getCsrfToken } from "@/lib/api";
+import { todayLocal } from "@/utils/date";
 
 export interface RecurringFormCategory {
   id: number;
@@ -75,7 +76,7 @@ export function RecurringFormModal({
   const [amount, setAmount] = useState(recurring?.amount ?? "");
   const [frequency, setFrequency] = useState(recurring?.frequency ?? freqChoices[0]?.value ?? "monthly");
   const [interval, setIntervalValue] = useState(String(recurring?.interval ?? "1"));
-  const [startDate, setStartDate] = useState(recurring?.start_date ?? new Date().toISOString().split("T")[0]);
+  const [startDate, setStartDate] = useState(recurring?.start_date ?? todayLocal());
   const [endDate, setEndDate] = useState(recurring?.end_date ?? "");
   const [description, setDescription] = useState(recurring?.description ?? "");
   const [paymentMethod, setPaymentMethod] = useState(String(recurring?.payment_method ?? ""));

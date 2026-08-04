@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getCsrfToken } from "@/lib/api";
 import { fmt, useCurrencySymbol } from "@/utils/currency";
-import { fmtDate } from "@/utils/date";
+import { fmtDate, todayLocal } from "@/utils/date";
 import {
   type RecurringFormCategory,
   type RecurringFormChoice,
@@ -69,11 +69,7 @@ export function RecurringPanel({ budgetPk, recurring, categories, paymentMethods
       headers: { "X-CSRFToken": getCsrfToken() },
     });
     if (res.ok || res.status === 204) {
-      onChange(
-        recurring.map((r) =>
-          r.id === rt.id ? { ...r, is_active: false, end_date: new Date().toISOString().split("T")[0] } : r,
-        ),
-      );
+      onChange(recurring.map((r) => (r.id === rt.id ? { ...r, is_active: false, end_date: todayLocal() } : r)));
     }
   }
 

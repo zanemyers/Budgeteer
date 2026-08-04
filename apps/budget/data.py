@@ -6,6 +6,7 @@ from decimal import Decimal
 
 from django.db.models import Q, Sum
 from django.db.models.functions import Coalesce, TruncMonth
+from django.utils import timezone
 
 from apps.budget.models import Category, CategoryBudget, Transaction, TransactionLine, add_months
 
@@ -266,7 +267,7 @@ def find_transfer_candidates_for_bank_txn(bt, budget, *, day_window: int = 3) ->
 
 
 def serialize_recurring(rt) -> dict:
-    next_due = rt.next_due_date_after(datetime.date.today() - datetime.timedelta(days=1)) if rt.is_active else None
+    next_due = rt.next_due_date_after(timezone.localdate() - datetime.timedelta(days=1)) if rt.is_active else None
     return {
         "id": rt.pk,
         "name": rt.name,
@@ -303,9 +304,9 @@ def serialize_membership(membership) -> dict:
 def get_budget_overview(budget, month_str: str | None, user_rate: "Decimal" = Decimal("1")) -> dict:
     """Compute the YNAB-style budget overview for a given month."""
     try:
-        selected = datetime.date.fromisoformat(month_str + "-01") if month_str else datetime.date.today().replace(day=1)
+        selected = datetime.date.fromisoformat(month_str + "-01") if month_str else timezone.localdate().replace(day=1)
     except (ValueError, TypeError, AttributeError):
-        selected = datetime.date.today().replace(day=1)
+        selected = timezone.localdate().replace(day=1)
 
     last_day = calendar.monthrange(selected.year, selected.month)[1]
     period_start = selected
@@ -481,7 +482,7 @@ def get_budget_overview(budget, month_str: str | None, user_rate: "Decimal" = De
     rows = []
     expense_assigned = Decimal("0.00")
 
-    today = datetime.date.today()
+    today = timezone.localdate()
 
     for cat in categories:
         activity = activity_map.get(cat.pk, Decimal("0.00"))
@@ -554,7 +555,7 @@ def get_budget_overview(budget, month_str: str | None, user_rate: "Decimal" = De
 
 
 def get_upcoming_transactions(budget) -> list:
-    today = datetime.date.today()
+    today = timezone.localdate()
     week_out = today + datetime.timedelta(days=7)
     upcoming = (
         Transaction.objects.filter(
@@ -580,10 +581,10 @@ def get_pending_count(budget, month_str: str | None) -> int:
     """
     try:
         month_start = (
-            datetime.date.fromisoformat(month_str + "-01") if month_str else datetime.date.today().replace(day=1)
+            datetime.date.fromisoformat(month_str + "-01") if month_str else timezone.localdate().replace(day=1)
         )
     except (ValueError, TypeError, AttributeError):
-        month_start = datetime.date.today().replace(day=1)
+        month_start = timezone.localdate().replace(day=1)
     last_day = calendar.monthrange(month_start.year, month_start.month)[1]
     month_end = month_start.replace(day=last_day)
 
