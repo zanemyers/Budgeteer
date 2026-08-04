@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { getCsrfToken } from "@/lib/api";
+import { errorMessage, getCsrfToken, jsonFetch } from "@/lib/api";
 import { usePageTour } from "@/lib/onboardingTour";
 
 interface EmailAddress {
@@ -81,16 +81,10 @@ function CurrencyTab({ currency: initialCurrency, currencies }: { currency: stri
     setSuccess(false);
     setError(null);
     try {
-      const res = await fetch("/accounts/settings/", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() },
-        body: JSON.stringify({ action: "update_currency", currency }),
-      });
-      if (res.ok) setSuccess(true);
-      else {
-        const data = (await res.json()) as { error?: string };
-        setError(data.error ?? "Something went wrong.");
-      }
+      await jsonFetch("/accounts/settings/", "PATCH", { action: "update_currency", currency });
+      setSuccess(true);
+    } catch (err) {
+      setError(errorMessage(err, "Something went wrong."));
     } finally {
       setSaving(false);
     }
@@ -140,7 +134,11 @@ function AvatarForm({ avatarUrl: initialAvatar }: { avatarUrl: string }) {
   function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    setAvatarPreview(URL.createObjectURL(file));
+    setAvatarPreview((prev) => {
+      // Release the previous preview: repeated uploads leaked one blob URL each.
+      if (prev) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(file);
+    });
     void uploadAvatar(file);
   }
 
@@ -155,14 +153,18 @@ function AvatarForm({ avatarUrl: initialAvatar }: { avatarUrl: string }) {
         headers: { "X-CSRFToken": getCsrfToken() },
         body: fd,
       });
-      const data = (await res.json()) as { avatar_url?: string; error?: string };
+      // .catch(() => ({})) because a 500 returns Django's HTML error page, and an
+      // unguarded res.json() then throws past the error branch entirely.
+      const data = (await res.json().catch(() => ({}))) as { avatar_url?: string; error?: string };
+      setAvatarPreview(null);
       if (res.ok && data.avatar_url) {
         setAvatarUrl(data.avatar_url);
-        setAvatarPreview(null);
       } else {
         setAvatarError(data.error ?? "Upload failed.");
-        setAvatarPreview(null);
       }
+    } catch (err) {
+      setAvatarPreview(null);
+      setAvatarError(errorMessage(err, "Upload failed."));
     } finally {
       setAvatarUploading(false);
     }
@@ -202,16 +204,10 @@ function TimezoneForm({ timezone: initialTz }: { timezone: string }) {
     setTzSuccess(false);
     setTzError(null);
     try {
-      const res = await fetch("/accounts/settings/", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() },
-        body: JSON.stringify({ action: "update_timezone", timezone: tz }),
-      });
-      if (res.ok) setTzSuccess(true);
-      else {
-        const data = (await res.json()) as { error?: string };
-        setTzError(data.error ?? "Something went wrong.");
-      }
+      await jsonFetch("/accounts/settings/", "PATCH", { action: "update_timezone", timezone: tz });
+      setTzSuccess(true);
+    } catch (err) {
+      setTzError(errorMessage(err, "Something went wrong."));
     } finally {
       setTzSaving(false);
     }
@@ -271,18 +267,11 @@ function NameTab({
     setSuccess(false);
     setError(null);
     try {
-      const res = await fetch("/accounts/settings/", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() },
-        body: JSON.stringify({ first_name: fn, last_name: ln }),
-      });
-      if (res.ok) {
-        setSuccess(true);
-        onSaved(fn, ln);
-      } else {
-        const data = (await res.json()) as { error?: string };
-        setError(data.error ?? "Something went wrong.");
-      }
+      await jsonFetch("/accounts/settings/", "PATCH", { first_name: fn, last_name: ln });
+      setSuccess(true);
+      onSaved(fn, ln);
+    } catch (err) {
+      setError(errorMessage(err, "Something went wrong."));
     } finally {
       setSaving(false);
     }
@@ -333,25 +322,18 @@ function PasswordTab() {
     setSuccess(false);
     setError(null);
     try {
-      const res = await fetch("/accounts/settings/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() },
-        body: JSON.stringify({
-          action: "change_password",
-          old_password: oldPw,
-          new_password: newPw,
-          confirm_password: confirmPw,
-        }),
+      await jsonFetch("/accounts/settings/", "POST", {
+        action: "change_password",
+        old_password: oldPw,
+        new_password: newPw,
+        confirm_password: confirmPw,
       });
-      if (res.ok) {
-        setSuccess(true);
-        setOldPw("");
-        setNewPw("");
-        setConfirmPw("");
-      } else {
-        const data = (await res.json()) as { error?: string };
-        setError(data.error ?? "Something went wrong.");
-      }
+      setSuccess(true);
+      setOldPw("");
+      setNewPw("");
+      setConfirmPw("");
+    } catch (err) {
+      setError(errorMessage(err, "Something went wrong."));
     } finally {
       setSaving(false);
     }
@@ -428,6 +410,8 @@ function EmailTab({
       } else {
         toast.error((data.error as string) ?? "Couldn't send the verification email.");
       }
+    } catch (err) {
+      toast.error(errorMessage(err, "Couldn't send the verification email."));
     } finally {
       setBusy(null);
     }
@@ -443,18 +427,24 @@ function EmailTab({
       } else {
         toast.error((data.error as string) ?? "Couldn't update primary email.");
       }
+    } catch (err) {
+      toast.error(errorMessage(err, "Couldn't update primary email."));
     } finally {
       setBusy(null);
     }
   }
 
   async function remove(addr: EmailAddress) {
-    const { ok, data } = await patch({ action: "remove_email", email: addr.email });
-    if (ok) {
-      setAddresses((prev) => prev.filter((a) => a.id !== addr.id));
-      toast.success(`Removed ${addr.email}.`);
-    } else {
-      toast.error((data.error as string) ?? "Couldn't remove that email.");
+    try {
+      const { ok, data } = await patch({ action: "remove_email", email: addr.email });
+      if (ok) {
+        setAddresses((prev) => prev.filter((a) => a.id !== addr.id));
+        toast.success(`Removed ${addr.email}.`);
+      } else {
+        toast.error((data.error as string) ?? "Couldn't remove that email.");
+      }
+    } catch (err) {
+      toast.error(errorMessage(err, "Couldn't remove that email."));
     }
   }
 
@@ -463,25 +453,15 @@ function EmailTab({
     setAdding(true);
     setAddError("");
     try {
-      const res = await fetch("/accounts/settings/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() },
-        body: JSON.stringify({ action: "add_email", email: newEmail }),
-      });
-      const data = (await res.json()) as {
-        id?: number;
-        email?: string;
-        primary?: boolean;
-        verified?: boolean;
-        error?: string;
-      };
-      if (!res.ok) {
-        setAddError(data.error ?? "Something went wrong.");
-        return;
-      }
-      setAddresses((prev) => [...prev, data as EmailAddress]);
+      const data = (await jsonFetch("/accounts/settings/", "POST", {
+        action: "add_email",
+        email: newEmail,
+      })) as EmailAddress;
+      setAddresses((prev) => [...prev, data]);
       setNewEmail("");
       setShowAdd(false);
+    } catch (err) {
+      setAddError(errorMessage(err, "Something went wrong."));
     } finally {
       setAdding(false);
     }
@@ -579,32 +559,31 @@ function BankTab({
     setError(null);
     setSuccess(false);
     try {
-      const res = await fetch("/accounts/settings/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() },
-        body: JSON.stringify({ action: "claim_simplefin_token", setup_token: token, label }),
-      });
-      const data = (await res.json()) as SimpleFINConnection & { error?: string };
-      if (!res.ok) {
-        setError(data.error ?? "Could not claim token.");
-        return;
-      }
+      const data = (await jsonFetch("/accounts/settings/", "POST", {
+        action: "claim_simplefin_token",
+        setup_token: token,
+        label,
+      })) as SimpleFINConnection;
       setConnections((prev) => [...prev, data]);
       setToken("");
       setLabel("");
       setSuccess(true);
+    } catch (err) {
+      setError(errorMessage(err, "Could not claim token."));
     } finally {
       setSubmitting(false);
     }
   }
 
   async function remove(conn: SimpleFINConnection) {
-    const res = await fetch("/accounts/settings/", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() },
-      body: JSON.stringify({ action: "remove_simplefin_connection", id: conn.id }),
-    });
-    if (res.ok) setConnections((prev) => prev.filter((c) => c.id !== conn.id));
+    try {
+      await jsonFetch("/accounts/settings/", "PATCH", { action: "remove_simplefin_connection", id: conn.id });
+      setConnections((prev) => prev.filter((c) => c.id !== conn.id));
+    } catch (err) {
+      // Previously the response was ignored, so a failed disconnect left the row in place
+      // with no explanation and looked like the click had simply not registered.
+      toast.error(errorMessage(err, "Couldn't disconnect that bank."));
+    }
   }
 
   function statusVariant(status: string): "success" | "destructive-subtle" | "warning" {

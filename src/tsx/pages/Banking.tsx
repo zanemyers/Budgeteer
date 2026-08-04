@@ -1,5 +1,6 @@
 import { router } from "@inertiajs/react";
 import { useState } from "react";
+import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,7 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { jsonFetch } from "../lib/api";
+import { errorMessage, jsonFetch } from "../lib/api";
 import { fmtDate, fmtDateTime } from "../utils/date";
 
 interface BankTransactionLite {
@@ -112,6 +113,10 @@ function AccountCard({
         },
       );
       if (updated) onUpdate({ ...account, payment_method_id: updated.payment_method_id });
+    } catch (err) {
+      // Without this the rejection escaped as an unhandled promise and the dropdown simply
+      // snapped back, giving no hint that the mapping had not been saved.
+      toast.error(errorMessage(err, "Couldn't map that account."));
     } finally {
       setSaving(false);
     }
@@ -228,7 +233,10 @@ export default function Banking({ connections: initialConnections, payment_metho
       setTimeout(() => {
         router.reload({ onFinish: () => setSyncing(false) });
       }, 1500);
-    } catch {
+    } catch (err) {
+      // The bare catch here reported nothing, so a queue failure looked exactly like a
+      // successful sync that happened to find no new transactions.
+      toast.error(errorMessage(err, "Couldn't start a sync."));
       setSyncing(false);
     }
   }
