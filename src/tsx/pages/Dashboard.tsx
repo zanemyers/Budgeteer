@@ -372,18 +372,28 @@ export default function Dashboard({
   }
 
   const sfMonthlySpending = parseFloat(overview.goal_monthly_spending);
-  // Monthly Spent is the budget-side flow only: non-SF expense category activity.
-  // SF spending is shown on its own line and excluded from Kept, since it draws
-  // from previously-saved funds, not this month's budget.
+  // The budget-side flow only: non-goal expense category activity. Goal spending is shown on its
+  // own line and excluded here, since it draws from previously-saved funds rather than this
+  // month's budget. This is the figure Remaining is measured against.
   const totalSpent = expense.reduce((sum, c) => sum + parseFloat(c.activity), 0);
   const rta = parseFloat(overview.ready_to_assign);
   // Income that hasn't gone out the door, deliberately the difference between the first two
   // boxes on this strip so the three can be checked against each other by eye. Not the same
   // question as `rta`, which is income that hasn't been *assigned* — money can sit assigned but
-  // unspent in a category, and then assignable is the smaller of the two. When they coincide,
-  // every assigned dollar has already been spent and one number tells the whole story.
-  const unspent = parseFloat(overview.income_total) - totalSpent;
-  const unspentDiffersFromRta = Math.abs(unspent - rta) >= 0.005;
+  // unspent in a category, and then what's assignable is the smaller of the two.
+  const remaining = parseFloat(overview.income_total) - totalSpent;
+
+  // The fourth box changes character with the month. While there is money to assign it is the
+  // place you assign it; once there isn't, leading with a 0.00 said nothing, so it becomes a
+  // plain readout of what is left. Over-assignment outranks the empty case so a budget with no
+  // income but money already assigned still shows the problem rather than a welcome message.
+  const overAssigned = rta < -0.005;
+  const hasToAssign = rta > 0.005;
+  const noIncomeYet = !overAssigned && Math.abs(parseFloat(overview.income_total)) < 0.005;
+  const headline = hasToAssign || overAssigned ? parseFloat(overview.ready_to_assign) : remaining;
+  // Suppressed at zero as well as when equal: "0.00 remaining" under a figure it already
+  // contradicts or restates is noise either way.
+  const showRemainingLine = Math.abs(remaining - rta) >= 0.005 && Math.abs(remaining) >= 0.005;
 
   return (
     <div className="max-w-[1200px]">
@@ -467,35 +477,54 @@ export default function Dashboard({
           </dl>
         </SummaryBox>
 
-        <SummaryBox label="Unused / assignable" accent={rta < -0.005 ? "alarm" : "moss"}>
-          <div className="flex items-center justify-between gap-3">
-            <span
-              className={`text-2xl font-semibold tracking-tight tabular-nums ${
-                rta < -0.005 ? "text-expense" : "text-moss"
-              }`}
-            >
-              {fmt(overview.ready_to_assign, symbol)}
-            </span>
-            {rta > 0.005 && (
-              <Button size="sm" onClick={() => setAssigning(true)}>
-                Assign
+        {/* The band follows the button: SummaryBox documents `accent` as marking the box that
+            carries an action, and it used to be applied unconditionally, emphasising this one even
+            in the states where it offers nothing to do. */}
+        <SummaryBox
+          label={overAssigned ? "Over-assigned" : hasToAssign ? "To assign" : "Remaining"}
+          accent={overAssigned ? "alarm" : hasToAssign || noIncomeYet ? "moss" : undefined}
+        >
+          {noIncomeYet ? (
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm text-ink-quiet">No income recorded yet.</p>
+              <Button size="sm" variant="outline" onClick={() => setAddTransactionType("income")}>
+                Add income
               </Button>
-            )}
-            {rta < -0.005 && (
-              <Button size="sm" variant="destructive" onClick={() => setCleaning(true)}>
-                Reduce
-              </Button>
-            )}
-          </div>
-          {/* Only worth a second line when the two actually differ — otherwise it restates the
-              number directly above it. */}
-          {unspentDiffersFromRta && (
-            <p
-              className="mt-1 text-sm text-ink-quiet"
-              title="Income − expenses. Larger than assignable when money is assigned but not yet spent."
-            >
-              <span className="tabular-nums text-ink">{fmt(unspent, symbol)}</span> unspent
-            </p>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between gap-3">
+                <span
+                  className={`text-2xl font-semibold tracking-tight tabular-nums ${
+                    headline < -0.005 ? "text-expense" : "text-moss"
+                  }`}
+                >
+                  {fmt(headline, symbol)}
+                </span>
+                {hasToAssign && (
+                  <Button size="sm" onClick={() => setAssigning(true)}>
+                    Assign
+                  </Button>
+                )}
+                {overAssigned && (
+                  <Button size="sm" variant="destructive" onClick={() => setCleaning(true)}>
+                    Reduce
+                  </Button>
+                )}
+              </div>
+              {hasToAssign || overAssigned ? (
+                showRemainingLine && (
+                  <p
+                    className="mt-1 text-sm text-ink-quiet"
+                    title="Income minus expenses. Differs from what is assignable when money is assigned but not yet spent."
+                  >
+                    <span className="tabular-nums text-ink">{fmt(remaining, symbol)}</span> remaining
+                  </p>
+                )
+              ) : (
+                <p className="mt-1 text-sm text-ink-quiet">all assigned</p>
+              )}
+            </>
           )}
         </SummaryBox>
       </div>
