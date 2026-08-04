@@ -253,9 +253,8 @@ export default function Dashboard({
     // worth explaining wherever that figure appears.
     const carried = cat.rollover_carry !== null && parseFloat(cat.rollover_carry) > 0;
 
-    // The target moves under the category name and is hidden once assigned matches it — a
-    // restated figure earns nothing on an on-plan row. Epsilon rather than `===` because both
-    // sides come from parseFloat over serialized decimals.
+    // Assigned and target sit side by side in one cell, both always shown. Epsilon rather than
+    // `===` because both sides come from parseFloat over serialized decimals.
     const onTarget = Math.abs(assigned - budgeted) < 0.005;
     const overTarget = assigned - budgeted > 0.005;
     const overBy = assigned - budgeted;
@@ -278,60 +277,61 @@ export default function Dashboard({
               <span className="sr-only">Rolls over</span>
             </span>
           )}
-          {!onTarget && (
-            <div className="mt-0.5 flex items-baseline gap-1 text-xs text-muted-foreground">
-              <span>target</span>
-              {cat.rollover && !cat.is_goal ? (
-                <span
-                  className="tabular-nums"
-                  title={
-                    carried
-                      ? `${fmt(cat.base_amount, symbol)} base + ${fmt(cat.rollover_carry, symbol)} carried over`
-                      : "Target for this month (base amount)"
-                  }
-                >
-                  {fmt(cat.budgeted, symbol)}
-                </span>
-              ) : (
-                <CurrencyEditCell
-                  symbol={symbol}
-                  value={cat.budgeted}
-                  editing={editingBudgeted[cat.id]}
-                  onStart={() => {
-                    setEditingBudgeted((prev) => ({ ...prev, [cat.id]: cat.budgeted }));
-                  }}
-                  onChange={(v) => setEditingBudgeted((prev) => ({ ...prev, [cat.id]: v }))}
-                  onCommit={() => void saveBudgeted(cat)}
-                  onCancel={() => clearEditBudgeted(cat.id)}
-                  saving={savingBudgeted[cat.id] ?? false}
-                  align="left"
-                  valueClass="tabular-nums"
-                  title="Click to set monthly target"
-                />
-              )}
-              {overTarget && <span className="text-expense">· {fmt(String(overBy), symbol)} over</span>}
-            </div>
-          )}
         </TableCell>
         <TableCell className="text-right">
-          <CurrencyEditCell
-            symbol={symbol}
-            value={cat.assigned}
-            editing={editingAssigned[cat.id]}
-            onStart={() => {
-              setEditingAssigned((prev) => ({ ...prev, [cat.id]: cat.assigned }));
-            }}
-            onChange={(v) => setEditingAssigned((prev) => ({ ...prev, [cat.id]: v }))}
-            onCommit={() => void saveAssigned(cat)}
-            onCancel={() => clearEditAssigned(cat.id)}
-            saving={savingAssigned[cat.id] ?? false}
-            valueClass={overTarget ? "text-expense" : assignedClass}
-            title={
-              carried
-                ? `${fmt(cat.rollover_carry, symbol)} carried over from last month. Reduce this to move it elsewhere.`
-                : "Click to set assigned amount"
-            }
-          />
+          <div className="flex items-baseline justify-end gap-1">
+            <CurrencyEditCell
+              symbol={symbol}
+              value={cat.assigned}
+              editing={editingAssigned[cat.id]}
+              onStart={() => {
+                setEditingAssigned((prev) => ({ ...prev, [cat.id]: cat.assigned }));
+              }}
+              onChange={(v) => setEditingAssigned((prev) => ({ ...prev, [cat.id]: v }))}
+              onCommit={() => void saveAssigned(cat)}
+              onCancel={() => clearEditAssigned(cat.id)}
+              saving={savingAssigned[cat.id] ?? false}
+              valueClass={overTarget ? "text-expense" : assignedClass}
+              title={
+                carried
+                  ? `${fmt(cat.rollover_carry, symbol)} carried over from last month. Reduce this to move it elsewhere.`
+                  : "Click to set assigned amount"
+              }
+            />
+            <span aria-hidden className="text-muted-foreground">
+              /
+            </span>
+            {/* A rollover category's target is base + carried balance, computed rather than typed,
+                so it is read-only here and explained on hover. */}
+            {cat.rollover && !cat.is_goal ? (
+              <span
+                className="text-sm tabular-nums text-muted-foreground"
+                title={
+                  carried
+                    ? `${fmt(cat.base_amount, symbol)} base + ${fmt(cat.rollover_carry, symbol)} carried over`
+                    : "Target for this month (base amount)"
+                }
+              >
+                {fmt(cat.budgeted, symbol)}
+              </span>
+            ) : (
+              <CurrencyEditCell
+                symbol={symbol}
+                value={cat.budgeted}
+                editing={editingBudgeted[cat.id]}
+                onStart={() => {
+                  setEditingBudgeted((prev) => ({ ...prev, [cat.id]: cat.budgeted }));
+                }}
+                onChange={(v) => setEditingBudgeted((prev) => ({ ...prev, [cat.id]: v }))}
+                onCommit={() => void saveBudgeted(cat)}
+                onCancel={() => clearEditBudgeted(cat.id)}
+                saving={savingBudgeted[cat.id] ?? false}
+                valueClass="text-sm tabular-nums text-muted-foreground"
+                title="Click to set monthly target"
+              />
+            )}
+          </div>
+          {overTarget && <div className="text-xs text-expense">{fmt(String(overBy), symbol)} over</div>}
         </TableCell>
         <TableCell className="text-right">{fmt(cat.activity, symbol)}</TableCell>
       </TableRow>
@@ -572,7 +572,7 @@ export default function Dashboard({
                   <TableHeader>
                     <TableRow>
                       <TableHead>Category</TableHead>
-                      <TableHead className="text-right">Assigned</TableHead>
+                      <TableHead className="text-right">Assigned / target</TableHead>
                       <TableHead className="text-right">Spent</TableHead>
                     </TableRow>
                   </TableHeader>
