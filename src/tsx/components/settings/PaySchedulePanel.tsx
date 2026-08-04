@@ -81,11 +81,11 @@ export function PaySchedulePanel({
       </p>
 
       {paySchedules.length === 0 ? (
-        <Card className="border-rule shadow-none">
+        <Card>
           <CardContent className="text-ink-quiet py-12 text-center">No pay schedules yet.</CardContent>
         </Card>
       ) : (
-        <Card className="overflow-hidden p-0 border-rule shadow-none">
+        <Card className="overflow-hidden p-0">
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>

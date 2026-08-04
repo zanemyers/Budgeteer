@@ -139,7 +139,7 @@ export default function BudgetList({ budgets: initial }: Props) {
       </header>
 
       {newName !== null && (
-        <Card className="mb-6 border-rule shadow-none">
+        <Card className="mb-6">
           <CardContent className="flex flex-col gap-4">
             <div className="flex flex-col gap-2">
               <Label htmlFor="budget-name" className="font-semibold">

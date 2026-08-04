@@ -7,7 +7,12 @@ function Card({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="card"
       className={cn(
-        "flex flex-col gap-6 rounded-xl border border-border-strong bg-card py-6 text-card-foreground shadow-sm",
+        // DESIGN.md: cards are quiet — 1px --rule border, --surface background, 8px radius,
+        // no shadow. The shadcn default shipped rounded-xl, border-strong and shadow-sm, so
+        // eight files patched it back with "border-rule shadow-none" and nine did not, which
+        // left the auth screens and transaction detail visibly off-brand. Fixing the primitive
+        // makes the default correct and lets those overrides go.
+        "flex flex-col gap-6 rounded-lg border border-rule bg-card py-6 text-card-foreground",
         className,
       )}
       {...props}

@@ -109,11 +109,11 @@ export function RecurringPanel({ budgetPk, recurring, categories, paymentMethods
       </div>
 
       {recurring.length === 0 ? (
-        <Card className="border-rule shadow-none">
+        <Card>
           <CardContent className="text-ink-quiet py-12 text-center">No recurring transactions yet.</CardContent>
         </Card>
       ) : (
-        <Card className="overflow-hidden p-0 border-rule shadow-none">
+        <Card className="overflow-hidden p-0">
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>

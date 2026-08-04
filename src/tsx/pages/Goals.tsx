@@ -201,7 +201,7 @@ export default function Goals({
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-          <Card data-tour="goal-card" className="md:col-span-8 p-0 gap-0 overflow-hidden border-rule shadow-none">
+          <Card data-tour="goal-card" className="md:col-span-8 p-0 gap-0 overflow-hidden">
             <div className="bg-fund-soft px-4 py-2 flex justify-between items-center">
               <span className={`${SECTION_LABEL_CLASS} text-ink`}>All Goals</span>
               <div className="flex gap-2">
@@ -215,7 +215,7 @@ export default function Goals({
             </div>
             <div>{goals.map((cat) => renderGoalCard(cat))}</div>
           </Card>
-          <Card className="md:col-span-4 p-0 border-rule shadow-none h-fit">
+          <Card className="md:col-span-4 p-0 h-fit">
             <div className="px-5 py-4 flex flex-col gap-2">
               <span className={`${SECTION_LABEL_CLASS} text-ink-quiet mb-1`}>Totals</span>
               <div className="flex justify-between items-baseline">

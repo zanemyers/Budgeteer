@@ -123,7 +123,7 @@ function AccountCard({
   }
 
   return (
-    <Card className="mb-3 border-rule shadow-none">
+    <Card className="mb-3">
       <CardContent>
         <div className="flex justify-between items-start gap-4 flex-wrap">
           <div>
@@ -278,7 +278,7 @@ export default function Banking({ connections: initialConnections, payment_metho
       </header>
 
       {connections.length === 0 && (
-        <Card className="border-rule shadow-none">
+        <Card>
           <CardContent className="text-center py-12">
             <p className="mb-4 text-ink-quiet">No SimpleFIN connections yet.</p>
             <Button asChild>

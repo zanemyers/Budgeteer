@@ -103,14 +103,14 @@ export default function Investments({ accounts, portfolio }: Props) {
       </header>
 
       {accounts.length === 0 ? (
-        <Card className="border-rule shadow-none">
+        <Card>
           <CardContent className="text-center py-12 text-ink-quiet">
             Connect a brokerage via SimpleFIN to see your positions here.
           </CardContent>
         </Card>
       ) : (
         <>
-          <Card className="border-rule shadow-none mb-8">
+          <Card className="mb-8">
             <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-6 py-6">
               <div>
                 <div className="text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-ink-quiet">
@@ -147,7 +147,7 @@ export default function Investments({ accounts, portfolio }: Props) {
             const isOpen = expanded.has(acct.id);
             return (
               <section key={acct.id} className="mb-6">
-                <Card className="border-rule shadow-none overflow-hidden p-0">
+                <Card className="overflow-hidden p-0">
                   <button
                     type="button"
                     onClick={() => toggle(acct.id)}

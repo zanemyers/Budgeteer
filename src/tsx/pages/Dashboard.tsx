@@ -426,7 +426,7 @@ export default function Dashboard({
           {income.length > 0 && (
             <div className="md:col-span-4 flex flex-col gap-6">
               {/* Income card — short */}
-              <Card className="p-0 gap-0 overflow-hidden border-rule shadow-none">
+              <Card className="p-0 gap-0 overflow-hidden">
                 <div className="flex justify-between items-center px-4 py-2 bg-moss-soft text-ink">
                   <span className={SECTION_LABEL_CLASS}>Income</span>
                   <Button
@@ -479,7 +479,7 @@ export default function Dashboard({
               </Card>
 
               {/* This month summary — single coherent card, plain header */}
-              <Card className="border-rule shadow-none">
+              <Card>
                 <div className="px-5 py-4 flex flex-col gap-2.5">
                   <span className={`${SECTION_LABEL_CLASS} text-ink-quiet`}>This month</span>
                   <dl className="flex flex-col gap-1.5">
@@ -525,7 +525,7 @@ export default function Dashboard({
           {/* Expenses — primary, full-height column */}
           {expense.length > 0 && (
             <div className="md:col-span-8 flex flex-col gap-6">
-              <Card className="p-0 gap-0 overflow-hidden border-rule shadow-none">
+              <Card className="p-0 gap-0 overflow-hidden">
                 <div className="flex justify-between items-center px-4 py-2 bg-expense-soft text-ink">
                   <span className={SECTION_LABEL_CLASS}>Expenses</span>
                   <Button

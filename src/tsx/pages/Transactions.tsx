@@ -686,7 +686,7 @@ export default function Transactions({
       </div>
 
       {transactions.length === 0 && bankTxns.length === 0 && ignoredBankTxns.length === 0 ? (
-        <Card className="border-rule shadow-none">
+        <Card>
           <CardContent className="text-muted-foreground py-12 text-center">Nothing logged for this period.</CardContent>
         </Card>
       ) : (
@@ -710,7 +710,7 @@ export default function Transactions({
               </TabsList>
 
               <TabsContent value="pending">
-                <Card className="overflow-hidden p-0 border-rule shadow-none">
+                <Card className="overflow-hidden p-0">
                   <div className="overflow-x-auto">
                     <Table>
                       <TableHeader>
@@ -793,7 +793,7 @@ export default function Transactions({
               </TabsContent>
 
               <TabsContent value="ignored">
-                <Card className="overflow-hidden p-0 border-rule shadow-none">
+                <Card className="overflow-hidden p-0">
                   <div className="overflow-x-auto">
                     <Table>
                       <TableHeader>
@@ -904,7 +904,7 @@ export default function Transactions({
               </TabsContent>
 
               <TabsContent value="logged">
-                <Card className="overflow-hidden p-0 border-rule shadow-none">
+                <Card className="overflow-hidden p-0">
                   {rest.length === 0 ? (
                     <CardContent className="text-muted-foreground py-12 text-center">
                       Nothing recorded yet for this period.
@@ -930,7 +930,7 @@ export default function Transactions({
               </TabsContent>
 
               <TabsContent value="transfers">
-                <Card className="overflow-hidden p-0 border-rule shadow-none">
+                <Card className="overflow-hidden p-0">
                   {transfers.length === 0 ? (
                     <CardContent className="text-muted-foreground py-12 text-center">
                       No linked transfers yet. Link two halves of a money movement (e.g. checking → savings) from a
