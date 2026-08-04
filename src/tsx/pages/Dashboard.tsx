@@ -279,7 +279,7 @@ export default function Dashboard({
           )}
         </TableCell>
         <TableCell className="text-right">
-          <div className="flex items-baseline justify-end gap-1">
+          <div className="flex flex-wrap items-baseline justify-end gap-x-1">
             <CurrencyEditCell
               symbol={symbol}
               value={cat.assigned}
@@ -330,8 +330,12 @@ export default function Dashboard({
                 title="Click to set monthly target"
               />
             )}
+            {overTarget && (
+              <span className="whitespace-nowrap text-xs text-expense">
+                &middot; {fmt(String(overBy), symbol)} over
+              </span>
+            )}
           </div>
-          {overTarget && <div className="text-xs text-expense">{fmt(String(overBy), symbol)} over</div>}
         </TableCell>
         <TableCell className="text-right">{fmt(cat.activity, symbol)}</TableCell>
       </TableRow>
