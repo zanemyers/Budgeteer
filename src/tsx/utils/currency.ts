@@ -2,6 +2,8 @@ import { usePage } from "@inertiajs/react";
 
 interface PageProps {
   auth?: { user?: { currency_symbol?: string; currency_code?: string; currency_rate?: string } };
+  // Inertia's usePage generic requires an index signature; page props are an open bag.
+  [key: string]: unknown;
 }
 
 export function useCurrencySymbol(): string {

@@ -5,7 +5,7 @@
     "dev": "bunx vite",
     "build": "bunx vite build",
     "preview": "bunx vite preview",
-    "lint": "bunx biome lint ./src",
+    "lint": "bunx biome lint ./src && bunx tsc --noEmit",
     "format": "bunx biome check --write ./src"
   },
   "dependencies": {

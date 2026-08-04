@@ -44,7 +44,7 @@ jobs:
       - name: Install Node dependencies
         run: bun install --frozen-lockfile
 
-      # just lint = biome + djlint + ruff + makemigrations --check + ty
+      # just lint = biome + tsc + djlint + ruff + makemigrations --check + ty
       - name: Lint
         run: PATH="$(pwd)/.venv/bin:${PATH}" just lint
 
