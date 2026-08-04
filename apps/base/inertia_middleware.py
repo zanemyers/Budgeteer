@@ -1,4 +1,5 @@
 from django.contrib.messages import get_messages
+from django.urls import NoReverseMatch, reverse
 
 from inertia import share
 
@@ -60,12 +61,32 @@ class InertiaShareMiddleware:
                 has_investments=has_investments,
             )
 
-        response = self.get_response(request)
+        # Flash has to be shared *before* the response is built. Sharing afterwards cannot
+        # affect an already-rendered response, and iterating get_messages() marks the storage
+        # used — so MessageMiddleware (which runs its response phase after this one) then
+        # discarded them. Between those two, server-side messages never reached the client.
+        #
+        # Read at request time, these are the messages set by whichever request redirected
+        # here, which is how every messages.* call site in this project uses them.
+        #
+        # Not gated on authentication, so allauth's messages work on anonymous pages too.
+        if not self._is_admin_path(request):
+            flash_messages = [{"level": m.level_tag, "message": str(m)} for m in get_messages(request)]
+            if flash_messages:
+                share(request, flash=flash_messages)
 
-        # Forward Django messages as flash props on the *next* request via session,
-        # but we can also attach them to the current response for redirects.
-        flash_messages = [{"level": m.level_tag, "message": str(m)} for m in get_messages(request)]
-        if flash_messages:
-            share(request, flash=flash_messages)
+        return self.get_response(request)
 
-        return response
+    @staticmethod
+    def _is_admin_path(request) -> bool:
+        """
+        Report whether this is a Django admin URL, whose messages must be left alone.
+
+        The admin renders messages through its own template, so consuming them here would
+        show the user a blank confirmation after actions like the exchange-rate refresh.
+        """
+        try:
+            admin_root = reverse("admin:index")
+        except NoReverseMatch:
+            return False
+        return request.path.startswith(admin_root)

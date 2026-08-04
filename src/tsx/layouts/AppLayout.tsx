@@ -1,6 +1,7 @@
 import { router, usePage } from "@inertiajs/react";
 import { Menu } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -29,6 +30,7 @@ interface PageProps {
   budget_pk?: number;
   month?: string;
   has_investments?: boolean;
+  flash?: Array<{ level: string; message: string }>;
 }
 
 function NavLink({
@@ -104,6 +106,22 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { props, url } = usePage<PageProps>();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const user = props.auth?.user;
+
+  // Surface server-side messages. The `flash` prop was being shared but read nowhere, so
+  // anything a view reported via messages.* (e.g. "Set an amount before marking this
+  // paycheck paid") was silently dropped after the redirect.
+  const flash = props.flash;
+  useEffect(() => {
+    for (const { level, message } of flash ?? []) {
+      if (level === "error") toast.error(message);
+      else if (level === "warning") toast.warning(message);
+      else if (level === "success") toast.success(message);
+      else toast(message);
+    }
+    // Keyed on the messages themselves so a re-render doesn't re-toast, but a fresh
+    // navigation carrying new ones does.
+  }, [flash]);
+
   const sidebarBudget = props.current_budget ?? null;
   const sidebarBudgetPk = props.budget_pk ?? sidebarBudget?.pk;
   const month = props.month;
