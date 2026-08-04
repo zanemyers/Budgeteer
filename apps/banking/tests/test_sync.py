@@ -13,6 +13,7 @@ from apps.accounts.models import User
 from apps.banking.management.commands.sync_simplefin import _to_datetime, _to_decimal, sync_connection
 from apps.banking.models import BankAccount, BankTransaction, SimpleFINConnection
 from apps.banking.simplefin import SimpleFINError
+from apps.investments.models import Holding
 
 FETCH_PATH = "apps.banking.management.commands.sync_simplefin.fetch_accounts"
 HOLDINGS_PATH = "apps.banking.management.commands.sync_simplefin.persist_holdings"
@@ -138,7 +139,7 @@ class TestSyncConnection(TestCase):
     @patch(HOLDINGS_PATH)
     @patch(FETCH_PATH)
     def test_persists_holdings_when_present(self, mock_fetch, mock_holdings):
-        mock_holdings.return_value = {"new": 2, "updated": 1, "removed": 0}
+        mock_holdings.return_value = {"new": 2, "updated": 1, "removed": 0, "skipped_empty": False}
         payload = _payload()
         payload["accounts"][0]["holdings"] = [{"id": "h1"}]
         mock_fetch.return_value = payload
@@ -147,6 +148,62 @@ class TestSyncConnection(TestCase):
         self.assertEqual(summary["new_holdings"], 2)
         self.assertEqual(summary["updated_holdings"], 1)
         mock_holdings.assert_called_once()
+
+    @patch(FETCH_PATH)
+    def test_null_holdings_does_not_wipe_the_portfolio(self, mock_fetch):
+        """
+        A null holdings value must not be read as "every position closed".
+
+        The command used to pass `acct.get("holdings") or []`, which turned None into an
+        empty list — and persist_holdings deletes anything absent from the payload, so a
+        single null-holdings sync deleted the account's whole portfolio, cost basis included.
+        """
+        payload = _payload()
+        payload["accounts"][0]["holdings"] = [{"id": "h1", "symbol": "AAPL", "cost_basis": "1000.00"}]
+        mock_fetch.return_value = payload
+        sync_connection(self.conn)
+        self.assertEqual(Holding.objects.count(), 1)
+
+        payload["accounts"][0]["holdings"] = None
+        mock_fetch.return_value = payload
+        summary = sync_connection(self.conn)
+
+        self.assertEqual(Holding.objects.count(), 1)
+        self.assertEqual(Holding.objects.get().cost_basis, Decimal("1000.00"))
+        self.assertEqual(summary["removed_holdings"], 0)
+        # None is a legitimate "no holdings data for this account" signal, so it must reach
+        # persist_holdings as None and return quietly. Coercing it to [] would instead trip
+        # the empty-payload guard and report a spurious sync error every six hours.
+        self.conn.refresh_from_db()
+        self.assertEqual(self.conn.last_sync_error, "")
+
+    @patch(FETCH_PATH)
+    def test_empty_holdings_keeps_the_portfolio_and_reports_it(self, mock_fetch):
+        payload = _payload()
+        payload["accounts"][0]["holdings"] = [{"id": "h1", "symbol": "AAPL", "cost_basis": "1000.00"}]
+        mock_fetch.return_value = payload
+        sync_connection(self.conn)
+
+        payload["accounts"][0]["holdings"] = []
+        mock_fetch.return_value = payload
+        summary = sync_connection(self.conn)
+
+        self.assertEqual(Holding.objects.count(), 1)
+        self.assertEqual(summary["removed_holdings"], 0)
+        self.conn.refresh_from_db()
+        self.assertIn("no holdings", self.conn.last_sync_error)
+
+    @patch(FETCH_PATH)
+    def test_holdings_key_absent_leaves_holdings_untouched(self, mock_fetch):
+        payload = _payload()
+        payload["accounts"][0]["holdings"] = [{"id": "h1", "symbol": "AAPL"}]
+        mock_fetch.return_value = payload
+        sync_connection(self.conn)
+
+        payload["accounts"][0].pop("holdings")
+        mock_fetch.return_value = payload
+        sync_connection(self.conn)
+        self.assertEqual(Holding.objects.count(), 1)
 
 
 class TestSyncCommand(TestCase):

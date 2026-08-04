@@ -22,9 +22,19 @@ def persist_holdings(bank_account, holdings_payload: list[dict[str, Any]] | None
 
     Pass `None` to skip reconciliation entirely (e.g. SimpleFIN didn't return a
     `holdings` key for this account).
+
+    An *empty* payload is treated as suspect rather than authoritative: a bridge that
+    briefly returns no positions is indistinguishable from an account that genuinely
+    closed all of them, and deleting is unrecoverable (there is no snapshot history, so
+    cost basis is lost) while keeping stale rows costs one more sync to correct. So an
+    empty payload for an account that currently holds positions is skipped and reported.
     """
-    summary = {"new": 0, "updated": 0, "removed": 0}
+    summary = {"new": 0, "updated": 0, "removed": 0, "skipped_empty": False}
     if holdings_payload is None:
+        return summary
+
+    if not holdings_payload and Holding.objects.filter(bank_account=bank_account).exists():
+        summary["skipped_empty"] = True
         return summary
 
     seen_ids: set[str] = set()

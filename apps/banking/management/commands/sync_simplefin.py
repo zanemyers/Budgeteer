@@ -74,10 +74,20 @@ def sync_connection(conn: SimpleFINConnection, days: int = 31) -> dict:
         summary["accounts"] += 1
 
         if "holdings" in acct:
-            hold_result = persist_holdings(bank_account, acct.get("holdings") or [])
+            # Pass the value through unchanged. `or []` here would turn a null holdings
+            # value into an empty list, which persist_holdings reads as "every position
+            # was closed" — deleting the account's whole portfolio, cost basis included.
+            hold_result = persist_holdings(bank_account, acct.get("holdings"))
             summary["new_holdings"] += hold_result["new"]
             summary["updated_holdings"] += hold_result["updated"]
             summary["removed_holdings"] += hold_result["removed"]
+            if hold_result["skipped_empty"]:
+                # Surfaced as a connection error so it reaches the Banking page rather than
+                # only the cron log — an empty payload usually means the bridge is unhealthy.
+                errors.append(
+                    f"{bank_account.name}: SimpleFIN returned no holdings for an account that has "
+                    f"positions on record. Kept the existing holdings; re-check after the next sync."
+                )
 
         for txn in acct.get("transactions") or []:
             txn_id = txn.get("id")
