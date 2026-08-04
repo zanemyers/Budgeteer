@@ -221,20 +221,20 @@ export default function Dashboard({
     const budgeted = parseFloat(cat.budgeted);
     const assigned = parseFloat(cat.assigned);
     const activity = parseFloat(cat.activity);
-    const isExpense = cat.category_type === "expense";
     // A carried balance pre-fills `assigned` without being charged to Ready to Assign, so it's
     // worth explaining wherever that figure appears.
     const carried = cat.rollover_carry !== null && parseFloat(cat.rollover_carry) > 0;
 
     const budgetedClass = budgeted > 0 && activity > budgeted ? "text-expense" : "";
     const assignedClass = budgeted > 0 && assigned === budgeted ? "text-moss" : "";
-    const availableClass = isExpense
-      ? available < 0
-        ? "text-expense font-semibold"
-        : available === 0
-          ? "text-muted-foreground"
-          : "text-moss"
-      : "text-moss";
+
+    // Available is no longer its own column — the meter carries it, as the relationship between
+    // what's assigned and what's been spent. Compared with an epsilon rather than `=== 0`
+    // because both sides come from parseFloat on serialized decimals.
+    const overspent = available < -0.005;
+    const spentFraction = assigned > 0 ? Math.min(1, activity / assigned) : activity > 0 ? 1 : 0;
+    const meterPct = Math.round(spentFraction * 100);
+    const meterFill = overspent ? "bg-expense" : "bg-moss";
 
     return (
       <TableRow key={cat.id}>
@@ -253,62 +253,74 @@ export default function Dashboard({
           )}
         </TableCell>
         <TableCell className="text-right">
-          {cat.rollover && !cat.is_goal ? (
-            <span
-              className={`tabular-nums ${budgetedClass}`}
-              title={
-                carried
-                  ? `Target: ${fmt(cat.base_amount, symbol)} base + ${fmt(cat.rollover_carry, symbol)} carried over`
-                  : "Target for this month (base amount)"
-              }
-            >
-              {fmt(cat.budgeted, symbol)}
-            </span>
-          ) : (
+          <div className="flex flex-col items-end gap-1">
             <CurrencyEditCell
               symbol={symbol}
-              value={cat.budgeted}
-              editing={editingBudgeted[cat.id]}
+              value={cat.assigned}
+              editing={editingAssigned[cat.id]}
               onStart={() => {
-                setEditingBudgeted((prev) => ({ ...prev, [cat.id]: cat.budgeted }));
+                setEditingAssigned((prev) => ({ ...prev, [cat.id]: cat.assigned }));
               }}
-              onChange={(v) => setEditingBudgeted((prev) => ({ ...prev, [cat.id]: v }))}
-              onCommit={() => void saveBudgeted(cat)}
-              onCancel={() =>
-                setEditingBudgeted((prev) => {
-                  const n = { ...prev };
-                  delete n[cat.id];
-                  return n;
-                })
+              onChange={(v) => setEditingAssigned((prev) => ({ ...prev, [cat.id]: v }))}
+              onCommit={() => void saveAssigned(cat)}
+              onCancel={() => clearEditAssigned(cat.id)}
+              saving={savingAssigned[cat.id] ?? false}
+              valueClass={assignedClass}
+              title={
+                carried
+                  ? `${fmt(cat.rollover_carry, symbol)} carried over from last month. Reduce this to move it elsewhere.`
+                  : "Click to set assigned amount"
               }
-              saving={savingBudgeted[cat.id] ?? false}
-              valueClass={budgetedClass}
-              title="Click to set monthly target"
             />
-          )}
-        </TableCell>
-        <TableCell className="text-right">
-          <CurrencyEditCell
-            symbol={symbol}
-            value={cat.assigned}
-            editing={editingAssigned[cat.id]}
-            onStart={() => {
-              setEditingAssigned((prev) => ({ ...prev, [cat.id]: cat.assigned }));
-            }}
-            onChange={(v) => setEditingAssigned((prev) => ({ ...prev, [cat.id]: v }))}
-            onCommit={() => void saveAssigned(cat)}
-            onCancel={() => clearEditAssigned(cat.id)}
-            saving={savingAssigned[cat.id] ?? false}
-            valueClass={assignedClass}
-            title={
-              carried
-                ? `${fmt(cat.rollover_carry, symbol)} carried over from last month. Reduce this to move it elsewhere.`
-                : "Click to set assigned amount"
-            }
-          />
+
+            {/* The target, secondary to what's actually in the envelope. Read-only for rollover
+                rows, where it's base + carry rather than a figure you set directly. */}
+            <div className="flex items-baseline gap-1 text-xs text-muted-foreground">
+              <span>of</span>
+              {cat.rollover && !cat.is_goal ? (
+                <span
+                  className={`tabular-nums ${budgetedClass}`}
+                  title={
+                    carried
+                      ? `Target: ${fmt(cat.base_amount, symbol)} base + ${fmt(cat.rollover_carry, symbol)} carried over`
+                      : "Target for this month (base amount)"
+                  }
+                >
+                  {fmt(cat.budgeted, symbol)}
+                </span>
+              ) : (
+                <CurrencyEditCell
+                  symbol={symbol}
+                  value={cat.budgeted}
+                  editing={editingBudgeted[cat.id]}
+                  onStart={() => {
+                    setEditingBudgeted((prev) => ({ ...prev, [cat.id]: cat.budgeted }));
+                  }}
+                  onChange={(v) => setEditingBudgeted((prev) => ({ ...prev, [cat.id]: v }))}
+                  onCommit={() => void saveBudgeted(cat)}
+                  onCancel={() => clearEditBudgeted(cat.id)}
+                  saving={savingBudgeted[cat.id] ?? false}
+                  valueClass={budgetedClass}
+                  title="Click to set monthly target"
+                />
+              )}
+            </div>
+
+            {/* Stands in for the Available column: fill is spend against what's assigned. */}
+            <div
+              role="progressbar"
+              aria-valuenow={meterPct}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label={`${cat.name}: ${fmt(cat.activity, symbol)} spent of ${fmt(cat.assigned, symbol)} assigned, ${fmt(cat.available, symbol)} left`}
+              title={`${fmt(cat.available, symbol)} left`}
+              className="h-1 w-24 overflow-hidden rounded-full bg-surface-strong"
+            >
+              <div className={`h-full rounded-full ${meterFill}`} style={{ width: `${meterPct}%` }} />
+            </div>
+          </div>
         </TableCell>
         <TableCell className="text-right">{fmt(cat.activity, symbol)}</TableCell>
-        <TableCell className={`text-right ${availableClass}`}>{fmt(cat.available, symbol)}</TableCell>
       </TableRow>
     );
   }
@@ -556,10 +568,8 @@ export default function Dashboard({
                   <TableHeader>
                     <TableRow>
                       <TableHead>Category</TableHead>
-                      <TableHead className="text-right">Budgeted</TableHead>
-                      <TableHead className="text-right">Assigned</TableHead>
+                      <TableHead className="text-right">Assigned / target</TableHead>
                       <TableHead className="text-right">Spent</TableHead>
-                      <TableHead className="text-right">Available</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>{renderHierarchical(expense)}</TableBody>
