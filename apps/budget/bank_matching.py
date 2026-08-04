@@ -18,7 +18,7 @@ from decimal import Decimal
 from difflib import SequenceMatcher
 from typing import TYPE_CHECKING
 
-from apps.budget.models import Transaction
+from apps.budget.models import Category, Transaction
 
 if TYPE_CHECKING:
     from apps.banking.models import BankTransaction
@@ -71,6 +71,24 @@ def _amount_matches(a: Decimal, b: Decimal) -> bool:
     return abs(abs(a) - abs(b)) <= AMOUNT_TOLERANCE
 
 
+def _direction_conflicts(bank_amount: Decimal, txn: Transaction) -> bool:
+    """
+    Report whether a bank row can't be the same movement of money as `txn`.
+
+    SimpleFIN signs outflows negative, while local amounts are always stored positive with
+    the direction carried by transaction_type. _amount_matches compares magnitudes only, so
+    without this an incoming $50 paycheck would be offered as the match for a $50 card
+    charge. Transfers and untyped transactions have no unambiguous direction, so they are
+    never rejected here.
+    """
+    txn_type = txn.derive_transaction_type()
+    if txn_type == Category.TYPE_INCOME:
+        return bank_amount < 0
+    if txn_type == Category.TYPE_EXPENSE:
+        return bank_amount > 0
+    return False
+
+
 def suggest_matches(bank_txn: BankTransaction, budget: Budget) -> list[dict]:
     """Return up to MAX_SUGGESTIONS dicts ranked by confidence."""
     bank_date = bank_txn.posted_at.date()
@@ -93,7 +111,7 @@ def suggest_matches(bank_txn: BankTransaction, budget: Budget) -> list[dict]:
     same_pm_filter = bank_txn.bank_account.payment_method_id
     for txn in candidates:
         txn_amount = txn.total_amount
-        if not _amount_matches(amount, txn_amount):
+        if not _amount_matches(amount, txn_amount) or _direction_conflicts(amount, txn):
             continue
         date_score = _date_proximity(bank_date, txn.due_date)
         # Name similarity: prefer recurring.name then description.
@@ -130,7 +148,7 @@ def suggest_matches(bank_txn: BankTransaction, budget: Budget) -> list[dict]:
     )
     for txn in paid_candidates:
         txn_amount = txn.total_amount
-        if not _amount_matches(amount, txn_amount):
+        if not _amount_matches(amount, txn_amount) or _direction_conflicts(amount, txn):
             continue
         date_score = _date_proximity(bank_date, txn.paid_date)
         name_score = _name_similarity(bank_txn, txn.description)
