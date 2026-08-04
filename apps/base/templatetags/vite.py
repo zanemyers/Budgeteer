@@ -81,10 +81,23 @@ def _get_css_asset(filename: str):
     if vite_settings.VITE_DEV_MODE is True:
         base_url = f"http://{vite_settings.VITE_SERVER_HOST}:{vite_settings.VITE_SERVER_PORT}"
         return mark_safe(f'<link rel="stylesheet" href="{base_url}{settings.STATIC_URL}{filename}">')  # noqa: S308
-    file_data = _get_file_data(filename)
-    # CSS direct entry uses "file" key; CSS imported by JS uses "css" array
-    hashed_filename = file_data.get("file") or (file_data.get("css") or [None])[0]  # type: ignore
-    return _get_css_link(hashed_filename)  # type: ignore
+    direct = _get_manifest().get(filename)
+    if direct is not None:
+        # A standalone CSS entry (e.g. "css/main.css"): its own "file" is the stylesheet.
+        hashed_filename = direct.get("file")
+    else:
+        # CSS emitted by a JS entry, reached via the .css -> .js fallback in _get_file_data.
+        # That entry's "file" is the JS bundle, so the stylesheet must come from "css" —
+        # preferring "file" here would emit a <link> pointing at a .js file.
+        file_data = _get_file_data(filename)
+        css_files = file_data.get("css")
+        hashed_filename = css_files[0] if isinstance(css_files, list) and css_files else None
+        if hashed_filename is None:
+            raise Exception(
+                f'The vite asset "{filename}" matched a manifest entry with no CSS output in '
+                f"{vite_settings.VITE_MANIFEST_FILE}."
+            )
+    return _get_css_link(hashed_filename)  # type: ignore[arg-type]
 
 
 def _get_js_asset(filename: str):
