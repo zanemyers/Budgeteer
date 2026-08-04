@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card";
 import GoalModal, { type GoalCategory } from "../components/GoalModal";
 import { PageTourButton } from "../components/PageTourButton";
 import TransactionModal from "../components/TransactionModal";
-import { getCsrfToken } from "../lib/api";
+import { errorMessage, jsonFetch } from "../lib/api";
 import { usePageTour } from "../lib/onboardingTour";
 import type {
   BudgetOverview,
@@ -40,6 +40,11 @@ function toGoalCategory(cat: BudgetOverviewCategory): GoalCategory {
     category_type: cat.category_type,
     parent_id: cat.parent_id,
     monthly_budget: cat.budgeted,
+    rollover: cat.rollover,
+    // The overview serializer doesn't carry these two, and a goal never uses rollover
+    // accrual anyway, so they're filled with the model defaults rather than left missing.
+    base_amount: "0.00",
+    rollover_start: null,
     is_goal: cat.is_goal,
     goal_target: cat.goal_target,
     goal_due_date: cat.goal_due_date,
@@ -72,27 +77,20 @@ export default function Goals({
   }
 
   async function createTransaction(data: Partial<Transaction>) {
-    const res = await fetch(`/budgets/${budget_pk}/transactions/create/`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() },
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) {
-      const json = (await res.json()) as { errors?: Record<string, string[]> };
-      throw json.errors ?? json;
-    }
+    // jsonFetch throws the same shape this built by hand; the modal needs the throw to
+    // render its field errors.
+    await jsonFetch(`/budgets/${budget_pk}/transactions/create/`, "POST", data);
     router.reload({ only: ["overview"] });
   }
 
   async function handleDelete(cat: BudgetOverviewCategory) {
-    const res = await fetch(`/budgets/${budget_pk}/categories/${cat.id}/delete/`, {
-      method: "DELETE",
-      headers: { "X-CSRFToken": getCsrfToken() },
-    });
-    if (res.ok || res.status === 204) {
+    try {
+      await jsonFetch(`/budgets/${budget_pk}/categories/${cat.id}/delete/`, "DELETE");
       router.reload({ only: ["overview", "categories"] });
-    } else {
-      setDeleteError((prev) => ({ ...prev, [cat.id]: "Cannot delete — goal has transactions." }));
+    } catch (err) {
+      // The view already explains why a delete was refused; asserting "has transactions"
+      // here was a guess that also covered 500s and network failures.
+      setDeleteError((prev) => ({ ...prev, [cat.id]: errorMessage(err, "Couldn't delete that goal.") }));
     }
   }
 

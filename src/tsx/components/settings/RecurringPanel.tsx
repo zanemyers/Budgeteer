@@ -1,11 +1,12 @@
 import { router } from "@inertiajs/react";
 import { Pause, Pencil, RotateCcw } from "lucide-react";
 import { Fragment, useState } from "react";
+import { toast } from "sonner";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { getCsrfToken } from "@/lib/api";
+import { errorMessage, jsonFetch } from "@/lib/api";
 import { fmt, useCurrencySymbol } from "@/utils/currency";
 import { fmtDate, todayLocal } from "@/utils/date";
 import {
@@ -64,32 +65,29 @@ export function RecurringPanel({ budgetPk, recurring, categories, paymentMethods
   const [editing, setEditing] = useState<RecurringPanelItem | null>(null);
 
   async function handleDeactivate(rt: RecurringPanelItem) {
-    const res = await fetch(`/budgets/${budgetPk}/recurring/${rt.id}/`, {
-      method: "DELETE",
-      headers: { "X-CSRFToken": getCsrfToken() },
-    });
-    if (res.ok || res.status === 204) {
+    try {
+      await jsonFetch(`/budgets/${budgetPk}/recurring/${rt.id}/`, "DELETE");
       onChange(recurring.map((r) => (r.id === rt.id ? { ...r, is_active: false, end_date: todayLocal() } : r)));
+    } catch (err) {
+      toast.error(errorMessage(err, "Couldn't pause that recurring transaction."));
     }
   }
 
   async function handleReactivate(rt: RecurringPanelItem) {
-    const res = await fetch(`/budgets/${budgetPk}/recurring/${rt.id}/`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() },
-      body: JSON.stringify({ is_active: true, end_date: null }),
-    });
-    if (!res.ok) return;
-    onChange(recurring.map((r) => (r.id === rt.id ? { ...r, is_active: true, end_date: null } : r)));
+    try {
+      await jsonFetch(`/budgets/${budgetPk}/recurring/${rt.id}/`, "PATCH", { is_active: true, end_date: null });
+      onChange(recurring.map((r) => (r.id === rt.id ? { ...r, is_active: true, end_date: null } : r)));
+    } catch (err) {
+      toast.error(errorMessage(err, "Couldn't resume that recurring transaction."));
+    }
   }
 
   async function handleDelete(rt: RecurringPanelItem) {
-    const res = await fetch(`/budgets/${budgetPk}/recurring/${rt.id}/?permanent=true`, {
-      method: "DELETE",
-      headers: { "X-CSRFToken": getCsrfToken() },
-    });
-    if (res.ok || res.status === 204) {
+    try {
+      await jsonFetch(`/budgets/${budgetPk}/recurring/${rt.id}/?permanent=true`, "DELETE");
       onChange(recurring.filter((r) => r.id !== rt.id));
+    } catch (err) {
+      toast.error(errorMessage(err, "Couldn't delete that recurring transaction."));
     }
   }
 

@@ -15,7 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { getCsrfToken } from "@/lib/api";
+import { fieldErrors, jsonFetch } from "@/lib/api";
 import { todayLocal } from "@/utils/date";
 
 export interface RecurringFormCategory {
@@ -111,24 +111,14 @@ export function RecurringFormModal({
     const url = isEdit ? `/budgets/${budgetPk}/recurring/${recurring!.id}/` : `/budgets/${budgetPk}/recurring/create/`;
 
     try {
-      const res = await fetch(url, {
-        method: isEdit ? "PATCH" : "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Requested-With": "XMLHttpRequest",
-          "X-CSRFToken": getCsrfToken(),
-        },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        const data = (await res.json()) as { errors?: Record<string, string[]> };
-        setErrors(data.errors ?? { non_field_errors: ["Something went wrong."] });
-        setSubmitting(false);
-        return;
-      }
+      await jsonFetch(url, isEdit ? "PATCH" : "POST", payload);
       onSaved();
-    } catch {
-      setErrors({ non_field_errors: ["Something went wrong."] });
+    } catch (err) {
+      // fieldErrors keeps a validation map intact and routes everything else — session
+      // expiry, a dropped connection, an HTML error page — to non_field_errors. Previously
+      // the bare catch flattened all of those into one generic string, and the branch above
+      // called res.json() unguarded so an HTML response threw past it entirely.
+      setErrors(fieldErrors(err));
       setSubmitting(false);
     }
   }

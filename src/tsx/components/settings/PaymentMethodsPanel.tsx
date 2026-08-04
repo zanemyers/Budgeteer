@@ -4,7 +4,7 @@ import { ConfirmButton } from "@/components/ConfirmButton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { getCsrfToken } from "@/lib/api";
+import { errorMessage, jsonFetch } from "@/lib/api";
 import { PaymentMethodModal } from "./PaymentMethodModal";
 
 export interface PaymentMethod {
@@ -39,14 +39,13 @@ export function PaymentMethodsPanel({ budgetPk, paymentMethods, typeChoices, onC
   }
 
   async function handleDelete(pm: PaymentMethod) {
-    const res = await fetch(`/budgets/${budgetPk}/payment-methods/${pm.id}/`, {
-      method: "DELETE",
-      headers: { "X-CSRFToken": getCsrfToken() },
-    });
-    if (res.ok || res.status === 204) {
+    try {
+      await jsonFetch(`/budgets/${budgetPk}/payment-methods/${pm.id}/`, "DELETE");
       onChange(paymentMethods.filter((m) => m.id !== pm.id));
-    } else {
-      setDeleteError((prev) => ({ ...prev, [pm.id]: "Cannot delete — payment method is in use." }));
+    } catch (err) {
+      // Reports whatever the server said instead of asserting "in use", which was shown for
+      // every failure including a 500 or a dropped connection.
+      setDeleteError((prev) => ({ ...prev, [pm.id]: errorMessage(err, "Couldn't delete that payment method.") }));
     }
   }
 

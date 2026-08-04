@@ -23,16 +23,36 @@ export function errorMessage(err: unknown, fallback: string): string {
     const body = err as Record<string, unknown>;
     if (typeof body.error === "string" && body.error) return body.error;
     if (typeof body.detail === "string" && body.detail) return body.detail;
-    // Field errors: surface the first real message rather than "[object Object]".
-    for (const value of Object.values(body)) {
-      if (typeof value === "string" && value) return value;
-      if (Array.isArray(value)) {
-        const first = value.find((v) => typeof v === "string" && v);
-        if (typeof first === "string") return first;
-      }
-    }
+    // Field errors: `{field: ["msg", ...]}`. Every message is joined rather than just the
+    // first, so a form with several invalid fields reports all of them — and rather than
+    // "[object Object]", which is what naive stringifying produced.
+    const messages = Object.values(body).flatMap((value) => {
+      if (typeof value === "string" && value) return [value];
+      if (Array.isArray(value)) return value.filter((item): item is string => typeof item === "string" && !!item);
+      return [];
+    });
+    if (messages.length > 0) return messages.join(" ");
   }
   return fallback;
+}
+
+/**
+ * Normalise a thrown value into the `{field: ["msg"]}` map that form components render.
+ *
+ * A field-error body passes through untouched. Anything else — a session expiry, a network
+ * failure, an HTML error page — is put under `non_field_errors` so the form still shows
+ * something. Without that, a form reading `errors.non_field_errors` renders nothing at all
+ * for exactly those cases and just silently re-enables its submit button.
+ */
+export function fieldErrors(err: unknown, fallback = "Something went wrong."): Record<string, string[]> {
+  if (err && typeof err === "object" && !(err instanceof Error)) {
+    const body = err as Record<string, unknown>;
+    const isFieldMap = Object.values(body).some(
+      (value) => Array.isArray(value) && value.every((item) => typeof item === "string"),
+    );
+    if (isFieldMap) return body as Record<string, string[]>;
+  }
+  return { non_field_errors: [errorMessage(err, fallback)] };
 }
 
 /**

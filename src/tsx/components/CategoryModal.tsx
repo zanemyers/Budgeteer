@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { getCsrfToken } from "@/lib/api";
+import { errorMessage, jsonFetch } from "@/lib/api";
 
 interface CategoryShape {
   id: number;
@@ -94,24 +94,13 @@ export default function CategoryModal({
     const method = isEdit ? "PATCH" : "POST";
 
     try {
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        const data = (await res.json()) as { errors?: Record<string, string[]> };
-        const flat = Object.values(data.errors ?? data)
-          .flat()
-          .join(" ");
-        setError(flat || "Could not save.");
-        setSaving(false);
-        return;
-      }
-      const cat = (await res.json()) as CategoryShape;
+      const cat = (await jsonFetch(url, method, body)) as CategoryShape;
       onSaved(cat);
-    } catch {
-      setError("Network error.");
+    } catch (err) {
+      // Was a bare catch reporting "Network error." for every failure, including
+      // validation rejections, and the error branch above called res.json() unguarded
+      // so an HTML error page threw straight past it.
+      setError(errorMessage(err, "Could not save."));
       setSaving(false);
     }
   }
@@ -122,41 +111,26 @@ export default function CategoryModal({
     setAddingChild(true);
     setChildError("");
     try {
-      const res = await fetch(`/budgets/${budgetPk}/categories/create/`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() },
-        body: JSON.stringify({
-          name: newChildName.trim(),
-          category_type: type,
-          parent_id: category.id,
-        }),
-      });
-      if (!res.ok) {
-        const data = (await res.json()) as { errors?: Record<string, string[]> };
-        setChildError(
-          Object.values(data.errors ?? data)
-            .flat()
-            .join(" ") || "Could not add.",
-        );
-        return;
-      }
-      const child = (await res.json()) as CategoryShape;
+      const child = (await jsonFetch(`/budgets/${budgetPk}/categories/create/`, "POST", {
+        name: newChildName.trim(),
+        category_type: type,
+        parent_id: category.id,
+      })) as CategoryShape;
       onChildSaved?.(child);
       setNewChildName("");
+    } catch (err) {
+      setChildError(errorMessage(err, "Could not add."));
     } finally {
       setAddingChild(false);
     }
   }
 
   async function deleteChild(child: CategoryShape) {
-    const res = await fetch(`/budgets/${budgetPk}/categories/${child.id}/delete/`, {
-      method: "DELETE",
-      headers: { "X-CSRFToken": getCsrfToken() },
-    });
-    if (res.ok || res.status === 204) {
+    try {
+      await jsonFetch(`/budgets/${budgetPk}/categories/${child.id}/delete/`, "DELETE");
       onChildDeleted?.(child.id);
-    } else {
-      setChildError(`Could not delete ${child.name}.`);
+    } catch (err) {
+      setChildError(errorMessage(err, `Could not delete ${child.name}.`));
     }
   }
 

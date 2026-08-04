@@ -1,11 +1,12 @@
 import { router } from "@inertiajs/react";
 import { Pencil } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { getCsrfToken } from "@/lib/api";
+import { errorMessage, jsonFetch } from "@/lib/api";
 import { fmt, useCurrencySymbol } from "@/utils/currency";
 import {
   type PaySchedule,
@@ -50,12 +51,11 @@ export function PaySchedulePanel({
   const [editing, setEditing] = useState<PaySchedule | null>(null);
 
   async function handleDelete(schedule: PaySchedule) {
-    const res = await fetch(`/budgets/${budgetPk}/pay-schedules/${schedule.id}/`, {
-      method: "DELETE",
-      headers: { "X-CSRFToken": getCsrfToken() },
-    });
-    if (res.ok || res.status === 204) {
+    try {
+      await jsonFetch(`/budgets/${budgetPk}/pay-schedules/${schedule.id}/`, "DELETE");
       router.reload({ only: ["pay_schedules"] });
+    } catch (err) {
+      toast.error(errorMessage(err, "Couldn't delete that pay schedule."));
     }
   }
 
