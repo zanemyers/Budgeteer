@@ -1,0 +1,48 @@
+# Dependabot version updates.
+# https://docs.github.com/github/administering-a-repository/configuration-options-for-dependency-updates
+#
+# This file was deleted in fcfe69f ("Switching to inertia"), which silently turned off
+# dependency update PRs and vulnerability alerts for this repo. Restored here.
+
+version: 2
+
+updates:
+  # Base images for Dockerfile.web / Dockerfile.node
+  - package-ecosystem: "docker"
+    directory: "/config/docker/"
+    schedule:
+      interval: "weekly"
+      day: "saturday"
+      time: "11:00" # 11 AM UTC / 5 AM CST
+
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "saturday"
+      time: "11:00" # 11 AM UTC / 5 AM CST
+    open-pull-requests-limit: 10
+    groups:
+      uv-dependencies:
+        patterns:
+          - "*"
+
+  # Reads package.json / bun.lock
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "saturday"
+      time: "11:00" # 11 AM UTC / 5 AM CST
+    groups:
+      production-dependencies:
+        dependency-type: "production"
+      development-dependencies:
+        dependency-type: "development"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "saturday"
+      time: "11:00" # 11 AM UTC / 5 AM CST

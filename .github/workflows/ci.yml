@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+# The just recipes shell out to docker compose by default. Emptying the prefixes runs the
+# tools directly on the runner, which is what the *_CMD_PREFIX env vars exist for.
+env:
+  PYTHON_CMD_PREFIX: ""
+  PYTHON_CMD_PREFIX_WITH_DEPS: ""
+  NODE_CMD_PREFIX: ""
+  # Settings that config/settings/_base.py requires at import time. Values are throwaway:
+  # CI never persists data, and FERNET_KEY only has to be a well-formed key.
+  SECRET_KEY: secret-key-for-testing-only
+  FERNET_KEY: iPOwdGvAg5JQffsMr8SiQywmkZg01SQHU_dgGQGVhl4=
+  READ_DOT_ENV_FILE: "False"
+  DB_SSL_REQUIRED: "False"
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install just
+        run: curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /usr/local/bin
+
+      - name: Setup bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Install Python dependencies
+        run: uv sync --frozen
+
+      - name: Install Node dependencies
+        run: bun install --frozen-lockfile
+
+      # just lint = biome + djlint + ruff + makemigrations --check + ty
+      - name: Lint
+        run: PATH="$(pwd)/.venv/bin:${PATH}" just lint
+
+      # Not part of `just lint`, but a broken bundle should fail CI rather than surface at deploy.
+      - name: Build frontend
+        run: bun run build
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+      # No built manifest here, so keep the vite template tags pointing at dev-server URLs.
+      # They are never fetched during tests; the lint job covers the real bundle.
+      VITE_DEV_MODE: "on"
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Install Python dependencies
+        run: uv sync --frozen
+
+      - name: Run tests
+        run: uv run pytest --cov --ds=config.settings.test_runner
