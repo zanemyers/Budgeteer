@@ -121,6 +121,10 @@ export default function Dashboard({
   const [editingBudgeted, setEditingBudgeted] = useState<Record<number, string>>({});
   const [savingAssigned, setSavingAssigned] = useState<Record<number, boolean>>({});
   const [savingBudgeted, setSavingBudgeted] = useState<Record<number, boolean>>({});
+  // The last value submitted per cell. The input commits on blur as well as Enter, so without
+  // this a failed save — which deliberately keeps the cell editable so the typed value isn't
+  // lost — re-sent the same value and re-toasted on every subsequent blur.
+  const [lastTried, setLastTried] = useState<Record<string, string>>({});
   const [addTransactionType, setAddTransactionType] = useState<"income" | "expense" | null>(null);
   const [assigning, setAssigning] = useState(false);
   const [cleaning, setCleaning] = useState(false);
@@ -134,27 +138,39 @@ export default function Dashboard({
     router.get(`/budgets/${budget_pk}/`, { month: m }, { preserveState: false });
   }
 
+  function clearEditAssigned(id: number) {
+    setEditingAssigned((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  }
+
+  function clearEditBudgeted(id: number) {
+    setEditingBudgeted((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  }
+
   async function saveAssigned(cat: BudgetOverviewCategory) {
     const val = editingAssigned[cat.id];
-    if (val === undefined || val === "") {
-      setEditingAssigned((prev) => {
-        const next = { ...prev };
-        delete next[cat.id];
-        return next;
-      });
+    if (val !== undefined && val === lastTried[`assigned:${cat.id}`]) return;
+    // Nothing to do when the field is empty, or unchanged — it opens seeded with the persisted
+    // value, so clicking in and out without editing would otherwise write on every blur.
+    if (val === undefined || val === "" || val === cat.assigned) {
+      clearEditAssigned(cat.id);
       return;
     }
     setSavingAssigned((prev) => ({ ...prev, [cat.id]: true }));
+    setLastTried((prev) => ({ ...prev, [`assigned:${cat.id}`]: val }));
     try {
       await jsonFetch(`/budgets/${budget_pk}/category-budgets/${cat.id}/`, "PATCH", { assigned: val, month });
       // Only discard the edit buffer once the save actually landed. Clearing it in a
       // `finally` threw away what the user typed on failure and silently restored the old
       // number, which is indistinguishable from a successful save.
-      setEditingAssigned((prev) => {
-        const next = { ...prev };
-        delete next[cat.id];
-        return next;
-      });
+      clearEditAssigned(cat.id);
       router.reload({ only: ["overview"] });
     } catch (err) {
       toast.error(errorMessage(err, "Couldn't save that amount."));
@@ -169,22 +185,18 @@ export default function Dashboard({
 
   async function saveBudgeted(cat: BudgetOverviewCategory) {
     const val = editingBudgeted[cat.id];
-    if (val === undefined || val === "") {
-      setEditingBudgeted((prev) => {
-        const next = { ...prev };
-        delete next[cat.id];
-        return next;
-      });
+    if (val !== undefined && val === lastTried[`budgeted:${cat.id}`]) return;
+    // Nothing to do when the field is empty, or unchanged — it opens seeded with the persisted
+    // value, so clicking in and out without editing would otherwise write on every blur.
+    if (val === undefined || val === "" || val === cat.budgeted) {
+      clearEditBudgeted(cat.id);
       return;
     }
     setSavingBudgeted((prev) => ({ ...prev, [cat.id]: true }));
+    setLastTried((prev) => ({ ...prev, [`budgeted:${cat.id}`]: val }));
     try {
       await jsonFetch(`/budgets/${budget_pk}/categories/${cat.id}/edit/`, "PATCH", { monthly_budget: val });
-      setEditingBudgeted((prev) => {
-        const next = { ...prev };
-        delete next[cat.id];
-        return next;
-      });
+      clearEditBudgeted(cat.id);
       router.reload({ only: ["overview"] });
     } catch (err) {
       toast.error(errorMessage(err, "Couldn't save that budget."));
@@ -247,7 +259,9 @@ export default function Dashboard({
               symbol={symbol}
               value={cat.budgeted}
               editing={editingBudgeted[cat.id]}
-              onStart={() => setEditingBudgeted((prev) => ({ ...prev, [cat.id]: "" }))}
+              onStart={() => {
+                setEditingBudgeted((prev) => ({ ...prev, [cat.id]: cat.budgeted }));
+              }}
               onChange={(v) => setEditingBudgeted((prev) => ({ ...prev, [cat.id]: v }))}
               onCommit={() => void saveBudgeted(cat)}
               onCancel={() =>
@@ -276,7 +290,9 @@ export default function Dashboard({
               symbol={symbol}
               value={cat.assigned}
               editing={editingAssigned[cat.id]}
-              onStart={() => setEditingAssigned((prev) => ({ ...prev, [cat.id]: "" }))}
+              onStart={() => {
+                setEditingAssigned((prev) => ({ ...prev, [cat.id]: cat.assigned }));
+              }}
               onChange={(v) => setEditingAssigned((prev) => ({ ...prev, [cat.id]: v }))}
               onCommit={() => void saveAssigned(cat)}
               onCancel={() =>

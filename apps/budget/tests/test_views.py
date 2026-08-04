@@ -21,6 +21,7 @@ from apps.budget.models import (
     Budget,
     BudgetMembership,
     Category,
+    CategoryBudget,
     Goal,
     PaySchedule,
     RecurringTransaction,
@@ -318,3 +319,71 @@ class TestBudgetDelete(BudgetViewTestCase):
         self.assertFalse(Budget.objects.filter(pk=budget_pk).exists())
         self.assertFalse(Transaction.objects.filter(budget_id=budget_pk).exists())
         self.assertFalse(Category.objects.filter(budget_id=budget_pk).exists())
+
+
+class TestCategoryBudgetUpdate(BudgetViewTestCase):
+    """
+    The assigned-amount endpoint must answer with JSON and validate its input.
+
+    It used to return a redirect to the dashboard. Its only callers are fetch() from the
+    dashboard's inline edit and the two assign modals, all of which follow the 302, receive
+    HTML, and then throw parsing it — so a save that had actually been written surfaced to the
+    user as a failure. `assigned` also went into the database unparsed, making a non-numeric
+    value a 500 and silently accepting a negative one.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(self.user)
+        self.url = reverse(
+            "budget:category-budget-update",
+            kwargs={"budget_pk": self.budget.pk, "category_pk": self.expense_cat.pk},
+        )
+
+    def test_returns_json_not_a_redirect(self):
+        res = self._patch_json(self.url, {"assigned": "123.45", "month": "2026-08"})
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res["Content-Type"], "application/json")
+        self.assertEqual(res.json()["assigned"], "123.45")
+
+    def test_persists_the_amount(self):
+        self._patch_json(self.url, {"assigned": "80.00", "month": "2026-08"})
+        row = CategoryBudget.objects.get(budget=self.budget, category=self.expense_cat)
+        self.assertEqual(row.assigned, Decimal("80.00"))
+        self.assertEqual(row.month, datetime.date(2026, 8, 1))
+
+    def test_second_write_updates_rather_than_duplicating(self):
+        for amount in ("10.00", "20.00"):
+            self._patch_json(self.url, {"assigned": amount, "month": "2026-08"})
+        rows = CategoryBudget.objects.filter(budget=self.budget, category=self.expense_cat)
+        self.assertEqual(rows.count(), 1)
+        self.assertEqual(rows.get().assigned, Decimal("20.00"))
+
+    def test_zero_is_allowed(self):
+        res = self._patch_json(self.url, {"assigned": "0", "month": "2026-08"})
+        self.assertEqual(res.status_code, 200)
+
+    def test_non_numeric_is_a_400_not_a_500(self):
+        res = self._patch_json(self.url, {"assigned": "abc", "month": "2026-08"})
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("assigned", res.json()["errors"])
+
+    def test_negative_is_rejected(self):
+        res = self._patch_json(self.url, {"assigned": "-5", "month": "2026-08"})
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("assigned", res.json()["errors"])
+        self.assertFalse(CategoryBudget.objects.filter(category=self.expense_cat).exists())
+
+    def test_bad_month_is_rejected(self):
+        res = self._patch_json(self.url, {"assigned": "10", "month": "nope"})
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("month", res.json()["errors"])
+
+    def test_another_budgets_category_is_not_reachable(self):
+        other = Budget.objects.create(created_by=self.user)
+        stranger = Category.objects.create(budget=other, name="Theirs", category_type=Category.TYPE_EXPENSE)
+        url = reverse(
+            "budget:category-budget-update",
+            kwargs={"budget_pk": self.budget.pk, "category_pk": stranger.pk},
+        )
+        self.assertEqual(self._patch_json(url, {"assigned": "10", "month": "2026-08"}).status_code, 404)

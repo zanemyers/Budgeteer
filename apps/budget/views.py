@@ -640,18 +640,32 @@ class CategoryBudgetUpdateView(BudgetMemberMixin, View):
         category = get_object_or_404(Category, pk=category_pk, budget=self.budget)
         data = parse_json_body(request)
         month_str = data.get("month", "")
-        assigned = data.get("assigned", "0.00")
         try:
             month = datetime.date.fromisoformat(month_str + "-01" if len(month_str) == 7 else month_str).replace(day=1)
         except (ValueError, TypeError):
             return JsonResponse({"errors": {"month": ["Invalid month."]}}, status=400)
-        CategoryBudget.objects.update_or_create(
+
+        # `assigned` used to go into the DB unparsed, so a non-numeric value raised a database
+        # error (a 500) and a negative one was accepted, producing an unexplained negative
+        # Ready to Assign.
+        try:
+            assigned = Decimal(str(data.get("assigned", "0.00")))
+        except (InvalidOperation, ValueError, TypeError):
+            return JsonResponse({"errors": {"assigned": ["Enter a valid amount."]}}, status=400)
+        if assigned < 0:
+            return JsonResponse({"errors": {"assigned": ["Assigned amount can't be negative."]}}, status=400)
+
+        row, _ = CategoryBudget.objects.update_or_create(
             budget=self.budget,
             category=category,
             month=month,
             defaults={"assigned": assigned},
         )
-        return redirect(reverse("budget:detail", kwargs={"budget_pk": budget_pk}) + f"?month={month_str}")
+        # JSON, not a redirect. This is only ever called by fetch() from the dashboard's inline
+        # edit and the two assign modals; a 302 to an Inertia page meant the caller followed it
+        # and got HTML, so parsing the response threw and every successful save surfaced as an
+        # error while having actually been written.
+        return JsonResponse({"category": category.pk, "month": month.strftime("%Y-%m"), "assigned": str(row.assigned)})
 
     patch = post
 
