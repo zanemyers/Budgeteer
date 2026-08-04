@@ -512,17 +512,16 @@ export default function Dashboard({
                   </Button>
                 )}
               </div>
-              {hasToAssign || overAssigned ? (
-                showRemainingLine && (
-                  <p
-                    className="mt-1 text-sm text-ink-quiet"
-                    title="Income minus expenses. Differs from what is assignable when money is assigned but not yet spent."
-                  >
-                    <span className="tabular-nums text-ink">{fmt(remaining, symbol)}</span> remaining
-                  </p>
-                )
-              ) : (
-                <p className="mt-1 text-sm text-ink-quiet">all assigned</p>
+              {/* Only when the headline is the assignable figure and what's left after spending
+                  is a different, non-zero number. In the Remaining state the headline already is
+                  that figure, so the box is a label and a number like the other three. */}
+              {(hasToAssign || overAssigned) && showRemainingLine && (
+                <p
+                  className="mt-1 text-sm text-ink-quiet"
+                  title="Income minus expenses. Differs from what is assignable when money is assigned but not yet spent."
+                >
+                  <span className="tabular-nums text-ink">{fmt(remaining, symbol)}</span> remaining
+                </p>
               )}
             </>
           )}
