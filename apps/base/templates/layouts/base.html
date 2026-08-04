@@ -19,12 +19,12 @@
     <link rel="apple-touch-icon"
           sizes="180x180"
           href="/public/static/favicon2/apple-touch-icon.png">
-    {# The app manifest, not the favicon generator's: that one had no start_url or scope, so an
+    {% comment %} The app manifest, not the favicon generator's: that one had no start_url or scope, so an
        installed shortcut opened whichever page it happened to be installed from, and it lived in
-       a directory a favicon regeneration would overwrite. #}
+       a directory a favicon regeneration would overwrite. {% endcomment %}
     <link rel="manifest" href="/public/static/manifest.webmanifest">
-    {# theme-color paints the browser chrome, so it has to follow the active theme; the manifest
-       can only carry one value. #}
+    {% comment %} theme-color paints the browser chrome, so it has to follow the active theme; the manifest
+       can only carry one value. {% endcomment %}
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="#50663a">
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#1c1e1a">
     <meta name="mobile-web-app-capable" content="yes">
