@@ -483,9 +483,6 @@ export default function Dashboard({
               <span className="tabular-nums text-ink">{fmt(unspent, symbol)}</span> unspent
             </p>
           )}
-          <p className="mt-1 text-xs text-ink-quiet">
-            Income &minus; assigned{parseFloat(overview.saved_to_goals_total) > 0 ? " − saved to goals" : ""}
-          </p>
         </SummaryBox>
       </div>
 
