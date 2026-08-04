@@ -201,14 +201,14 @@ export default function CategoryModal({
                   <div className="flex flex-col gap-0.5">
                     <Label htmlFor="cat-rollover">Roll over leftover balance</Label>
                     <small className="text-muted-foreground">
-                      Budget a set amount each month; unspent money carries into the next month instead of resetting —
-                      good for saving toward something bigger.
+                      Whatever you don't spend stays in the category next month instead of resetting, and counts as
+                      already assigned. Good for saving toward something bigger.
                     </small>
                   </div>
                 </div>
                 {rollover && (
                   <div className="flex flex-col gap-2 pl-7">
-                    <Label htmlFor="cat-base">Base amount / month</Label>
+                    <Label htmlFor="cat-base">Monthly target</Label>
                     <div className="flex">
                       <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-input bg-muted text-muted-foreground text-sm">
                         {symbol}
@@ -225,9 +225,9 @@ export default function CategoryModal({
                       />
                     </div>
                     <small className="text-muted-foreground">
-                      Budgeted automatically each month
-                      {isEdit && category?.rollover_start ? "" : ", starting this month"}. Replaces manual assigning for
-                      this category.
+                      The amount you aim to have in this category each month
+                      {isEdit && category?.rollover_start ? "" : ", starting this month"}. It sets the target only — you
+                      still assign the money, and anything carried over from last month counts toward it.
                     </small>
                   </div>
                 )}

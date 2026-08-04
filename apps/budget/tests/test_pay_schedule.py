@@ -463,6 +463,16 @@ class TestPayScheduleGeneration(BaseTest):
 
 
 class TestCategoryRollover(BaseTest):
+    """
+    Rollover semantics: `base_amount` is a target, not funding.
+
+    An envelope holds the balance carried in from last month plus whatever is assigned this
+    month, so `available = assigned - spent`. The carried part was already paid for out of an
+    earlier month's income and is therefore not charged to Ready to Assign again; only the
+    difference between what's assigned and what carried is. Assigning below the carry releases
+    money back into the pool.
+    """
+
     def setUp(self):
         super().setUp()
         self.user = self.make_user()
@@ -479,6 +489,11 @@ class TestCategoryRollover(BaseTest):
             rollover_start=start,
         )
 
+    def _assign(self, cat, amount, month):
+        return CategoryBudget.objects.update_or_create(
+            budget=self.budget, category=cat, month=month, defaults={"assigned": Decimal(amount)}
+        )
+
     def _spend(self, cat, amount, paid_date):
         txn = Transaction.objects.create(
             budget=self.budget,
@@ -493,45 +508,107 @@ class TestCategoryRollover(BaseTest):
     def _row(self, overview, cat):
         return next(r for r in overview["categories"] if r["id"] == cat.pk)
 
-    def test_base_accrues_and_leftover_carries(self):
-        # Base $100/mo starting July. July: spend 30 → 70 left. August: base + 70 carryover.
-        cat = self._cat(rollover=True, base="100.00", start=datetime.date(2026, 7, 1))
-        self._spend(cat, Decimal("30.00"), datetime.date(2026, 7, 10))
-        july = self._row(get_budget_overview(self.budget, "2026-07"), cat)
-        august = self._row(get_budget_overview(self.budget, "2026-08"), cat)
-        # The base sets the BUDGETED target, not assigned.
+    def _month(self, cat, month):
+        return self._row(get_budget_overview(self.budget, month), cat)
+
+    JULY = datetime.date(2026, 7, 1)
+
+    def test_base_is_a_target_and_does_not_fund_the_envelope(self):
+        """Nothing is available until it's assigned — the base only sets the target."""
+        cat = self._cat(rollover=True, base="100.00", start=self.JULY)
+        july = self._month(cat, "2026-07")
         self.assertEqual(Decimal(july["budgeted"]), Decimal("100.00"))
         self.assertEqual(Decimal(july["assigned"]), Decimal("0.00"))
-        self.assertEqual(Decimal(july["available"]), Decimal("70.00"))
-        # August: base 100 + 70 carried = 170 budgeted, nothing spent, 170 available.
-        self.assertEqual(Decimal(august["budgeted"]), Decimal("170.00"))
-        self.assertEqual(Decimal(august["available"]), Decimal("170.00"))
-
-    def test_overspend_resets_to_base_next_month(self):
-        # Base $100 from July. Overspend in July ($130) → next month resets to base, no negative carryover.
-        cat = self._cat(rollover=True, base="100.00", start=datetime.date(2026, 7, 1))
-        self._spend(cat, Decimal("130.00"), datetime.date(2026, 7, 10))
-        july = self._row(get_budget_overview(self.budget, "2026-07"), cat)
-        august = self._row(get_budget_overview(self.budget, "2026-08"), cat)
-        self.assertEqual(Decimal(july["available"]), Decimal("-30.00"))  # overspent this month
-        # August resets to just the base — the -30 does NOT carry forward.
-        self.assertEqual(Decimal(august["budgeted"]), Decimal("100.00"))
-        self.assertEqual(Decimal(august["available"]), Decimal("100.00"))
-
-    def test_exactly_zero_leftover_resets_to_base(self):
-        cat = self._cat(rollover=True, base="100.00", start=datetime.date(2026, 7, 1))
-        self._spend(cat, Decimal("100.00"), datetime.date(2026, 7, 10))  # spend it all → 0 left
-        august = self._row(get_budget_overview(self.budget, "2026-08"), cat)
-        self.assertEqual(Decimal(august["budgeted"]), Decimal("100.00"))
-
-    def test_no_accrual_before_start_month(self):
-        cat = self._cat(rollover=True, base="100.00", start=datetime.date(2026, 8, 1))
-        july = self._row(get_budget_overview(self.budget, "2026-07"), cat)
-        # Before the start month, the base isn't accruing yet.
         self.assertEqual(Decimal(july["available"]), Decimal("0.00"))
 
-    def test_rollover_does_not_touch_ready_to_assign(self):
-        self._cat(rollover=True, base="100.00", start=datetime.date(2026, 7, 1))
+    def test_leftover_carries_and_auto_assigns_next_month(self):
+        cat = self._cat(rollover=True, base="100.00", start=self.JULY)
+        self._assign(cat, "100.00", self.JULY)
+        self._spend(cat, Decimal("30.00"), datetime.date(2026, 7, 10))
+
+        july = self._month(cat, "2026-07")
+        self.assertEqual(Decimal(july["available"]), Decimal("70.00"))
+
+        august = self._month(cat, "2026-08")
+        # The 70 carries in and shows as already assigned; the target is base + carry.
+        self.assertEqual(Decimal(august["rollover_carry"]), Decimal("70.00"))
+        self.assertEqual(Decimal(august["assigned"]), Decimal("70.00"))
+        self.assertEqual(Decimal(august["budgeted"]), Decimal("170.00"))
+        self.assertEqual(Decimal(august["available"]), Decimal("70.00"))
+
+    def test_carried_balance_is_not_charged_to_ready_to_assign_again(self):
+        cat = self._cat(rollover=True, base="100.00", start=self.JULY)
+        self._assign(cat, "100.00", self.JULY)
+        self._spend(cat, Decimal("30.00"), datetime.date(2026, 7, 10))
         august = get_budget_overview(self.budget, "2026-08")
-        # The base sets the budgeted target only — it never draws from Ready to Assign.
+        # 70 sits in the envelope but July's income already paid for it.
         self.assertEqual(Decimal(august["expense_assigned"]), Decimal("0.00"))
+
+    def test_assigning_above_the_carry_charges_only_the_difference(self):
+        cat = self._cat(rollover=True, base="100.00", start=self.JULY)
+        self._assign(cat, "100.00", self.JULY)
+        self._spend(cat, Decimal("30.00"), datetime.date(2026, 7, 10))
+        self._assign(cat, "120.00", datetime.date(2026, 8, 1))  # 70 carried + 50 new
+
+        august = get_budget_overview(self.budget, "2026-08")
+        self.assertEqual(Decimal(self._row(august, cat)["assigned"]), Decimal("120.00"))
+        self.assertEqual(Decimal(august["expense_assigned"]), Decimal("50.00"))
+
+    def test_assigning_below_the_carry_releases_money(self):
+        """Moving a carried balance elsewhere: the released amount returns to the pool."""
+        cat = self._cat(rollover=True, base="100.00", start=self.JULY)
+        self._assign(cat, "100.00", self.JULY)
+        self._spend(cat, Decimal("30.00"), datetime.date(2026, 7, 10))
+        self._assign(cat, "20.00", datetime.date(2026, 8, 1))  # keep 20 of the 70 carried
+
+        august = get_budget_overview(self.budget, "2026-08")
+        row = self._row(august, cat)
+        self.assertEqual(Decimal(row["assigned"]), Decimal("20.00"))
+        self.assertEqual(Decimal(row["available"]), Decimal("20.00"))
+        # A negative contribution, i.e. 50 handed back to Ready to Assign.
+        self.assertEqual(Decimal(august["expense_assigned"]), Decimal("-50.00"))
+
+    def test_an_explicit_zero_releases_the_whole_carry(self):
+        cat = self._cat(rollover=True, base="100.00", start=self.JULY)
+        self._assign(cat, "100.00", self.JULY)
+        self._spend(cat, Decimal("30.00"), datetime.date(2026, 7, 10))
+        self._assign(cat, "0.00", datetime.date(2026, 8, 1))
+
+        august = get_budget_overview(self.budget, "2026-08")
+        # A stored zero is a decision, distinct from having no row at all.
+        self.assertEqual(Decimal(self._row(august, cat)["assigned"]), Decimal("0.00"))
+        self.assertEqual(Decimal(august["expense_assigned"]), Decimal("-70.00"))
+
+    def test_overspend_does_not_carry_forward(self):
+        cat = self._cat(rollover=True, base="100.00", start=self.JULY)
+        self._assign(cat, "100.00", self.JULY)
+        self._spend(cat, Decimal("130.00"), datetime.date(2026, 7, 10))
+
+        self.assertEqual(Decimal(self._month(cat, "2026-07")["available"]), Decimal("-30.00"))
+        august = self._month(cat, "2026-08")
+        self.assertEqual(Decimal(august["rollover_carry"]), Decimal("0.00"))
+        self.assertEqual(Decimal(august["budgeted"]), Decimal("100.00"))
+        self.assertEqual(Decimal(august["available"]), Decimal("0.00"))
+
+    def test_exactly_zero_leftover_carries_nothing(self):
+        cat = self._cat(rollover=True, base="100.00", start=self.JULY)
+        self._assign(cat, "100.00", self.JULY)
+        self._spend(cat, Decimal("100.00"), datetime.date(2026, 7, 10))
+        august = self._month(cat, "2026-08")
+        self.assertEqual(Decimal(august["rollover_carry"]), Decimal("0.00"))
+        self.assertEqual(Decimal(august["budgeted"]), Decimal("100.00"))
+
+    def test_no_accrual_before_the_start_month(self):
+        cat = self._cat(rollover=True, base="100.00", start=datetime.date(2026, 8, 1))
+        july = self._month(cat, "2026-07")
+        self.assertIsNone(july["rollover_carry"])
+        self.assertEqual(Decimal(july["available"]), Decimal("0.00"))
+
+    def test_a_non_rollover_category_is_unaffected(self):
+        cat = self._cat(rollover=False)
+        self._assign(cat, "80.00", self.JULY)
+        self._spend(cat, Decimal("30.00"), datetime.date(2026, 7, 10))
+        july = self._month(cat, "2026-07")
+        self.assertIsNone(july["rollover_carry"])
+        self.assertEqual(Decimal(july["available"]), Decimal("50.00"))
+        self.assertEqual(Decimal(get_budget_overview(self.budget, "2026-07")["expense_assigned"]), Decimal("80.00"))

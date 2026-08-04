@@ -437,16 +437,41 @@ def get_budget_overview(budget, month_str: str | None, user_rate: "Decimal" = De
         Category.objects.filter(budget=budget, is_system=False).select_related("goal").order_by("category_type", "name")
     )
 
-    # Rollover categories are budgeted a recurring base each month (from rollover_start). Only a
-    # *positive* leftover carries forward — a month that ends at zero or overspent resets to just the
-    # base next month (no negative carryover). This needs a month-by-month walk, so we fetch spending
-    # per month and iterate the running balance.
+    # Rollover categories carry an unspent balance forward. `base_amount` is a *target*, not
+    # funding: the money in the envelope is the carried balance plus whatever is assigned this
+    # month, so
+    #
+    #     budgeted (target) = base + carry
+    #     assigned (actual) = carry, or the stored figure once one exists for the month
+    #     available         = assigned - spent
+    #     carry to next     = max(0, available)
+    #
+    # The carried portion was already paid for out of an earlier month's income, so only
+    # `assigned - carry` is charged to Ready to Assign. Assigning below the carry is how you
+    # take money back out of the envelope, which makes that figure negative and returns it to
+    # the pool. Only a positive leftover carries: an overspent month starts the next one at the
+    # base with nothing carried.
+    #
+    # Each month's balance depends on that month's assignment, so the walk needs the assignment
+    # history rather than just the selected month's.
+    rollover_cats = [
+        cat
+        for cat in categories
+        if cat.rollover
+        and not cat.is_goal
+        and cat.base_amount
+        and cat.rollover_start
+        and cat.rollover_start <= period_start
+    ]
+    assigned_history: dict[tuple[int, datetime.date], Decimal] = {}
+    if rollover_cats:
+        for row in CategoryBudget.objects.filter(
+            budget=budget, category__in=rollover_cats, month__lte=period_start
+        ).values("category_id", "month", "assigned"):
+            assigned_history[(row["category_id"], row["month"])] = row["assigned"]
+
     rollover_info: dict[int, dict] = {}
-    for cat in categories:
-        if not (cat.rollover and not cat.is_goal and cat.base_amount and cat.rollover_start):
-            continue
-        if cat.rollover_start > period_start:
-            continue  # not accruing yet for this month
+    for cat in rollover_cats:
         start = cat.rollover_start
         base = cat.base_amount
         spend_by_month: dict[datetime.date, Decimal] = {}
@@ -466,15 +491,23 @@ def get_budget_overview(budget, month_str: str | None, user_rate: "Decimal" = De
             spend_by_month[row["m"]] = row["total"] * user_rate
 
         balance = Decimal("0.00")
+        carry = Decimal("0.00")
         budgeted = base
+        assigned_this_month = Decimal("0.00")
         cursor = start
         while cursor <= period_start:
             carry = balance if balance > Decimal("0.00") else Decimal("0.00")
-            budgeted = base + carry  # this month's budgeted target = base + positive leftover only
-            balance = budgeted - spend_by_month.get(cursor, Decimal("0.00"))
+            budgeted = base + carry
+            # No stored row means the carry is simply still sitting there. A stored row — even a
+            # zero — is an explicit decision about how much the envelope holds this month.
+            stored = assigned_history.get((cat.pk, cursor))
+            assigned_this_month = carry if stored is None else stored
+            balance = assigned_this_month - spend_by_month.get(cursor, Decimal("0.00"))
             cursor = add_months(cursor, 1)
         rollover_info[cat.pk] = {
             "budgeted": budgeted,
+            "assigned": assigned_this_month,
+            "carry": carry,
             "available": balance,
             "activity": spend_by_month.get(period_start, Decimal("0.00")),
         }
@@ -507,12 +540,15 @@ def get_budget_overview(budget, month_str: str | None, user_rate: "Decimal" = De
             available = activity
         elif cat.pk in rollover_info:
             info = rollover_info[cat.pk]
-            # The base auto-sets the BUDGETED target (base + carryover) and the running available
-            # balance. It does NOT assign from Ready to Assign — RTA is untouched by rollover.
             budgeted = info["budgeted"]
+            assigned = info["assigned"]
             available = info["available"]
             activity = info["activity"]
-            assigned = Decimal("0.00")
+            # Only the part beyond the carried balance is funded from this month's income; the
+            # carry was paid for by an earlier month. Assigning below the carry releases money
+            # back, so this term is negative in that case — which is what lets Ready to Assign
+            # exceed this month's income when you move a carried balance elsewhere.
+            expense_assigned += assigned - info["carry"]
         else:
             expense_assigned += assigned
             available = assigned - activity
@@ -527,6 +563,8 @@ def get_budget_overview(budget, month_str: str | None, user_rate: "Decimal" = De
             "activity": str(activity),
             "available": str(available),
             "rollover": cat.rollover,
+            "base_amount": str(cat.base_amount),
+            "rollover_carry": (str(rollover_info[cat.pk]["carry"]) if cat.pk in rollover_info else None),
             "is_goal": cat.is_goal,
             "goal_target": str(cat.goal_target) if cat.goal_target is not None else None,
             "goal_due_date": str(cat.goal_due_date) if cat.goal_due_date else None,
@@ -542,6 +580,10 @@ def get_budget_overview(budget, month_str: str | None, user_rate: "Decimal" = De
     # Ready to Assign is per-month: this month's income (by effective budget month) minus what's
     # been assigned and saved to goals this month. Surplus is not carried forward automatically —
     # to fund a future month, target income at it via its budget month.
+    #
+    # One exception: releasing a rollover category's carried balance contributes a negative
+    # assignment, so RTA can exceed this month's income by the amount released. That money was
+    # funded by an earlier month and would otherwise be stranded.
     ready_to_assign = income_total - expense_assigned - goal_transfers_month
 
     return {

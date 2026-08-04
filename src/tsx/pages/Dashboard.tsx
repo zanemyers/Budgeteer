@@ -222,6 +222,9 @@ export default function Dashboard({
     const assigned = parseFloat(cat.assigned);
     const activity = parseFloat(cat.activity);
     const isExpense = cat.category_type === "expense";
+    // A carried balance pre-fills `assigned` without being charged to Ready to Assign, so it's
+    // worth explaining wherever that figure appears.
+    const carried = cat.rollover_carry !== null && parseFloat(cat.rollover_carry) > 0;
 
     const budgetedClass = budgeted > 0 && activity > budgeted ? "text-expense" : "";
     const assignedClass = budgeted > 0 && assigned === budgeted ? "text-moss" : "";
@@ -251,7 +254,14 @@ export default function Dashboard({
         </TableCell>
         <TableCell className="text-right">
           {cat.rollover && !cat.is_goal ? (
-            <span className={`tabular-nums ${budgetedClass}`} title="Auto-budgeted: base + carried-over balance">
+            <span
+              className={`tabular-nums ${budgetedClass}`}
+              title={
+                carried
+                  ? `Target: ${fmt(cat.base_amount, symbol)} base + ${fmt(cat.rollover_carry, symbol)} carried over`
+                  : "Target for this month (base amount)"
+              }
+            >
               {fmt(cat.budgeted, symbol)}
             </span>
           ) : (
@@ -278,35 +288,24 @@ export default function Dashboard({
           )}
         </TableCell>
         <TableCell className="text-right">
-          {cat.rollover && !cat.is_goal ? (
-            <span
-              className="tabular-nums text-muted-foreground"
-              title="Rollover categories aren't assigned from Ready to Assign — the base sets the budget"
-            >
-              —
-            </span>
-          ) : (
-            <CurrencyEditCell
-              symbol={symbol}
-              value={cat.assigned}
-              editing={editingAssigned[cat.id]}
-              onStart={() => {
-                setEditingAssigned((prev) => ({ ...prev, [cat.id]: cat.assigned }));
-              }}
-              onChange={(v) => setEditingAssigned((prev) => ({ ...prev, [cat.id]: v }))}
-              onCommit={() => void saveAssigned(cat)}
-              onCancel={() =>
-                setEditingAssigned((prev) => {
-                  const n = { ...prev };
-                  delete n[cat.id];
-                  return n;
-                })
-              }
-              saving={savingAssigned[cat.id] ?? false}
-              valueClass={assignedClass}
-              title="Click to set assigned amount"
-            />
-          )}
+          <CurrencyEditCell
+            symbol={symbol}
+            value={cat.assigned}
+            editing={editingAssigned[cat.id]}
+            onStart={() => {
+              setEditingAssigned((prev) => ({ ...prev, [cat.id]: cat.assigned }));
+            }}
+            onChange={(v) => setEditingAssigned((prev) => ({ ...prev, [cat.id]: v }))}
+            onCommit={() => void saveAssigned(cat)}
+            onCancel={() => clearEditAssigned(cat.id)}
+            saving={savingAssigned[cat.id] ?? false}
+            valueClass={assignedClass}
+            title={
+              carried
+                ? `${fmt(cat.rollover_carry, symbol)} carried over from last month. Reduce this to move it elsewhere.`
+                : "Click to set assigned amount"
+            }
+          />
         </TableCell>
         <TableCell className="text-right">{fmt(cat.activity, symbol)}</TableCell>
         <TableCell className={`text-right ${availableClass}`}>{fmt(cat.available, symbol)}</TableCell>

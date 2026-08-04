@@ -145,6 +145,9 @@ export interface BudgetOverviewCategory {
   activity: string;
   available: string;
   rollover: boolean;
+  base_amount: string;
+  /** Balance carried in from last month. Null for non-rollover rows. */
+  rollover_carry: string | null;
   is_goal: boolean;
   goal_target: string | null;
   goal_due_date: string | null;
