@@ -1,6 +1,7 @@
 import { router } from "@inertiajs/react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -9,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import AssignModal from "../components/AssignModal";
 import CleanupAssignedModal from "../components/CleanupAssignedModal";
 import TransactionModal from "../components/TransactionModal";
-import { getCsrfToken } from "../lib/api";
+import { errorMessage, jsonFetch } from "../lib/api";
 import { usePageTour } from "../lib/onboardingTour";
 import type {
   BudgetOverview,
@@ -145,20 +146,19 @@ export default function Dashboard({
     }
     setSavingAssigned((prev) => ({ ...prev, [cat.id]: true }));
     try {
-      const res = await fetch(`/budgets/${budget_pk}/category-budgets/${cat.id}/`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() },
-        body: JSON.stringify({ assigned: val, month }),
-      });
-      if (res.ok || res.redirected) {
-        router.reload({ only: ["overview"] });
-      }
-    } finally {
+      await jsonFetch(`/budgets/${budget_pk}/category-budgets/${cat.id}/`, "PATCH", { assigned: val, month });
+      // Only discard the edit buffer once the save actually landed. Clearing it in a
+      // `finally` threw away what the user typed on failure and silently restored the old
+      // number, which is indistinguishable from a successful save.
       setEditingAssigned((prev) => {
         const next = { ...prev };
         delete next[cat.id];
         return next;
       });
+      router.reload({ only: ["overview"] });
+    } catch (err) {
+      toast.error(errorMessage(err, "Couldn't save that amount."));
+    } finally {
       setSavingAssigned((prev) => {
         const next = { ...prev };
         delete next[cat.id];
@@ -179,20 +179,16 @@ export default function Dashboard({
     }
     setSavingBudgeted((prev) => ({ ...prev, [cat.id]: true }));
     try {
-      const res = await fetch(`/budgets/${budget_pk}/categories/${cat.id}/edit/`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() },
-        body: JSON.stringify({ monthly_budget: val }),
-      });
-      if (res.ok) {
-        router.reload({ only: ["overview"] });
-      }
-    } finally {
+      await jsonFetch(`/budgets/${budget_pk}/categories/${cat.id}/edit/`, "PATCH", { monthly_budget: val });
       setEditingBudgeted((prev) => {
         const next = { ...prev };
         delete next[cat.id];
         return next;
       });
+      router.reload({ only: ["overview"] });
+    } catch (err) {
+      toast.error(errorMessage(err, "Couldn't save that budget."));
+    } finally {
       setSavingBudgeted((prev) => {
         const next = { ...prev };
         delete next[cat.id];
@@ -202,15 +198,9 @@ export default function Dashboard({
   }
 
   async function createTransaction(data: Partial<Transaction>) {
-    const res = await fetch(`/budgets/${budget_pk}/transactions/create/`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() },
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) {
-      const json = (await res.json()) as { errors?: Record<string, string[]> };
-      throw json.errors ?? json;
-    }
+    // jsonFetch throws the same `errors ?? body` shape this used to build by hand, and also
+    // catches the redirect-to-login case. The modal relies on the throw to show field errors.
+    await jsonFetch(`/budgets/${budget_pk}/transactions/create/`, "POST", data);
     router.reload({ only: ["overview", "pending_count"] });
   }
 
@@ -241,13 +231,9 @@ export default function Dashboard({
             {cat.name}
           </a>
           {cat.rollover && !cat.is_goal && (
-            <span
-              className="ml-1.5 text-moss"
-              title="Leftover rolls over to next month"
-              role="img"
-              aria-label="Rolls over"
-            >
-              ↻
+            <span className="ml-1.5 inline-flex text-moss" title="Leftover rolls over to next month">
+              <RotateCcw aria-hidden className="size-3" />
+              <span className="sr-only">Rolls over</span>
             </span>
           )}
         </TableCell>

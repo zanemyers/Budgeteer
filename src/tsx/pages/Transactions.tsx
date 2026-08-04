@@ -32,7 +32,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import BankTransactionConfirmModal from "../components/BankTransactionConfirmModal";
 import { PageTourButton } from "../components/PageTourButton";
 import TransactionModal from "../components/TransactionModal";
-import { jsonFetch } from "../lib/api";
+import { errorMessage, jsonFetch } from "../lib/api";
 import { usePageTour } from "../lib/onboardingTour";
 import type {
   BankTransaction,
@@ -191,8 +191,10 @@ export default function Transactions({
     return updated;
   }
 
+  // Delegates to the shared helper: reading only `err.error` meant every field-validation
+  // message from the server was discarded in favour of the generic fallback.
   function errMsg(err: unknown, fallback: string): string {
-    return (err as { error?: string })?.error ?? fallback;
+    return errorMessage(err, fallback);
   }
 
   async function saveDesc(txn: Transaction) {
@@ -378,18 +380,14 @@ export default function Transactions({
                 </button>
               )}
               {!opts.suppressStateMarkers && txn.recurring !== null && (
-                <span className="text-xs italic text-ink-quiet" role="img" aria-label="Recurring">
-                  recurring
-                </span>
+                <span className="text-xs italic text-ink-quiet">recurring</span>
               )}
               {txn.bank_linked && (
                 <span
                   className="inline-flex items-center gap-1 text-xs text-ink-quiet"
                   title="Linked to a bank transaction"
-                  role="img"
-                  aria-label="Linked to bank"
                 >
-                  <Landmark className="size-3" />
+                  <Landmark aria-hidden className="size-3" />
                   bank
                 </span>
               )}
@@ -454,9 +452,14 @@ export default function Transactions({
           </TableCell>
 
           <TableCell className={`text-right font-medium tabular-nums ${amountClass}`}>
-            <span role="img" aria-label={isIncome ? "Income" : isTransfer ? "Transfer" : "Expense"}>
+            {/* No role="img" here: it makes the element a leaf in the accessibility tree and
+                lets aria-label replace its contents, so the amount itself never gets read.
+                The visible +/− prefix carries the direction; the sr-only word names the type
+                without hiding the number. */}
+            <span>
               {isExpense ? "−" : isIncome ? "+" : ""}
               {fmtConverted(txn.total_amount, txn.exchange_rate_to_usd, userRate, symbol)}
+              <span className="sr-only">{isIncome ? " income" : isTransfer ? " transfer" : " expense"}</span>
             </span>
             {txn.currency !== userCurrencyCode && (
               <div className="text-muted-foreground font-normal text-[0.7rem]">
@@ -734,10 +737,8 @@ export default function Transactions({
                                     <span
                                       className="inline-flex items-center gap-1 text-xs text-ink-quiet"
                                       title={`From ${sourceLabel}`}
-                                      role="img"
-                                      aria-label="Pending from bank"
                                     >
-                                      <Landmark className="size-3" />
+                                      <Landmark aria-hidden className="size-3" />
                                       bank
                                     </span>
                                   </div>
@@ -820,7 +821,7 @@ export default function Transactions({
                                       className="inline-flex items-center gap-1 text-xs"
                                       title={`From ${sourceLabel}`}
                                     >
-                                      <Landmark className="size-3" />
+                                      <Landmark aria-hidden className="size-3" />
                                       bank
                                     </span>
                                   </div>
