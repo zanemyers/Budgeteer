@@ -18,9 +18,14 @@ export interface BudgetSummary {
 interface Props {
   budget: BudgetSummary;
   onChange: (next: BudgetSummary) => void;
+  /**
+   * Extra sections — currently Members — rendered after the budget's own settings but before
+   * the destructive row, so "Delete budget" stays the last thing on the tab.
+   */
+  children?: React.ReactNode;
 }
 
-export function BudgetPanel({ budget, onChange }: Props) {
+export function BudgetPanel({ budget, onChange, children }: Props) {
   const [name, setName] = useState(budget.name);
   const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
@@ -106,6 +111,8 @@ export function BudgetPanel({ budget, onChange }: Props) {
           </Button>
         )}
       </SettingsRow>
+
+      {children && <div className="border-t py-6">{children}</div>}
 
       {budget.is_owner && (
         <SettingsRow

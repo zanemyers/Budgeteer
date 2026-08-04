@@ -95,21 +95,22 @@ const TOURS: Record<TourStage, DriveStep[]> = {
         description: "Each tab configures one part of the budget. Here is a look at each.",
       },
     },
-    tabStep("budget", "Budget", "Rename this budget, make it your default, or delete it."),
     tabStep(
-      "pay-schedule",
-      "Pay schedule",
-      "Describe how you are paid so income lands in the right month and matches automatically.",
+      "budget",
+      "Budget",
+      "Rename this budget, make it your default, and invite a partner or household member. Deleting the budget lives here too.",
     ),
-    tabStep("expense", "Expense categories", "Your spending envelopes. Group them and set a monthly target for each."),
-    tabStep("income", "Income categories", "Where paychecks and other income are recorded."),
+    tabStep(
+      "categories",
+      "Categories",
+      "Your spending envelopes and the places income is recorded. Group them and set a monthly target for each.",
+    ),
+    tabStep(
+      "schedules",
+      "Schedules",
+      "How you are paid, so income lands in the right month, plus the bills and subscriptions that repeat. Budgeteer puts both on the calendar for you.",
+    ),
     tabStep("payment-methods", "Payment methods", "The accounts and cards you spend from."),
-    tabStep(
-      "recurring",
-      "Recurring transactions",
-      "Bills and subscriptions that repeat. Budgeteer schedules them for you.",
-    ),
-    tabStep("members", "Members", "Invite a partner or household member and choose who can manage the budget."),
   ],
   account: [
     {

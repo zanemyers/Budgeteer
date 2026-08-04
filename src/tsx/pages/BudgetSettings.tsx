@@ -31,13 +31,30 @@ interface Props {
   pay_schedule_freq_choices: { value: string; label: string }[];
 }
 
-const VALID_TABS = ["budget", "pay-schedule", "expense", "income", "payment-methods", "recurring", "members"] as const;
+const VALID_TABS = ["budget", "categories", "schedules", "payment-methods"] as const;
 type Tab = (typeof VALID_TABS)[number];
+
+/**
+ * Where the pre-consolidation tab names now live, so an old bookmark still lands on the content
+ * it was pointing at rather than silently falling back to the Budget tab.
+ */
+const LEGACY_TABS: Record<string, Tab> = {
+  expense: "categories",
+  income: "categories",
+  "pay-schedule": "schedules",
+  recurring: "schedules",
+  members: "budget",
+};
+
+function normalizeTab(value: string | null): Tab {
+  if (!value) return "budget";
+  if ((VALID_TABS as readonly string[]).includes(value)) return value as Tab;
+  return LEGACY_TABS[value] ?? "budget";
+}
 
 function readTabFromUrl(): Tab {
   if (typeof window === "undefined") return "budget";
-  const t = new URL(window.location.href).searchParams.get("tab");
-  return (VALID_TABS as readonly string[]).includes(t ?? "") ? (t as Tab) : "budget";
+  return normalizeTab(new URL(window.location.href).searchParams.get("tab"));
 }
 
 export default function BudgetSettings({
@@ -62,7 +79,7 @@ export default function BudgetSettings({
   const [recurring, setRecurring] = useState(initialRecurring);
 
   const changeTab = useCallback((next: string) => {
-    const t = (VALID_TABS as readonly string[]).includes(next) ? (next as Tab) : "budget";
+    const t = normalizeTab(next);
     setTab(t);
     const url = new URL(window.location.href);
     url.searchParams.set("tab", t);
@@ -81,9 +98,7 @@ export default function BudgetSettings({
       <header className="mb-8 flex justify-between items-start gap-4 flex-wrap">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight">Budget Settings</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {budget.name || "This budget"}: categories, payment methods, members.
-          </p>
+          <p className="text-sm text-muted-foreground mt-1">{budget.name || "This budget"}</p>
         </div>
         <div className="flex items-center gap-2 mt-1">
           <PageTourButton stage="settings" />
@@ -105,59 +120,70 @@ export default function BudgetSettings({
           <TabsTrigger value="budget" data-tour="tab-budget">
             Budget
           </TabsTrigger>
-          <TabsTrigger value="pay-schedule" data-tour="tab-pay-schedule">
-            Pay Schedule
+          <TabsTrigger value="categories" data-tour="tab-categories">
+            Categories
           </TabsTrigger>
-          <TabsTrigger value="expense" data-tour="tab-expense">
-            Expense Categories
-          </TabsTrigger>
-          <TabsTrigger value="income" data-tour="tab-income">
-            Income Categories
+          <TabsTrigger value="schedules" data-tour="tab-schedules">
+            Schedules
           </TabsTrigger>
           <TabsTrigger value="payment-methods" data-tour="tab-payment-methods">
             Payment Methods
           </TabsTrigger>
-          <TabsTrigger value="recurring" data-tour="tab-recurring">
-            Recurring Transactions
-          </TabsTrigger>
-          {budget.is_owner && (
-            <TabsTrigger value="members" data-tour="tab-members">
-              Members
-            </TabsTrigger>
-          )}
         </TabsList>
 
         <TabsContent value="budget" className="mt-2">
-          <BudgetPanel budget={budget} onChange={setBudget} />
+          <BudgetPanel budget={budget} onChange={setBudget}>
+            {budget.is_owner && (
+              <MembersPanel
+                budgetPk={budget_pk}
+                memberships={memberships}
+                roleChoices={role_choices}
+                onChange={setMemberships}
+              />
+            )}
+          </BudgetPanel>
         </TabsContent>
 
-        <TabsContent value="pay-schedule" className="mt-2">
-          <PaySchedulePanel
-            budgetPk={budget_pk}
-            paySchedules={pay_schedules}
-            freqChoices={pay_schedule_freq_choices}
-            incomeCategories={categories.filter((c) => c.category_type === "income")}
-            paymentMethods={paymentMethods}
-            isOwner={budget.is_owner}
-          />
+        {/* Expense first: it is the longer list and the one reached for most. */}
+        <TabsContent value="categories" className="mt-2">
+          <div className="flex flex-col gap-10">
+            <CategoriesPanel
+              budgetPk={budget_pk}
+              type="expense"
+              categories={categories}
+              onCategoriesChange={setCategories}
+            />
+            <CategoriesPanel
+              budgetPk={budget_pk}
+              type="income"
+              categories={categories}
+              onCategoriesChange={setCategories}
+            />
+          </div>
         </TabsContent>
 
-        <TabsContent value="expense" className="mt-2">
-          <CategoriesPanel
-            budgetPk={budget_pk}
-            type="expense"
-            categories={categories}
-            onCategoriesChange={setCategories}
-          />
-        </TabsContent>
-
-        <TabsContent value="income" className="mt-2">
-          <CategoriesPanel
-            budgetPk={budget_pk}
-            type="income"
-            categories={categories}
-            onCategoriesChange={setCategories}
-          />
+        {/* Pay schedules and recurring transactions are the same mechanism — both watermarked by
+            generated_through and materialized into Transactions by the same nightly job. Money in
+            is listed before money out. */}
+        <TabsContent value="schedules" className="mt-2">
+          <div className="flex flex-col gap-10">
+            <PaySchedulePanel
+              budgetPk={budget_pk}
+              paySchedules={pay_schedules}
+              freqChoices={pay_schedule_freq_choices}
+              incomeCategories={categories.filter((c) => c.category_type === "income")}
+              paymentMethods={paymentMethods}
+              isOwner={budget.is_owner}
+            />
+            <RecurringPanel
+              budgetPk={budget_pk}
+              recurring={recurring}
+              categories={categories}
+              paymentMethods={paymentMethods}
+              freqChoices={freq_choices}
+              onChange={setRecurring}
+            />
+          </div>
         </TabsContent>
 
         <TabsContent value="payment-methods" className="mt-2">
@@ -168,28 +194,6 @@ export default function BudgetSettings({
             onChange={setPaymentMethods}
           />
         </TabsContent>
-
-        <TabsContent value="recurring" className="mt-2">
-          <RecurringPanel
-            budgetPk={budget_pk}
-            recurring={recurring}
-            categories={categories}
-            paymentMethods={paymentMethods}
-            freqChoices={freq_choices}
-            onChange={setRecurring}
-          />
-        </TabsContent>
-
-        {budget.is_owner && (
-          <TabsContent value="members" className="mt-2">
-            <MembersPanel
-              budgetPk={budget_pk}
-              memberships={memberships}
-              roleChoices={role_choices}
-              onChange={setMemberships}
-            />
-          </TabsContent>
-        )}
       </Tabs>
     </div>
   );
