@@ -1,4 +1,4 @@
-import calendar
+import datetime
 
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
@@ -9,15 +9,52 @@ from django.utils import timezone
 class Command(BaseCommand):
     help = "Generate Transaction instances for all active RecurringTransaction schedules."
 
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--prune",
+            action="store_true",
+            help=(
+                "Delete unpaid generated instances due beyond the lookahead window and pull each "
+                "schedule's watermark back to the window edge. Run this once after narrowing "
+                "BUDGET_RECURRING_LOOKAHEAD_DAYS, otherwise the old instances linger and the "
+                "watermark — already parked past the new window — generates nothing until it "
+                "catches up. Off by default because it cannot distinguish a generated instance "
+                "from one added by hand against the same schedule."
+            ),
+        )
+
+    def prune(self, through_date):
+        from apps.budget.models import PaySchedule, RecurringTransaction, Transaction
+
+        stale = Transaction.objects.filter(
+            Q(recurring__isnull=False) | Q(pay_schedule__isnull=False),
+            paid_date__isnull=True,
+            due_date__gt=through_date,
+        )
+        removed = stale.count()
+        stale.delete()
+
+        # Only ever pull a watermark backwards. One left short of the window edge is a schedule
+        # mid-catch-up, and moving it forward would skip the instances it still owes.
+        rewound = RecurringTransaction.objects.filter(generated_through__gt=through_date).update(
+            generated_through=through_date
+        ) + PaySchedule.objects.filter(generated_through__gt=through_date).update(generated_through=through_date)
+
+        self.stdout.write(
+            self.style.WARNING(
+                f"Pruned {removed} unpaid instance(s) due after {through_date} "
+                f"and rewound {rewound} watermark(s) to it."
+            )
+        )
+
     def handle(self, *args, **options):
         from apps.budget.models import PaySchedule, RecurringTransaction
 
-        lookahead = getattr(settings, "BUDGET_RECURRING_LOOKAHEAD_MONTHS", 3)
         today = timezone.localdate()
+        through_date = today + datetime.timedelta(days=settings.BUDGET_RECURRING_LOOKAHEAD_DAYS)
 
-        year = today.year + (today.month + lookahead - 1) // 12
-        month = (today.month + lookahead - 1) % 12 + 1
-        through_date = today.replace(year=year, month=month, day=calendar.monthrange(year, month)[1])
+        if options["prune"]:
+            self.prune(through_date)
 
         active_filter = (
             Q(is_active=True) & Q(start_date__lte=through_date) & (Q(end_date__isnull=True) | Q(end_date__gte=today))

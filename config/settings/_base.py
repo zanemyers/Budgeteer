@@ -252,6 +252,14 @@ else:
 
 EXCHANGERATE_API_KEY = env("EXCHANGERATE_API_KEY", default="")
 
+# How far ahead the nightly job materializes recurring bills and expected paychecks.
+# Deliberately days, not months: a schedule only becomes a real Transaction shortly before
+# it's due, so the register shows what's actually imminent instead of a month of rows on the
+# 1st that can't be reconciled until the end of it. Widening this is safe; narrowing it
+# leaves already-generated instances behind, so follow it with
+# `generate_recurring_instances --prune`.
+BUDGET_RECURRING_LOOKAHEAD_DAYS = env.int("BUDGET_RECURRING_LOOKAHEAD_DAYS", default=3)
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/6.0/ref/settings/#default-auto-field
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

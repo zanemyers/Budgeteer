@@ -86,3 +86,110 @@ class TestGenerateRecurringInstances(BaseTest):
     def test_clean_run_does_not_raise(self):
         self._recurring("Netflix")
         call_command("generate_recurring_instances", stdout=StringIO(), stderr=StringIO())
+
+
+class TestLookaheadWindow(TestGenerateRecurringInstances):
+    """
+    The window is days, not months.
+
+    A month-based lookahead materialized every bill for the next three months on the 1st, so
+    the register opened the month with dozens of rows that could not be reconciled until it
+    ended. Nothing pinned the width, so these tests exist to keep it narrow.
+    """
+
+    def test_generates_only_within_the_lookahead_window(self):
+        self._recurring("Netflix")
+        with mock.patch("django.utils.timezone.localdate", return_value=datetime.date(2026, 8, 4)):
+            call_command("generate_recurring_instances", stdout=StringIO())
+
+        due = sorted(Transaction.objects.values_list("due_date", flat=True))
+        self.assertTrue(due, "expected at least one instance inside the window")
+        self.assertLessEqual(due[-1], datetime.date(2026, 8, 7), f"generated past the 3-day window: {due}")
+
+    def test_window_width_follows_the_setting(self):
+        self._recurring("Netflix")
+        with (
+            mock.patch("django.utils.timezone.localdate", return_value=datetime.date(2026, 8, 4)),
+            self.settings(BUDGET_RECURRING_LOOKAHEAD_DAYS=40),
+        ):
+            call_command("generate_recurring_instances", stdout=StringIO())
+
+        # Widening reaches September's instance; the 3-day default would not.
+        self.assertTrue(Transaction.objects.filter(due_date=datetime.date(2026, 9, 1)).exists())
+
+    def test_a_bill_appears_three_days_before_it_is_due_not_a_month_early(self):
+        """The whole point of the change: mid-August, September's rent is not in the register yet."""
+        self._recurring("Rent")  # monthly, due the 1st
+        sep_1 = datetime.date(2026, 9, 1)
+
+        with mock.patch("django.utils.timezone.localdate", return_value=datetime.date(2026, 8, 4)):
+            call_command("generate_recurring_instances", stdout=StringIO())
+        self.assertFalse(
+            Transaction.objects.filter(due_date=sep_1).exists(),
+            "September's bill was materialized four weeks ahead of its due date",
+        )
+
+        with mock.patch("django.utils.timezone.localdate", return_value=datetime.date(2026, 8, 30)):
+            call_command("generate_recurring_instances", stdout=StringIO())
+        self.assertTrue(Transaction.objects.filter(due_date=sep_1).exists(), "it never arrived inside the window")
+
+
+class TestPrune(TestGenerateRecurringInstances):
+    """
+    --prune cleans up after the window is narrowed.
+
+    Narrowing alone is not enough: the old instances remain, and each schedule's watermark is
+    already parked past the new window, so the generator computes an empty date list and the
+    nightly run silently does nothing until the calendar catches up.
+    """
+
+    def _widely_generated(self):
+        rt = self._recurring("Netflix")
+        with (
+            self.settings(BUDGET_RECURRING_LOOKAHEAD_DAYS=120),
+            mock.patch("django.utils.timezone.localdate", return_value=datetime.date(2026, 8, 4)),
+        ):
+            call_command("generate_recurring_instances", stdout=StringIO())
+        rt.refresh_from_db()
+        return rt
+
+    def test_prune_removes_instances_past_the_window_and_rewinds_the_watermark(self):
+        rt = self._widely_generated()
+        self.assertGreater(Transaction.objects.filter(due_date__gt=datetime.date(2026, 8, 7)).count(), 0)
+
+        with mock.patch("django.utils.timezone.localdate", return_value=datetime.date(2026, 8, 4)):
+            call_command("generate_recurring_instances", "--prune", stdout=StringIO())
+
+        rt.refresh_from_db()
+        self.assertEqual(Transaction.objects.filter(due_date__gt=datetime.date(2026, 8, 7)).count(), 0)
+        self.assertEqual(rt.generated_through, datetime.date(2026, 8, 7))
+
+    def test_prune_keeps_paid_history(self):
+        self._widely_generated()
+        future = Transaction.objects.filter(due_date__gt=datetime.date(2026, 8, 7)).order_by("due_date").first()
+        future.paid_date = future.due_date
+        future.save(update_fields=["paid_date"])
+
+        with mock.patch("django.utils.timezone.localdate", return_value=datetime.date(2026, 8, 4)):
+            call_command("generate_recurring_instances", "--prune", stdout=StringIO())
+
+        self.assertTrue(Transaction.objects.filter(pk=future.pk).exists(), "a paid instance was pruned")
+
+    def test_pruning_then_running_daily_resumes_generation(self):
+        """Without the rewind the watermark sits past the window and nothing regenerates."""
+        self._widely_generated()
+        with mock.patch("django.utils.timezone.localdate", return_value=datetime.date(2026, 8, 4)):
+            call_command("generate_recurring_instances", "--prune", stdout=StringIO())
+        with mock.patch("django.utils.timezone.localdate", return_value=datetime.date(2026, 9, 1)):
+            call_command("generate_recurring_instances", stdout=StringIO())
+
+        self.assertTrue(
+            Transaction.objects.filter(due_date=datetime.date(2026, 9, 1)).exists(),
+            "September's instance never came back after the prune",
+        )
+
+    def test_prune_is_off_by_default(self):
+        self._widely_generated()
+        with mock.patch("django.utils.timezone.localdate", return_value=datetime.date(2026, 8, 4)):
+            call_command("generate_recurring_instances", stdout=StringIO())
+        self.assertGreater(Transaction.objects.filter(due_date__gt=datetime.date(2026, 8, 7)).count(), 0)

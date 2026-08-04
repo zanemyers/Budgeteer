@@ -1350,11 +1350,7 @@ class RecurringCreateView(BudgetMemberMixin, View):
             end_date=end_date,
             is_active=data.get("is_active", True),
         )
-        lookahead = getattr(django_settings, "BUDGET_RECURRING_LOOKAHEAD_MONTHS", 3)
-        today = timezone.localdate()
-        year = today.year + (today.month + lookahead - 1) // 12
-        month = (today.month + lookahead - 1) % 12 + 1
-        through_date = today.replace(year=year, month=month, day=calendar.monthrange(year, month)[1])
+        through_date = timezone.localdate() + datetime.timedelta(days=django_settings.BUDGET_RECURRING_LOOKAHEAD_DAYS)
         rt.generate_instances_up_to(through_date)
         return rt
 
@@ -1411,10 +1407,7 @@ class RecurringDetailView(BudgetMemberMixin, View):
         # Only regenerate for a live schedule. Pausing one used to delete its future
         # instances and then immediately recreate them, so the pause did nothing.
         if rt.is_active:
-            lookahead = getattr(django_settings, "BUDGET_RECURRING_LOOKAHEAD_MONTHS", 3)
-            year = today.year + (today.month + lookahead - 1) // 12
-            month = (today.month + lookahead - 1) % 12 + 1
-            through_date = today.replace(year=year, month=month, day=calendar.monthrange(year, month)[1])
+            through_date = today + datetime.timedelta(days=django_settings.BUDGET_RECURRING_LOOKAHEAD_DAYS)
             rt.generate_instances_up_to(through_date)
 
         return JsonResponse(serialize_recurring(rt))

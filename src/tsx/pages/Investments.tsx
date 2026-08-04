@@ -188,15 +188,23 @@ export default function Investments({ accounts, portfolio }: Props) {
                           {acct.holdings.map((h) => (
                             <TableRow key={h.id}>
                               <TableCell className="font-medium tabular-nums">{h.symbol || "—"}</TableCell>
-                              <TableCell className="hidden lg:table-cell text-sm text-ink-quiet">{h.description || "—"}</TableCell>
+                              <TableCell className="hidden lg:table-cell text-sm text-ink-quiet">
+                                {h.description || "—"}
+                              </TableCell>
                               <TableCell className="text-right tabular-nums">{fmtQuantity(h.shares)}</TableCell>
-                              <TableCell className="text-right tabular-nums hidden md:table-cell">{fmt(h.purchase_price, symbol)}</TableCell>
-                              <TableCell className="text-right tabular-nums hidden lg:table-cell">{fmt(h.cost_basis, symbol)}</TableCell>
+                              <TableCell className="text-right tabular-nums hidden md:table-cell">
+                                {fmt(h.purchase_price, symbol)}
+                              </TableCell>
+                              <TableCell className="text-right tabular-nums hidden lg:table-cell">
+                                {fmt(h.cost_basis, symbol)}
+                              </TableCell>
                               <TableCell className="text-right tabular-nums">{fmt(h.market_value, symbol)}</TableCell>
                               <TableCell className={`text-right tabular-nums ${gainClass(h.unrealized_gain)}`}>
                                 {fmt(h.unrealized_gain, symbol)}
                               </TableCell>
-                              <TableCell className={`text-right tabular-nums hidden md:table-cell ${gainClass(h.unrealized_gain_pct)}`}>
+                              <TableCell
+                                className={`text-right tabular-nums hidden md:table-cell ${gainClass(h.unrealized_gain_pct)}`}
+                              >
                                 {fmtPct(h.unrealized_gain_pct)}
                               </TableCell>
                               <TableCell className="text-right tabular-nums text-ink-quiet hidden lg:table-cell">
