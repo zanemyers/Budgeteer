@@ -1,6 +1,6 @@
 import { router, usePage } from "@inertiajs/react";
 import { Menu } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { FlashToaster } from "@/components/FlashToaster";
 import { Button } from "@/components/ui/button";
 import {
@@ -114,6 +114,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const user = props.auth?.user;
 
+  useEffect(() => {
+    if (!sidebarOpen) return;
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSidebarOpen(false);
+    };
+    document.addEventListener("keydown", onEsc);
+    return () => document.removeEventListener("keydown", onEsc);
+  }, [sidebarOpen]);
+
   const sidebarBudget = props.current_budget ?? null;
   const sidebarBudgetPk = props.budget_pk ?? sidebarBudget?.pk;
   const month = props.month;
@@ -125,6 +134,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen">
       <FlashToaster />
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[60] focus:rounded-md focus:bg-popover focus:px-3 focus:py-2 focus:text-sm focus:outline-2 focus:outline-ring"
+      >
+        Skip to content
+      </a>
       {/* Mobile overlay */}
       {sidebarOpen && (
         <button
@@ -140,13 +155,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         className="sidebar fixed lg:static inset-y-0 left-0 z-50 lg:z-auto"
         data-sidebar-open={sidebarOpen || undefined}
       >
-        <style>{`
-          @media (max-width: 1023px) {
-            [data-sidebar-open] { transform: translateX(0) !important; }
-            .sidebar:not([data-sidebar-open]) { transform: translateX(-100%); }
-          }
-        `}</style>
-
         {/* Brand */}
         <div className="sidebar-brand-wrap">
           <a href="/" className="sidebar-brand">
@@ -170,7 +178,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* Nav */}
-        <nav className="sidebar-nav">
+        <nav aria-label="Main" className="sidebar-nav">
           {user ? (
             <>
               {sidebarBudgetPk ? (
@@ -269,7 +277,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </a>
         </header>
 
-        <main className="grow flex flex-col p-4 lg:p-6">{children}</main>
+        <main id="main" className="grow flex flex-col p-4 lg:p-6">
+          {children}
+        </main>
 
         <footer className="shrink-0 border-t px-4 py-2">
           <p className="text-sm text-muted-foreground">© Budgeteer {new Date().getFullYear()}</p>

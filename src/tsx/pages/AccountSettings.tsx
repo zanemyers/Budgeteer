@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { PageTourButton } from "@/components/PageTourButton";
@@ -130,6 +130,7 @@ function AvatarForm({ avatarUrl: initialAvatar }: { avatarUrl: string }) {
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -180,12 +181,29 @@ function AvatarForm({ avatarUrl: initialAvatar }: { avatarUrl: string }) {
         className="rounded-full object-cover size-16"
       />
       <div>
-        <Button asChild variant="outline" size="sm">
-          <label className="cursor-pointer">
-            {avatarUploading ? "Uploading…" : "Change photo"}
-            <input type="file" accept="image/*" className="hidden" onChange={onFileChange} disabled={avatarUploading} />
-          </label>
+        {/* A real button rather than a <label> wrapping a display:none input: neither of those
+            is focusable, so there was no tab stop here at all and the avatar could not be
+            changed by keyboard (WCAG 2.1.1). Driving the hidden input from a button also keeps
+            the focus ring on something visible, which an sr-only input would not. */}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={avatarUploading}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          {avatarUploading ? "Uploading…" : "Change photo"}
         </Button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          tabIndex={-1}
+          aria-hidden
+          onChange={onFileChange}
+          disabled={avatarUploading}
+        />
         {avatarError && <p className="text-destructive text-sm mt-1">{avatarError}</p>}
       </div>
     </div>
@@ -509,6 +527,7 @@ function EmailTab({
             <Input
               type="email"
               placeholder="new@example.com"
+              aria-label="New email address"
               value={newEmail}
               autoFocus
               onChange={(e) => setNewEmail(e.target.value)}

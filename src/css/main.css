@@ -305,10 +305,23 @@ input[type="number"],
 
 @media (max-width: 1023px) {
   .sidebar {
+    /* visibility, not just transform: translated off-screen alone left every nav link, the
+       budget switcher and the user menu in the tab order and the accessibility tree, so on a
+       phone a keyboard or switch-access user traversed the whole closed drawer before
+       reaching page content. visibility removes it; the 0s delay holds it until the
+       slide-out has finished so the animation is still seen. */
+    visibility: hidden;
     transform: translateX(-100%);
+    transition:
+      transform 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+      visibility 0s 0.2s;
   }
   .sidebar[data-sidebar-open] {
+    visibility: visible;
     transform: translateX(0);
+    transition:
+      transform 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+      visibility 0s;
   }
 }
 
@@ -319,6 +332,11 @@ input[type="number"],
   *::after {
     animation-duration: 0ms !important;
     transition-duration: 0ms !important;
+    /* Delays too: zeroing only the durations left staggered entrances (BudgetHistory's
+       per-row animation-delay) invisible for their full delay before snapping in, which is
+       exactly the effect the preference asks to remove. */
+    animation-delay: 0ms !important;
+    transition-delay: 0ms !important;
   }
 }
 

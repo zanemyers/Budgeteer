@@ -55,13 +55,46 @@ export function DateRangeFilter({ month, from, to, onChange }: Props) {
   const inRange = (d: number) => lo !== null && hi !== null && d >= lo && d <= hi;
   const isEnd = (d: number) => d === lo || d === hi;
 
-  function commit() {
-    if (anchor === null) return;
-    const h = hover ?? anchor;
-    onChange(iso(Math.min(anchor, h)), iso(Math.max(anchor, h)));
+  function commitRange(a: number, b: number) {
+    onChange(iso(Math.min(a, b)), iso(Math.max(a, b)));
     setAnchor(null);
     setHover(null);
     setOpen(false);
+  }
+
+  function commit() {
+    if (anchor === null) return;
+    commitRange(anchor, hover ?? anchor);
+  }
+
+  /**
+   * Keyboard activation of a day.
+   *
+   * The cells only had onMouseDown, and Enter/Space on a button dispatches `click`, never
+   * `mousedown` — so every day was reachable by Tab and none could be selected (WCAG 2.1.1).
+   * Pointer clicks are already handled by the mousedown/mouseup pair, and a keyboard-generated
+   * click is distinguishable by `detail === 0`.
+   */
+  function onDayClick(e: React.MouseEvent, day: number) {
+    if (e.detail !== 0) return;
+    if (anchor === null) {
+      setAnchor(day);
+      setHover(day);
+    } else {
+      commitRange(anchor, day);
+    }
+  }
+
+  /** Arrow-key movement, so reaching a date doesn't mean Tabbing through the whole month. */
+  function onDayKeyDown(e: React.KeyboardEvent<HTMLButtonElement>, day: number) {
+    const step = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 }[e.key];
+    if (step === undefined) return;
+    const next = Math.min(lastDay, Math.max(1, day + step));
+    const target = ref.current?.querySelector<HTMLButtonElement>(`[data-day="${next}"]`);
+    if (!target) return;
+    e.preventDefault();
+    target.focus();
+    if (anchor !== null) setHover(next);
   }
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: re-bound on open/anchor/hover; commit reads current values
@@ -90,6 +123,14 @@ export function DateRangeFilter({ month, from, to, onChange }: Props) {
     };
   }, [open, anchor, hover]);
 
+  // Move focus into the grid on open and back to the trigger on close, so keyboard users
+  // aren't left tabbing from the top of the page to reach a popover that just appeared.
+  useEffect(() => {
+    if (!open) return;
+    const target = ref.current?.querySelector<HTMLButtonElement>(`[data-day="${appliedFrom ?? 1}"]`);
+    target?.focus();
+  }, [open, appliedFrom]);
+
   const cells: { id: string; day: number | null }[] = [
     ...Array.from({ length: firstWeekday }, (_, i) => ({ id: `pad-${i}`, day: null })),
     ...Array.from({ length: lastDay }, (_, i) => ({ id: `day-${i + 1}`, day: i + 1 })),
@@ -101,6 +142,8 @@ export function DateRangeFilter({ month, from, to, onChange }: Props) {
         type="button"
         variant="outline"
         size="sm"
+        aria-haspopup="dialog"
+        aria-expanded={open}
         className={active ? "border-moss text-foreground" : ""}
         onClick={() => setOpen((o) => !o)}
       >
@@ -108,7 +151,11 @@ export function DateRangeFilter({ month, from, to, onChange }: Props) {
       </Button>
 
       {open && (
-        <div className="absolute z-50 mt-1 w-64 rounded-md border border-rule bg-popover p-3 shadow-md select-none">
+        <div
+          role="dialog"
+          aria-label={`Pick days in ${short}`}
+          className="absolute z-50 mt-1 w-64 rounded-md border border-rule bg-popover p-3 shadow-md select-none"
+        >
           <p className="text-sm font-medium mb-2 text-center">{short}</p>
           <div className="grid grid-cols-7 gap-0.5 mb-1">
             {WEEKDAYS.map((w) => (
@@ -125,13 +172,20 @@ export function DateRangeFilter({ month, from, to, onChange }: Props) {
                 <button
                   key={id}
                   type="button"
+                  data-day={d}
+                  // Names the month too: on its own the accessible name was just "5".
+                  aria-label={`${short} ${d}`}
+                  // Selection was conveyed by background colour alone.
+                  aria-pressed={inRange(d)}
                   onMouseDown={(e) => {
                     e.preventDefault();
                     setAnchor(d);
                     setHover(d);
                   }}
                   onMouseEnter={() => dragging && setHover(d)}
-                  className={`h-8 rounded-sm text-sm tabular-nums transition-colors ${
+                  onClick={(e) => onDayClick(e, d)}
+                  onKeyDown={(e) => onDayKeyDown(e, d)}
+                  className={`h-8 rounded-sm text-sm tabular-nums transition-colors focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-1 ${
                     isEnd(d) ? "bg-moss text-white" : inRange(d) ? "bg-moss-soft text-ink" : "hover:bg-muted"
                   }`}
                 >
@@ -141,7 +195,7 @@ export function DateRangeFilter({ month, from, to, onChange }: Props) {
             )}
           </div>
           <div className="flex justify-between items-center pt-2 mt-1 border-t">
-            <span className="text-[0.7rem] text-muted-foreground">Click or drag to pick days</span>
+            <span className="text-[0.7rem] text-muted-foreground">Click, drag, or use arrow keys</span>
             <Button
               type="button"
               variant="ghost"
