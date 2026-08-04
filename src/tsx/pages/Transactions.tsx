@@ -154,7 +154,7 @@ export default function Transactions({
           title="Click to sort, shift+click to add a secondary sort"
         >
           {label}
-          <span className={active ? "text-moss" : "text-muted-foreground/40"}>
+          <span className={active ? "text-moss" : "text-muted-foreground"}>
             {dir === "desc" ? <ChevronDown className="size-3" /> : <ChevronUp className="size-3" />}
           </span>
           {rank ? <span className="text-[0.65rem] text-muted-foreground">{rank}</span> : null}
@@ -877,7 +877,7 @@ export default function Transactions({
                                 )}
                               </TableCell>
                               <TableCell
-                                className={`text-right font-medium tabular-nums ${negative ? "text-expense/70" : "text-income/70"}`}
+                                className={`text-right font-medium tabular-nums ${negative ? "text-expense" : "text-income"}`}
                               >
                                 {fmtSigned(amt, symbol)}
                               </TableCell>

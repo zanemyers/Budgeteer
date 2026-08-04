@@ -392,7 +392,7 @@ export default function Dashboard({
 
       {/* Pending review */}
       {isCurrentMonth && pending_count > 0 && (
-        <Alert className="mb-8 border-fund/30 bg-fund-soft text-ink *:data-[slot=alert-description]:text-ink/90">
+        <Alert className="mb-8 border-fund/30 bg-fund-soft text-ink *:data-[slot=alert-description]:text-ink">
           <AlertDescription>
             <div className="flex justify-between items-center w-full gap-4">
               <div>
