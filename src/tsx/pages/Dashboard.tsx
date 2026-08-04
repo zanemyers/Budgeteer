@@ -363,6 +363,11 @@ export default function Dashboard({
   // from previously-saved funds, not this month's budget.
   const totalSpent = expense.reduce((sum, c) => sum + parseFloat(c.activity), 0);
   const rta = parseFloat(overview.ready_to_assign);
+  // Money sitting in a category that hasn't been spent yet — a different kind of leftover from
+  // Ready to Assign, which has never been given a job at all. Goals are excluded: their rows
+  // carry a different meaning for `available`, and they have their own box.
+  const unspent = expense.reduce((sum, c) => sum + parseFloat(c.available), 0);
+  const unspentDiffersFromRta = Math.abs(unspent - rta) >= 0.005;
 
   return (
     <div className="max-w-[1200px]">
@@ -466,6 +471,13 @@ export default function Dashboard({
               </Button>
             )}
           </div>
+          {/* Only worth a second line when the two actually differ — otherwise it restates the
+              number directly above it. */}
+          {unspentDiffersFromRta && (
+            <p className="mt-1 text-sm text-ink-quiet">
+              <span className="tabular-nums text-ink">{fmt(unspent, symbol)}</span> unspent in categories
+            </p>
+          )}
           <p className="mt-1 text-xs text-ink-quiet">
             Income &minus; assigned{parseFloat(overview.saved_to_goals_total) > 0 ? " − saved to goals" : ""}
           </p>
