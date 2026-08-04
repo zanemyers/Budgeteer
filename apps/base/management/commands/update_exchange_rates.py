@@ -3,7 +3,7 @@ from functools import cache
 from pathlib import Path
 
 from django.conf import settings
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
 import requests
@@ -32,10 +32,37 @@ class Command(BaseCommand):
             help="Only fetch if rates are older than 23 hours.",
         )
 
+    def _get_json(self, url: str) -> dict:
+        """
+        GET a URL and parse JSON, converting failures into CommandError.
+
+        Unwrapped, a network blip or an HTML error page raised out of handle() as a raw
+        traceback in the cron log with a zero-ish signal and no indication of which call
+        failed. The API key is in the URL, so the URL is never included in the message.
+        """
+        try:
+            response = requests.get(url, timeout=10)
+        except requests.RequestException as e:
+            raise CommandError(f"Could not reach the exchange rate API: {e.__class__.__name__}") from e
+        if response.status_code != 200:
+            raise CommandError(f"Exchange rate API returned HTTP {response.status_code}.")
+        try:
+            return response.json()
+        except ValueError as e:
+            raise CommandError("Exchange rate API returned a non-JSON response.") from e
+
     def handle(self, *args, **options):
         api_key = settings.EXCHANGERATE_API_KEY
         if not api_key:
-            self.stderr.write("EXCHANGERATE_API_KEY is not set — skipping.")
+            # Not fatal — a single-currency install never needs this. But the consequence is
+            # invisible otherwise: every Currency.rate_to_usd stays at its default of 1, so
+            # any non-USD amount is silently converted at par.
+            self.stderr.write(
+                self.style.WARNING(
+                    "EXCHANGERATE_API_KEY is not set — skipping. Exchange rates will stay at 1.0, "
+                    "so amounts in any currency other than USD will be wrong until it is configured."
+                )
+            )
             return
 
         if options["if_stale"]:
@@ -49,16 +76,14 @@ class Command(BaseCommand):
         base_url = f"https://v6.exchangerate-api.com/v6/{api_key}"
 
         self.stdout.write("Fetching supported currencies…")
-        codes_data = requests.get(f"{base_url}/codes", timeout=10).json()
+        codes_data = self._get_json(f"{base_url}/codes")
         if codes_data.get("result") != "success":
-            self.stderr.write(f"API error: {codes_data}")
-            return
+            raise CommandError(f"Exchange rate API returned an error for /codes: {codes_data}")
 
         self.stdout.write("Fetching exchange rates…")
-        rates_data = requests.get(f"{base_url}/latest/USD", timeout=10).json()
+        rates_data = self._get_json(f"{base_url}/latest/USD")
         if rates_data.get("result") != "success":
-            self.stderr.write(f"API error: {rates_data}")
-            return
+            raise CommandError(f"Exchange rate API returned an error for /latest/USD: {rates_data}")
 
         rates = rates_data["conversion_rates"]
         symbols = load_currency_symbols()

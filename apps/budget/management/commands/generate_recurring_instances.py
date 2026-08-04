@@ -1,7 +1,7 @@
 import calendar
 
 from django.conf import settings
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.db.models import Q
 from django.utils import timezone
 
@@ -26,10 +26,19 @@ class Command(BaseCommand):
             "budget", "category", "created_by"
         )
 
+        # Each schedule is generated independently. Without this, one bad row — a missing
+        # currency, an unusable anchor — aborted the whole nightly run, including every
+        # schedule queued behind it, and did so silently apart from a traceback in the log.
+        failures: list[str] = []
+
         total_created = 0
         schedules_count = 0
         for schedule in schedules:
-            created = schedule.generate_instances_up_to(through_date)
+            try:
+                created = schedule.generate_instances_up_to(through_date)
+            except Exception as e:  # noqa: BLE001 - one bad schedule must not stop the rest
+                failures.append(f"recurring #{schedule.pk} ({schedule.name}): {e}")
+                continue
             total_created += len(created)
             schedules_count += 1
 
@@ -38,7 +47,11 @@ class Command(BaseCommand):
         pay_created = 0
         pay_count = 0
         for pay_schedule in pay_schedules:
-            created = pay_schedule.generate_instances_up_to(through_date, since=today)
+            try:
+                created = pay_schedule.generate_instances_up_to(through_date, since=today)
+            except Exception as e:  # noqa: BLE001 - as above
+                failures.append(f"pay schedule #{pay_schedule.pk} ({pay_schedule.name}): {e}")
+                continue
             pay_created += len(created)
             pay_count += 1
 
@@ -48,3 +61,9 @@ class Command(BaseCommand):
                 f"{pay_count} pay schedules ({pay_created} paychecks)."
             )
         )
+
+        if failures:
+            for failure in failures:
+                self.stderr.write(self.style.ERROR(f"  {failure}"))
+            # Non-zero exit so the failure is detectable, not just present in the log.
+            raise CommandError(f"{len(failures)} schedule(s) failed to generate; the rest completed.")
