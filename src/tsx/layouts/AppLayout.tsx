@@ -1,7 +1,7 @@
 import { router, usePage } from "@inertiajs/react";
 import { Menu } from "lucide-react";
-import { useEffect, useState } from "react";
-import { toast } from "sonner";
+import { useState } from "react";
+import { FlashToaster } from "@/components/FlashToaster";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Toaster } from "@/components/ui/sonner";
+import { getCsrfToken } from "@/lib/api";
 import ThemeToggle from "../components/ThemeToggle";
 import { startFullTour } from "../lib/onboardingTour";
 
@@ -30,7 +30,8 @@ interface PageProps {
   budget_pk?: number;
   month?: string;
   has_investments?: boolean;
-  flash?: Array<{ level: string; message: string }>;
+  // Inertia's usePage generic requires an index signature; page props are an open bag.
+  [key: string]: unknown;
 }
 
 function NavLink({
@@ -65,11 +66,17 @@ function NavLink({
   );
 }
 
-function logout() {
-  void fetch("/accounts/logout/", {
-    method: "POST",
-    headers: { "X-CSRFToken": document.cookie.match(/csrftoken=([^;]+)/)?.[1] ?? "" },
-  }).then(() => router.visit("/accounts/login/"));
+async function logout() {
+  try {
+    await fetch("/accounts/logout/", {
+      method: "POST",
+      headers: { "X-CSRFToken": getCsrfToken() },
+    });
+  } catch {
+    // Fall through to the redirect regardless: the session may already be gone, and leaving
+    // the user on an authenticated-looking page is worse than an extra bounce through login.
+  }
+  router.visit("/accounts/login/");
 }
 
 function UserMenu({ user, budgetPk }: { user: AuthUser; budgetPk?: number }) {
@@ -107,21 +114,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const user = props.auth?.user;
 
-  // Surface server-side messages. The `flash` prop was being shared but read nowhere, so
-  // anything a view reported via messages.* (e.g. "Set an amount before marking this
-  // paycheck paid") was silently dropped after the redirect.
-  const flash = props.flash;
-  useEffect(() => {
-    for (const { level, message } of flash ?? []) {
-      if (level === "error") toast.error(message);
-      else if (level === "warning") toast.warning(message);
-      else if (level === "success") toast.success(message);
-      else toast(message);
-    }
-    // Keyed on the messages themselves so a re-render doesn't re-toast, but a fresh
-    // navigation carrying new ones does.
-  }, [flash]);
-
   const sidebarBudget = props.current_budget ?? null;
   const sidebarBudgetPk = props.budget_pk ?? sidebarBudget?.pk;
   const month = props.month;
@@ -132,7 +124,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen">
-      <Toaster position="bottom-right" richColors closeButton />
+      <FlashToaster />
       {/* Mobile overlay */}
       {sidebarOpen && (
         <button

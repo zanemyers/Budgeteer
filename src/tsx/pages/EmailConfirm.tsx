@@ -1,8 +1,9 @@
 import { router } from "@inertiajs/react";
 import { createElement, useState } from "react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { getCsrfToken } from "@/lib/api";
+import { errorMessage, getCsrfToken } from "@/lib/api";
 import AuthLayout from "../layouts/AuthLayout";
 
 interface Props {
@@ -13,6 +14,7 @@ interface Props {
 export default function EmailConfirm({ email, invalid }: Props) {
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function confirm() {
     setLoading(true);
@@ -28,9 +30,15 @@ export default function EmailConfirm({ email, invalid }: Props) {
       });
       if (res.redirected) {
         router.visit(res.url);
-      } else {
+      } else if (res.ok) {
         setDone(true);
+      } else {
+        // Previously any non-redirect response set done, so a failure reported the address
+        // as confirmed when it was not.
+        setError("Could not confirm this email address. The link may have expired.");
       }
+    } catch (err) {
+      setError(errorMessage(err, "Could not confirm this email address."));
     } finally {
       setLoading(false);
     }
@@ -88,6 +96,11 @@ export default function EmailConfirm({ email, invalid }: Props) {
         <p className="text-muted-foreground text-sm mb-6">
           Click below to verify <strong className="text-foreground">{email}</strong>.
         </p>
+        {error && (
+          <Alert variant="destructive" className="mb-4 text-left">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
         <Button disabled={loading} onClick={() => void confirm()}>
           {loading ? "Confirming…" : "Confirm email address"}
         </Button>

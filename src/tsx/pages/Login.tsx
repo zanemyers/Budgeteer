@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getCsrfToken } from "@/lib/api";
+import { errorMessage, getCsrfToken } from "@/lib/api";
 import { PasswordInput } from "../components/PasswordInput";
 import AuthLayout from "../layouts/AuthLayout";
 
@@ -61,6 +61,8 @@ export default function Login({ errors: initialErrors, next }: Props) {
           ? { __all__: String(data.form.errors[0]) }
           : null;
       setErrors(data?.errors ?? formErrors ?? { __all__: "Invalid email or password." });
+    } catch (err) {
+      setErrors({ __all__: errorMessage(err, "Could not sign in. Please try again.") });
     } finally {
       setLoading(false);
     }

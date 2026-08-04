@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getCsrfToken } from "@/lib/api";
+import { errorMessage, getCsrfToken } from "@/lib/api";
 import AuthLayout from "../layouts/AuthLayout";
 
 interface Props {
@@ -37,9 +37,11 @@ export default function PasswordReset({ done: initialDone, errors: initialErrors
       if (res.redirected) {
         setDone(true);
       } else {
-        const data = (await res.json()) as { errors: Record<string, string> };
+        const data = (await res.json().catch(() => ({}))) as { errors?: Record<string, string> };
         setErrors(data.errors ?? {});
       }
+    } catch (err) {
+      setErrors({ __all__: errorMessage(err, "Could not send the reset email. Please try again.") });
     } finally {
       setLoading(false);
     }

@@ -152,10 +152,12 @@ const setFullRun = (budgetPk: number) => sessionStorage.setItem(FLAG, String(bud
 const clearFullRun = () => sessionStorage.removeItem(FLAG);
 
 function markOnboarded() {
+  // Silent by design: if this fails the tour simply offers itself again, which is a far
+  // better outcome than an error toast. The catch is here to avoid an unhandled rejection.
   void fetch("/onboarding/", {
     method: "POST",
     headers: { "X-CSRFToken": getCsrfToken(), "X-Requested-With": "XMLHttpRequest" },
-  });
+  }).catch(() => {});
 }
 
 /** Run one stage's tour. In full mode, advances to the next stage on completion. */
