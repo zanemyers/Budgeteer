@@ -749,6 +749,10 @@ class CategoryCreateView(BudgetMemberMixin, View):
                 base_amount = Decimal(str(data.get("base_amount") or "0"))
             except (ValueError, InvalidOperation):
                 base_amount = Decimal("0")
+            try:
+                monthly_budget = Decimal(str(data.get("monthly_budget") or "0"))
+            except (ValueError, InvalidOperation):
+                monthly_budget = Decimal("0")
             cat = Category.objects.create(
                 budget=self.budget,
                 parent=parent,
@@ -756,6 +760,7 @@ class CategoryCreateView(BudgetMemberMixin, View):
                 category_type=category_type,
                 rollover=rollover,
                 base_amount=base_amount,
+                monthly_budget=monthly_budget,
                 rollover_start=timezone.localdate().replace(day=1) if (rollover and base_amount) else None,
                 created_by=request.user,
             )
@@ -810,9 +815,16 @@ class CategoryUpdateView(BudgetMemberMixin, View):
     def patch(self, request, budget_pk, pk):
         category = get_object_or_404(Category, pk=pk, budget=self.budget)
         data = parse_json_body(request)
-        for field in ("name", "category_type", "monthly_budget"):
+        for field in ("name", "category_type"):
             if field in data:
                 setattr(category, field, data[field])
+        # monthly_budget is a DecimalField and used to be assigned straight from the request, so
+        # a non-numeric value raised on save instead of being rejected.
+        if "monthly_budget" in data:
+            try:
+                category.monthly_budget = Decimal(str(data.get("monthly_budget") or "0"))
+            except (ValueError, InvalidOperation):
+                return JsonResponse({"errors": {"monthly_budget": ["Enter a valid amount."]}}, status=400)
         if "rollover" in data:
             category.rollover = bool(data["rollover"])
         if "base_amount" in data:

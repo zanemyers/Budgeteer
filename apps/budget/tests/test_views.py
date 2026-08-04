@@ -368,6 +368,60 @@ class TestRecurringDelete(BudgetViewTestCase):
         self.assertFalse(RecurringTransaction.objects.filter(pk=self.rt.pk).exists())
 
 
+class TestCategoryMonthlyTarget(BudgetViewTestCase):
+    """
+    A category's monthly target has to be settable, and settable safely.
+
+    monthly_budget is the target the dashboard compares assigned against, and the dashboard now
+    hides it once the target is met — so the category editor has to be able to set it. The create
+    view ignored the field entirely, and the update view assigned it straight from the request
+    into a DecimalField, so a non-numeric value raised on save: a 500 rather than a rejection.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(self.user)
+        self.create_url = reverse("budget:category-create", kwargs={"budget_pk": self.budget.pk})
+        self.edit_url = reverse("budget:category-edit", kwargs={"budget_pk": self.budget.pk, "pk": self.expense_cat.pk})
+
+    def test_create_accepts_a_monthly_target(self):
+        res = self.client.post(
+            self.create_url,
+            data=json.dumps({"name": "Fuel", "category_type": Category.TYPE_EXPENSE, "monthly_budget": "200.00"}),
+            content_type="application/json",
+        )
+        self.assertEqual(res.status_code, 201)
+        self.assertEqual(Category.objects.get(budget=self.budget, name="Fuel").monthly_budget, Decimal("200.00"))
+
+    def test_create_without_a_target_still_works(self):
+        res = self.client.post(
+            self.create_url,
+            data=json.dumps({"name": "Sundries", "category_type": Category.TYPE_EXPENSE}),
+            content_type="application/json",
+        )
+        self.assertEqual(res.status_code, 201)
+        self.assertEqual(Category.objects.get(budget=self.budget, name="Sundries").monthly_budget, Decimal("0"))
+
+    def test_patch_updates_the_target(self):
+        res = self._patch_json(self.edit_url, {"monthly_budget": "313.83"})
+        self.assertEqual(res.status_code, 200)
+        self.expense_cat.refresh_from_db()
+        self.assertEqual(self.expense_cat.monthly_budget, Decimal("313.83"))
+
+    def test_bad_target_is_rejected_not_a_500(self):
+        res = self._patch_json(self.edit_url, {"monthly_budget": "not-a-number"})
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("monthly_budget", res.json()["errors"])
+
+    def test_blank_target_clears_it(self):
+        self.expense_cat.monthly_budget = Decimal("200.00")
+        self.expense_cat.save(update_fields=["monthly_budget"])
+        res = self._patch_json(self.edit_url, {"monthly_budget": ""})
+        self.assertEqual(res.status_code, 200)
+        self.expense_cat.refresh_from_db()
+        self.assertEqual(self.expense_cat.monthly_budget, Decimal("0"))
+
+
 class TestBudgetDelete(BudgetViewTestCase):
     """
     Deleting a budget must succeed even when it has history.

@@ -55,6 +55,11 @@ export default function CategoryModal({
   const [parentId, setParentId] = useState(initialParent ? String(initialParent) : "none");
   const [rollover, setRollover] = useState(category?.rollover ?? false);
   const [baseAmount, setBaseAmount] = useState(category?.base_amount ?? "");
+  // A non-rollover category's target lives on monthly_budget; a rollover one's is base_amount
+  // plus whatever carried over. One field is shown for either, sourced from the right column.
+  const [monthlyBudget, setMonthlyBudget] = useState(
+    category && parseFloat(category.monthly_budget) > 0 ? category.monthly_budget : "",
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -89,6 +94,9 @@ export default function CategoryModal({
     if (type === "expense") {
       body.rollover = rollover;
       body.base_amount = rollover ? baseAmount || "0" : "0";
+      // Left alone while a category is in rollover mode, so unticking the box restores the
+      // target that was there before rather than a zero.
+      if (!rollover) body.monthly_budget = monthlyBudget || "0";
     }
 
     const url = isEdit
@@ -206,6 +214,29 @@ export default function CategoryModal({
                     </small>
                   </div>
                 </div>
+                {!rollover && (
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="cat-monthly">Monthly target</Label>
+                    <div className="flex">
+                      <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-input bg-muted text-muted-foreground text-sm">
+                        {symbol}
+                      </span>
+                      <Input
+                        id="cat-monthly"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        className="rounded-l-none"
+                        placeholder="e.g. 200"
+                        value={monthlyBudget}
+                        onChange={(e) => setMonthlyBudget(e.target.value)}
+                      />
+                    </div>
+                    <small className="text-muted-foreground">
+                      What you aim to assign here each month. Optional — leave blank for no target.
+                    </small>
+                  </div>
+                )}
                 {rollover && (
                   <div className="flex flex-col gap-2 pl-7">
                     <Label htmlFor="cat-base">Monthly target</Label>

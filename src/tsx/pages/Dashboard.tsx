@@ -253,11 +253,17 @@ export default function Dashboard({
     // worth explaining wherever that figure appears.
     const carried = cat.rollover_carry !== null && parseFloat(cat.rollover_carry) > 0;
 
-    // Assigned and target sit side by side in one cell, both always shown. Epsilon rather than
-    // `===` because both sides come from parseFloat over serialized decimals.
+    // Epsilon rather than `===` because both sides come from parseFloat over serialized decimals.
     const onTarget = Math.abs(assigned - budgeted) < 0.005;
-    const overTarget = assigned - budgeted > 0.005;
+    // Guarded on a target existing: without it, any assignment to a category with no target read
+    // as "over", which is a comparison against nothing — and now that the target is hidden once
+    // met, there would be no visible figure to explain the red.
+    const overTarget = budgeted > 0 && assigned - budgeted > 0.005;
     const overBy = assigned - budgeted;
+    // The target is a reference for a row still working toward one. Once assigned has reached or
+    // passed it, restating it is clutter — the colour says it was met, and the overage says by how
+    // much it was passed.
+    const showTarget = budgeted - assigned > 0.005;
     // Reuses the epsilon: an exact === on parseFloat results missed rows that were on target by
     // any floating-point residue.
     const assignedClass = budgeted > 0 && onTarget ? "text-moss" : "";
@@ -298,37 +304,41 @@ export default function Dashboard({
                   : "Click to set assigned amount"
               }
             />
-            <span aria-hidden className="text-muted-foreground">
-              /
-            </span>
-            {/* A rollover category's target is base + carried balance, computed rather than typed,
-                so it is read-only here and explained on hover. */}
-            {cat.rollover && !cat.is_goal ? (
-              <span
-                className="text-sm tabular-nums text-muted-foreground"
-                title={
-                  carried
-                    ? `${fmt(cat.base_amount, symbol)} base + ${fmt(cat.rollover_carry, symbol)} carried over`
-                    : "Target for this month (base amount)"
-                }
-              >
-                {fmt(cat.budgeted, symbol)}
-              </span>
-            ) : (
-              <CurrencyEditCell
-                symbol={symbol}
-                value={cat.budgeted}
-                editing={editingBudgeted[cat.id]}
-                onStart={() => {
-                  setEditingBudgeted((prev) => ({ ...prev, [cat.id]: cat.budgeted }));
-                }}
-                onChange={(v) => setEditingBudgeted((prev) => ({ ...prev, [cat.id]: v }))}
-                onCommit={() => void saveBudgeted(cat)}
-                onCancel={() => clearEditBudgeted(cat.id)}
-                saving={savingBudgeted[cat.id] ?? false}
-                valueClass="text-sm tabular-nums text-muted-foreground"
-                title="Click to set monthly target"
-              />
+            {showTarget && (
+              <>
+                <span aria-hidden className="text-muted-foreground">
+                  /
+                </span>
+                {/* A rollover category's target is base + carried balance, computed rather than
+                    typed, so it is read-only here and explained on hover. */}
+                {cat.rollover && !cat.is_goal ? (
+                  <span
+                    className="text-sm tabular-nums text-muted-foreground"
+                    title={
+                      carried
+                        ? `${fmt(cat.base_amount, symbol)} base + ${fmt(cat.rollover_carry, symbol)} carried over`
+                        : "Target for this month (base amount)"
+                    }
+                  >
+                    {fmt(cat.budgeted, symbol)}
+                  </span>
+                ) : (
+                  <CurrencyEditCell
+                    symbol={symbol}
+                    value={cat.budgeted}
+                    editing={editingBudgeted[cat.id]}
+                    onStart={() => {
+                      setEditingBudgeted((prev) => ({ ...prev, [cat.id]: cat.budgeted }));
+                    }}
+                    onChange={(v) => setEditingBudgeted((prev) => ({ ...prev, [cat.id]: v }))}
+                    onCommit={() => void saveBudgeted(cat)}
+                    onCancel={() => clearEditBudgeted(cat.id)}
+                    saving={savingBudgeted[cat.id] ?? false}
+                    valueClass="text-sm tabular-nums text-muted-foreground"
+                    title="Click to set monthly target"
+                  />
+                )}
+              </>
             )}
             {overTarget && (
               <span className="whitespace-nowrap text-xs text-expense">
