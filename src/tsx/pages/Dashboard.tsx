@@ -111,27 +111,41 @@ function CurrencyEditCell({
 /**
  * One figure in the month's summary strip.
  *
- * `accent` marks the box that carries an action rather than just a number, so the four don't
- * read as an identical tiled row — DESIGN.md calls that out as the default-finance-dashboard
- * reflex and asks for size and emphasis to vary deliberately.
+ * The four share a single card divided by rules rather than sitting in four separate cards, because
+ * four cards in a grid become four full-width blocks stacked down a phone — a screen and a half of
+ * scrolling before the budget itself. Ruled cells wrap two-by-two instead.
+ *
+ * `index` drives which edges get a rule: on a narrow screen the second of each pair takes a left
+ * rule and the bottom pair takes a top one; from `sm` up they sit in a single row, so every cell but
+ * the first takes a left rule and none take a top one. Tailwind's `divide-x` cannot express that,
+ * since it would draw a rule at the start of a wrapped row.
+ *
+ * `accent` still marks the cell that carries an action rather than just a number, now as a tint on
+ * the cell instead of a band above it.
  */
-function SummaryBox({
+function SummaryCell({
   label,
+  index,
   accent,
   children,
 }: {
   label: string;
+  index: number;
   accent?: "moss" | "alarm";
   children: React.ReactNode;
 }) {
-  const band = accent === "moss" ? "bg-moss-soft" : accent === "alarm" ? "bg-expense-soft" : "";
+  const tint = accent === "moss" ? "bg-moss-soft/40" : accent === "alarm" ? "bg-expense-soft/40" : "";
+  const rules = [
+    index % 2 === 1 ? "border-l" : "",
+    index >= 2 ? "border-t" : "",
+    "sm:border-t-0",
+    index > 0 ? "sm:border-l" : "",
+  ].join(" ");
   return (
-    <Card className="p-0 gap-0 overflow-hidden">
-      <div className={`px-4 py-2 ${band}`}>
-        <span className={`${SECTION_LABEL_CLASS} ${accent ? "text-ink" : "text-ink-quiet"}`}>{label}</span>
-      </div>
-      <div className="px-4 py-3">{children}</div>
-    </Card>
+    <div className={`px-4 py-3 ${rules} ${tint}`}>
+      <span className={`${SECTION_LABEL_CLASS} ${accent ? "text-ink" : "text-ink-quiet"}`}>{label}</span>
+      <div className="mt-1.5">{children}</div>
+    </div>
   );
 }
 
@@ -456,90 +470,93 @@ export default function Dashboard({
       {/* This month at a glance. Previously a card in the income column — which meant a budget
           with no income categories rendered no summary at all — plus a separate Ready to Assign
           alert saying the same thing twice. */}
-      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <SummaryBox label="Total income">
-          <span className="text-2xl font-semibold tracking-tight tabular-nums text-income">
-            {fmt(overview.income_total, symbol)}
-          </span>
-        </SummaryBox>
+      <Card className="mb-8 overflow-hidden p-0">
+        <div className="grid grid-cols-2 sm:grid-cols-4">
+          <SummaryCell label="Total income" index={0}>
+            <span className="text-2xl font-semibold tracking-tight tabular-nums text-income">
+              {fmt(overview.income_total, symbol)}
+            </span>
+          </SummaryCell>
 
-        <SummaryBox label="Total expenses">
-          <span className="text-2xl font-semibold tracking-tight tabular-nums text-expense">
-            {fmt(totalSpent, symbol)}
-          </span>
-        </SummaryBox>
+          <SummaryCell label="Total expenses" index={1}>
+            <span className="text-2xl font-semibold tracking-tight tabular-nums text-expense">
+              {fmt(totalSpent, symbol)}
+            </span>
+          </SummaryCell>
 
-        {/* Number first, then its word — the same shape as the other three, and as the fourth box's
+          {/* Number first, then its word — the same shape as the other three, and as the fourth box's
             secondary line. This one used to sit its labels on the left with the figures right-aligned
             against them, which read as a different kind of card in a row of four and put its numbers
             nowhere near the others' eye line. */}
-        <SummaryBox label="Goals">
-          <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-semibold tracking-tight tabular-nums text-fund">
-              {fmt(overview.saved_to_goals_total, symbol)}
-            </span>
-            <span className="text-xs text-ink-quiet">saved</span>
-          </div>
-          {sfMonthlySpending > 0.005 && (
-            <p
-              className="mt-1 text-sm text-ink-quiet"
-              title="Drawn from previously-saved balances, not this month's budget"
-            >
-              <span className="tabular-nums text-ink">{fmt(sfMonthlySpending, symbol)}</span> spent from goals
-            </p>
-          )}
-        </SummaryBox>
+          <SummaryCell label="Goals" index={2}>
+            <div className="flex items-baseline gap-2">
+              <span className="text-2xl font-semibold tracking-tight tabular-nums text-fund">
+                {fmt(overview.saved_to_goals_total, symbol)}
+              </span>
+              <span className="text-xs text-ink-quiet">saved</span>
+            </div>
+            {sfMonthlySpending > 0.005 && (
+              <p
+                className="mt-1 text-sm text-ink-quiet"
+                title="Drawn from previously-saved balances, not this month's budget"
+              >
+                <span className="tabular-nums text-ink">{fmt(sfMonthlySpending, symbol)}</span> spent from goals
+              </p>
+            )}
+          </SummaryCell>
 
-        {/* The band follows the button: SummaryBox documents `accent` as marking the box that
+          {/* The band follows the button: SummaryBox documents `accent` as marking the box that
             carries an action, and it used to be applied unconditionally, emphasising this one even
             in the states where it offers nothing to do. */}
-        <SummaryBox
-          label={overAssigned ? "Over-assigned" : hasToAssign ? "To assign" : "Remaining"}
-          accent={overAssigned ? "alarm" : hasToAssign || noIncomeYet ? "moss" : undefined}
-        >
-          {noIncomeYet ? (
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-sm text-ink-quiet">No income recorded yet.</p>
-              <Button size="sm" variant="outline" onClick={() => setAddTransactionType("income")}>
-                Add income
-              </Button>
-            </div>
-          ) : (
-            <>
+          <SummaryCell
+            label={overAssigned ? "Over-assigned" : hasToAssign ? "To assign" : "Remaining"}
+            index={3}
+            accent={overAssigned ? "alarm" : hasToAssign || noIncomeYet ? "moss" : undefined}
+          >
+            {noIncomeYet ? (
               <div className="flex items-center justify-between gap-3">
-                <span
-                  className={`text-2xl font-semibold tracking-tight tabular-nums ${
-                    headline < -0.005 ? "text-expense" : "text-moss"
-                  }`}
-                >
-                  {fmt(headline, symbol)}
-                </span>
-                {hasToAssign && (
-                  <Button size="sm" onClick={() => setAssigning(true)}>
-                    Assign
-                  </Button>
-                )}
-                {overAssigned && (
-                  <Button size="sm" variant="destructive" onClick={() => setCleaning(true)}>
-                    Reduce
-                  </Button>
-                )}
+                <p className="text-sm text-ink-quiet">No income recorded yet.</p>
+                <Button size="sm" variant="outline" onClick={() => setAddTransactionType("income")}>
+                  Add income
+                </Button>
               </div>
-              {/* Only when the headline is the assignable figure and what's left after spending
+            ) : (
+              <>
+                <div className="flex items-center justify-between gap-3">
+                  <span
+                    className={`text-2xl font-semibold tracking-tight tabular-nums ${
+                      headline < -0.005 ? "text-expense" : "text-moss"
+                    }`}
+                  >
+                    {fmt(headline, symbol)}
+                  </span>
+                  {hasToAssign && (
+                    <Button size="sm" onClick={() => setAssigning(true)}>
+                      Assign
+                    </Button>
+                  )}
+                  {overAssigned && (
+                    <Button size="sm" variant="destructive" onClick={() => setCleaning(true)}>
+                      Reduce
+                    </Button>
+                  )}
+                </div>
+                {/* Only when the headline is the assignable figure and what's left after spending
                   is a different, non-zero number. In the Remaining state the headline already is
                   that figure, so the box is a label and a number like the other three. */}
-              {(hasToAssign || overAssigned) && showRemainingLine && (
-                <p
-                  className="mt-1 text-sm text-ink-quiet"
-                  title="Income minus expenses. Differs from what is assignable when money is assigned but not yet spent."
-                >
-                  <span className="tabular-nums text-ink">{fmt(remaining, symbol)}</span> remaining
-                </p>
-              )}
-            </>
-          )}
-        </SummaryBox>
-      </div>
+                {(hasToAssign || overAssigned) && showRemainingLine && (
+                  <p
+                    className="mt-1 text-sm text-ink-quiet"
+                    title="Income minus expenses. Differs from what is assignable when money is assigned but not yet spent."
+                  >
+                    <span className="tabular-nums text-ink">{fmt(remaining, symbol)}</span> remaining
+                  </p>
+                )}
+              </>
+            )}
+          </SummaryCell>
+        </div>
+      </Card>
 
       {/* Budget Grid */}
       {overview.categories.length === 0 ? (
