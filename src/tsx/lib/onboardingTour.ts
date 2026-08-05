@@ -155,7 +155,21 @@ const FLAG = "bt_full_tour";
 const isFullRun = () => sessionStorage.getItem(FLAG) !== null;
 const fullRunBudget = () => Number(sessionStorage.getItem(FLAG));
 const setFullRun = (budgetPk: number) => sessionStorage.setItem(FLAG, String(budgetPk));
-const clearFullRun = () => sessionStorage.removeItem(FLAG);
+const clearFullRun = () => {
+  sessionStorage.removeItem(FLAG);
+  sessionStorage.removeItem(SEEN);
+};
+
+// Stages already shown during this run. A reload does not run the unmount cleanup, so without this a
+// stranded flag re-armed the same stage's overlay on every load of that page — and an overlay you did
+// not ask for that eats every click is indistinguishable from the page being broken.
+const SEEN = "bt_tour_seen";
+const seenStages = (): string[] => JSON.parse(sessionStorage.getItem(SEEN) ?? "[]");
+const markStageSeen = (stage: TourStage) => {
+  const seen = new Set(seenStages());
+  seen.add(stage);
+  sessionStorage.setItem(SEEN, JSON.stringify([...seen]));
+};
 
 function markOnboarded() {
   // Silent by design: if this fails the tour simply offers itself again, which is a far
@@ -164,6 +178,24 @@ function markOnboarded() {
     method: "POST",
     headers: { "X-CSRFToken": getCsrfToken(), "X-Requested-With": "XMLHttpRequest" },
   }).catch(() => {});
+}
+
+/**
+ * The tour currently on screen, so leaving the page can tear it down.
+ *
+ * driver.js paints a full-page SVG overlay with a cutout around the highlighted element, and that
+ * overlay swallows every pointer event outside the cutout. An overlay left behind therefore makes the
+ * page look fine and respond to nothing — which is exactly what happened: navigating away or
+ * reloading mid-tour never destroyed the driver, so onDestroyed never ran, so the sessionStorage flag
+ * stayed set and every page for the rest of the browser session re-armed a tour whose overlay blocked
+ * anything it was not pointing at.
+ */
+let activeTour: ReturnType<typeof driver> | null = null;
+
+/** Tear down whatever tour is showing. Called when a page unmounts. */
+export function endActiveTour() {
+  activeTour?.destroy();
+  activeTour = null;
 }
 
 /** Run one stage's tour. In full mode, advances to the next stage on completion. */
@@ -202,6 +234,7 @@ function runStage(stage: TourStage, opts: { full: boolean }) {
     },
     onPrevClick: () => d.movePrevious(),
     onDestroyed: () => {
+      activeTour = null;
       if (settled) return;
       settled = true;
       if (!opts.full) return;
@@ -213,6 +246,7 @@ function runStage(stage: TourStage, opts: { full: boolean }) {
       }
     },
   });
+  activeTour = d;
   d.drive();
 }
 
@@ -239,14 +273,21 @@ export function usePageTour(stage: TourStage, budgetPk?: number, opts?: { firstR
     if (opts?.firstRun && budgetPk != null && !isFullRun()) setFullRun(budgetPk);
     if (!isFullRun() || ran.current) return;
     // Let the page (and sidebar) paint before anchoring popovers.
+    if (seenStages().includes(stage)) return;
     const timer = setTimeout(() => {
       if (ran.current) return;
       ran.current = true;
+      markStageSeen(stage);
       // Pages that know their budget refresh the flag, so a run started without one is corrected.
       if (budgetPk != null) setFullRun(budgetPk);
       runStage(stage, { full: true });
     }, 400);
-    return () => clearTimeout(timer);
+    // Leaving the page ends the tour rather than abandoning its overlay. Without this, an overlay
+    // outlived the page that raised it and silently ate every click on the next one.
+    return () => {
+      clearTimeout(timer);
+      endActiveTour();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stage, budgetPk, opts?.firstRun]);
 }
