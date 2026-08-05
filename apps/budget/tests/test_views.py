@@ -520,3 +520,102 @@ class TestCategoryBudgetUpdate(BudgetViewTestCase):
             kwargs={"budget_pk": self.budget.pk, "category_pk": stranger.pk},
         )
         self.assertEqual(self._patch_json(url, {"assigned": "10", "month": "2026-08"}).status_code, 404)
+
+
+class TestBudgetCopy(BudgetViewTestCase):
+    """
+    Copying a budget must reproduce its categories, not a flattened sketch of them.
+
+    BudgetCreateView bulk_created categories carrying only name and category_type, so every
+    subcategory became top-level and rollover, its base amount, the monthly target and every goal
+    were dropped. Nothing raised, so the damage only showed up later. The budget and its owner
+    membership were also created outside any atomic block, so a failure mid-copy left an orphaned
+    half-built budget.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(self.user)
+        self.url = reverse("budget:create")
+
+        self.parent = Category.objects.create(
+            budget=self.budget, name="Home", category_type=Category.TYPE_EXPENSE, monthly_budget=Decimal("500.00")
+        )
+        self.child = Category.objects.create(
+            budget=self.budget, name="Repairs", category_type=Category.TYPE_EXPENSE, parent=self.parent
+        )
+        self.rolling = Category.objects.create(
+            budget=self.budget,
+            name="Car",
+            category_type=Category.TYPE_EXPENSE,
+            rollover=True,
+            base_amount=Decimal("100.00"),
+            rollover_start=datetime.date(2025, 1, 1),
+        )
+        self.goal_cat = Category.objects.create(budget=self.budget, name="Roof", category_type=Category.TYPE_EXPENSE)
+        Goal.objects.create(
+            category=self.goal_cat, target=Decimal("9000.00"), due_date=datetime.date(2027, 6, 1), ongoing=False
+        )
+        # Created on demand for transfers; a fresh budget should not inherit one.
+        Category.get_or_create_transfers(self.budget)
+
+    def _copy(self):
+        res = self.client.post(
+            self.url,
+            data=json.dumps({"name": "Copy", "copy_from": self.budget.pk, "copy_members": False}),
+            content_type="application/json",
+        )
+        self.assertEqual(res.status_code, 201)
+        return Budget.objects.get(pk=res.json()["id"])
+
+    def test_nesting_survives(self):
+        copy = self._copy()
+        child = Category.objects.get(budget=copy, name="Repairs")
+        self.assertIsNotNone(child.parent, "the subcategory was flattened to the top level")
+        self.assertEqual(child.parent.name, "Home")
+
+    def test_monthly_target_survives(self):
+        copy = self._copy()
+        self.assertEqual(Category.objects.get(budget=copy, name="Home").monthly_budget, Decimal("500.00"))
+
+    def test_rollover_and_base_amount_survive(self):
+        copy = self._copy()
+        car = Category.objects.get(budget=copy, name="Car")
+        self.assertTrue(car.rollover)
+        self.assertEqual(car.base_amount, Decimal("100.00"))
+
+    def test_rollover_accrual_restarts_in_the_new_budget(self):
+        """Carrying the source's start date would accrue over months this budget has no data for."""
+        copy = self._copy()
+        car = Category.objects.get(budget=copy, name="Car")
+        self.assertEqual(car.rollover_start, timezone.localdate().replace(day=1))
+
+    def test_goals_survive_with_their_target_and_due_date(self):
+        copy = self._copy()
+        roof = Category.objects.get(budget=copy, name="Roof")
+        self.assertTrue(roof.is_goal, "the goal was dropped, leaving a plain category behind")
+        self.assertEqual(roof.goal.target, Decimal("9000.00"))
+        self.assertEqual(roof.goal.due_date, datetime.date(2027, 6, 1))
+
+    def test_a_copied_goal_starts_empty(self):
+        """Only the target copies. No transactions are copied, so nothing is saved toward it yet."""
+        copy = self._copy()
+        roof = Category.objects.get(budget=copy, name="Roof")
+        self.assertEqual(TransactionLine.objects.filter(category=roof).count(), 0)
+
+    def test_the_transfers_system_category_is_not_copied(self):
+        copy = self._copy()
+        self.assertFalse(Category.objects.filter(budget=copy, is_system=True).exists())
+
+    def test_a_failed_copy_leaves_no_orphaned_budget(self):
+        before = Budget.objects.count()
+        with (
+            mock.patch("apps.budget.views._copy_budget_categories", side_effect=RuntimeError("boom")),
+            self.assertRaises(RuntimeError),
+        ):
+            self.client.post(
+                self.url,
+                data=json.dumps({"name": "Doomed", "copy_from": self.budget.pk}),
+                content_type="application/json",
+            )
+        self.assertEqual(Budget.objects.count(), before, "a half-built budget survived the failure")

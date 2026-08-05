@@ -295,6 +295,54 @@ DEFAULT_CATEGORIES: list[tuple[str, str, list[str]]] = [
 ]
 
 
+def _copy_budget_categories(source: Budget, target: Budget, user) -> None:
+    """
+    Copy a budget's category tree, keeping its shape and its settings.
+
+    Only `name` and `category_type` used to be carried, which flattened every subcategory to the
+    top level and silently dropped rollover, its base amount, the monthly target, and every goal.
+    Copying budget 1 that way lost 14 targets and 8 goals; copying budget 10 flattened 13
+    subcategories. Nothing failed, so the damage was only visible afterwards.
+
+    One insert per category rather than a bulk_create and a primary-key map: the counts are in the
+    tens, and a child needs its copied parent's row to point at.
+    """
+    # Parents first so a child can reference its copy. The model allows a single level of nesting,
+    # so putting roots ahead of children is sufficient ordering.
+    ordered = sorted(source.categories.select_related("goal"), key=lambda c: c.parent_id is not None)
+    copies: dict[int, Category] = {}
+    this_month = timezone.localdate().replace(day=1)
+
+    for cat in ordered:
+        if cat.is_system:
+            # get_or_create_transfers makes this the first time a transfer is recorded. A budget
+            # with no transfers yet has no use for one.
+            continue
+        copy = Category.objects.create(
+            budget=target,
+            parent=copies.get(cat.parent_id),
+            name=cat.name,
+            category_type=cat.category_type,
+            rollover=cat.rollover,
+            base_amount=cat.base_amount,
+            # Accrual starts now, not whenever the source started. Carrying the original date would
+            # have the rollover walk months this budget has no transactions for.
+            rollover_start=this_month if (cat.rollover and cat.base_amount) else None,
+            monthly_budget=cat.monthly_budget,
+            created_by=user,
+        )
+        copies[cat.pk] = copy
+        if cat.is_goal:
+            # The target and schedule copy; the balance does not, since no transactions are copied.
+            Goal.objects.create(
+                category=copy,
+                target=cat.goal.target,
+                due_date=cat.goal.due_date,
+                ongoing=cat.goal.ongoing,
+                monthly_goal=cat.goal.monthly_goal,
+            )
+
+
 def _create_default_categories(budget: Budget, user) -> None:
     for cat_type, parent_name, child_names in DEFAULT_CATEGORIES:
         parent = Category.objects.create(
@@ -319,47 +367,41 @@ class BudgetCreateView(LoginRequiredMixin, View):
         name = data.get("name", "").strip()
         copy_from_id = data.get("copy_from")
 
-        budget = Budget.objects.create(created_by=request.user, name=name)
-        BudgetMembership.objects.create(budget=budget, user=request.user, role=BudgetMembership.ROLE_OWNER)
+        # One transaction for the whole build. The budget and its owner membership were created
+        # first and outside any atomic block, so a failure part-way through the copy left an
+        # orphaned half-built budget behind with no way to tell it from a real one.
+        with db_transaction.atomic():
+            budget = Budget.objects.create(created_by=request.user, name=name)
+            BudgetMembership.objects.create(budget=budget, user=request.user, role=BudgetMembership.ROLE_OWNER)
 
-        if copy_from_id:
-            source = Budget.objects.filter(pk=copy_from_id, members=request.user).first()
-            if source:
-                if data.get("copy_categories", True):
-                    Category.objects.bulk_create(
-                        [
-                            Category(
-                                budget=budget,
-                                name=cat.name,
-                                category_type=cat.category_type,
-                                created_by=request.user,
-                            )
-                            for cat in source.categories.all()
-                        ]
-                    )
-                if data.get("copy_payment_methods", True):
-                    PaymentMethod.objects.bulk_create(
-                        [
-                            PaymentMethod(
-                                budget=budget,
-                                name=pm.name,
-                                payment_type=pm.payment_type,
-                                last_four=pm.last_four,
-                                is_active=pm.is_active,
-                            )
-                            for pm in source.payment_methods.all()
-                        ]
-                    )
-                if data.get("copy_members", True):
-                    BudgetMembership.objects.bulk_create(
-                        [
-                            BudgetMembership(budget=budget, user=m.user, role=BudgetMembership.ROLE_MEMBER)
-                            for m in source.memberships.select_related("user").all()
-                            if m.user != request.user
-                        ]
-                    )
-        elif data.get("add_default_categories", False):
-            _create_default_categories(budget, request.user)
+            if copy_from_id:
+                source = Budget.objects.filter(pk=copy_from_id, members=request.user).first()
+                if source:
+                    if data.get("copy_categories", True):
+                        _copy_budget_categories(source, budget, request.user)
+                    if data.get("copy_payment_methods", True):
+                        PaymentMethod.objects.bulk_create(
+                            [
+                                PaymentMethod(
+                                    budget=budget,
+                                    name=pm.name,
+                                    payment_type=pm.payment_type,
+                                    last_four=pm.last_four,
+                                    is_active=pm.is_active,
+                                )
+                                for pm in source.payment_methods.all()
+                            ]
+                        )
+                    if data.get("copy_members", True):
+                        BudgetMembership.objects.bulk_create(
+                            [
+                                BudgetMembership(budget=budget, user=m.user, role=BudgetMembership.ROLE_MEMBER)
+                                for m in source.memberships.select_related("user").all()
+                                if m.user != request.user
+                            ]
+                        )
+            elif data.get("add_default_categories", False):
+                _create_default_categories(budget, request.user)
 
         return JsonResponse({"id": budget.pk}, status=201)
 
