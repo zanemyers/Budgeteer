@@ -98,4 +98,15 @@ urlpatterns = [
     ),
     path("<int:budget_pk>/export/", views.BudgetExportView.as_view(), name="export"),
     path("<int:budget_pk>/transactions/export/", views.TransactionExportView.as_view(), name="transaction-export"),
+    path("<int:budget_pk>/transactions/import/", views.TransactionImportView.as_view(), name="transaction-import"),
+    path(
+        "<int:budget_pk>/bank-transactions/<int:pk>/delete/",
+        views.BankTransactionDeleteView.as_view(),
+        name="bank-txn-delete",
+    ),
+    path(
+        "<int:budget_pk>/imports/<str:batch>/delete/",
+        views.ImportBatchDeleteView.as_view(),
+        name="import-batch-delete",
+    ),
 ]

@@ -97,6 +97,9 @@ export interface BankTransaction {
   bank_account_id: number;
   bank_account_name: string;
   org_name: string;
+  /** Only an imported row can be deleted; a synced one would return on the next sync. */
+  is_imported?: boolean;
+  import_batch?: string;
 }
 
 export interface BankMatchSuggestion {

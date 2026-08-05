@@ -61,10 +61,15 @@ class SimpleFINConnection(models.Model):
 class BankAccount(models.Model):
     """An account at a financial institution surfaced by a SimpleFIN connection."""
 
+    # Null for an account that came from an uploaded file rather than a sync. Imported rows need
+    # somewhere to hang so they can use the same awaiting-review pipeline as synced ones, and
+    # requiring a SimpleFIN connection for that would mean inventing a fake one.
     connection = models.ForeignKey(
         SimpleFINConnection,
         on_delete=models.CASCADE,
         related_name="bank_accounts",
+        null=True,
+        blank=True,
     )
     simplefin_id = models.CharField(max_length=255)
     name = models.CharField(max_length=255)
@@ -81,13 +86,38 @@ class BankAccount(models.Model):
         blank=True,
         related_name="bank_accounts",
     )
+    # Set only for an imported account, where it is the sole link back to a budget. A synced account
+    # reaches its budget through payment_method, but an import may not know the account at all — the
+    # file could have come from another budgeting tool covering several — and without this those rows
+    # belong to nothing and cannot be listed.
+    budget = models.ForeignKey(
+        "budget.Budget",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="imported_bank_accounts",
+    )
     is_hidden = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        # Postgres treats NULLs as distinct in a unique constraint, so unique_together alone stops
+        # enforcing anything once connection can be null. The partial constraint covers the imported
+        # case, where simplefin_id already carries the payment method's own primary key.
         unique_together = [("connection", "simplefin_id")]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["simplefin_id"],
+                condition=models.Q(connection__isnull=True),
+                name="unique_imported_bank_account",
+            ),
+        ]
         ordering = ["org_name", "name"]
+
+    @property
+    def is_imported(self) -> bool:
+        return self.connection_id is None
 
     def __str__(self) -> str:
         return f"{self.org_name} — {self.name}" if self.org_name else self.name
@@ -122,6 +152,29 @@ class BalanceSnapshot(models.Model):
 
     def __str__(self) -> str:
         return f"{self.bank_account} at {self.as_of:%Y-%m-%d}: {self.balance}"
+
+
+class BankTransactionQuerySet(models.QuerySet):
+    def for_budget(self, budget, user=None):
+        """
+        Every row a budget is entitled to see, synced or imported.
+
+        A synced account proves its budget through the payment method it is mapped to. An imported one
+        may have no payment method at all — a file from another budgeting tool can cover several
+        accounts — so it carries a direct budget link instead.
+
+        Callers used to write this predicate themselves, and every one of them required a connection,
+        which excluded every imported row. That made imported rows invisible on the page meant to
+        review them, and made the whole confirm flow 404 for them.
+
+        `user` narrows the synced side only, and is not optional in spirit: it keeps a connection
+        belonging to someone else from being read through a payment method mapped into this budget.
+        The imported side needs no equivalent, since its budget link is the account's own.
+        """
+        synced = models.Q(bank_account__payment_method__budget=budget)
+        if user is not None:
+            synced &= models.Q(bank_account__connection__user=user)
+        return self.filter(synced | models.Q(bank_account__budget=budget))
 
 
 class BankTransaction(models.Model):
@@ -160,6 +213,8 @@ class BankTransaction(models.Model):
     )
     first_seen_at = models.DateTimeField(auto_now_add=True)
     last_seen_at = models.DateTimeField(auto_now=True)
+
+    objects = BankTransactionQuerySet.as_manager()
 
     class Meta:
         unique_together = [("bank_account", "simplefin_id")]

@@ -1,6 +1,7 @@
 import calendar
 import contextlib
 import datetime
+import json
 from decimal import Decimal, InvalidOperation
 
 from django.conf import settings as django_settings
@@ -38,6 +39,7 @@ from apps.budget.data import (
     serialize_transaction,
 )
 from apps.budget.export import build_flat_workbook, build_month_workbook, build_year_workbook, workbook_filename
+from apps.budget.importing import ColumnMap, ImportError_, build_preview, commit_import, resolve_payment_methods
 from apps.budget.models import (
     Budget,
     BudgetMembership,
@@ -1023,6 +1025,100 @@ def filter_transactions(budget, params):
     return qs
 
 
+class TransactionImportView(BudgetMemberMixin, View):
+    """
+    Upload a bank download, look at what it would do, then commit it.
+
+    Two steps on purpose. Every bank exports a different shape, so the column mapping is a guess
+    until someone has confirmed it, and nothing should be written on a guess. POST without `commit`
+    returns the guess and a preview; POST with `commit` writes.
+    """
+
+    MAX_UPLOAD_BYTES = 5 * 1024 * 1024
+
+    def post(self, request, budget_pk):
+        upload = request.FILES.get("file")
+        if upload is None:
+            return JsonResponse({"errors": {"file": ["Choose a file to import."]}}, status=400)
+        if upload.size > self.MAX_UPLOAD_BYTES:
+            return JsonResponse({"errors": {"file": ["That file is larger than 5 MB."]}}, status=400)
+
+        override = None
+        if request.POST.get("mapping"):
+            try:
+                override = ColumnMap(**json.loads(request.POST["mapping"]))
+            except (TypeError, ValueError, json.JSONDecodeError):
+                return JsonResponse({"errors": {"mapping": ["Could not read the column mapping."]}}, status=400)
+
+        try:
+            preview = build_preview(upload.read(), override=override)
+        except ImportError_ as e:
+            return JsonResponse({"errors": {"file": [str(e)]}}, status=400)
+
+        method = None
+        if request.POST.get("payment_method"):
+            method = PaymentMethod.objects.filter(pk=request.POST["payment_method"], budget=self.budget).first()
+            if method is None:
+                return JsonResponse(
+                    {"errors": {"payment_method": ["That payment method is not in this budget."]}}, status=400
+                )
+
+        if not request.POST.get("commit"):
+            return JsonResponse(self._preview_payload(preview, method))
+
+        # Deliberately not required. A file from another budgeting tool can cover several accounts, so
+        # a row that cannot be attributed lands in review without one rather than being refused.
+        result = commit_import(self.budget, request.user, preview, method)
+        return JsonResponse(
+            {
+                "batch": result.batch,
+                "created": result.created,
+                "duplicates": result.duplicates,
+                "logged": result.logged,
+                "unmatched_cards": result.unmatched_cards,
+                "skipped": [{"line": line, "reason": reason} for line, reason in result.skipped],
+            }
+        )
+
+    def _preview_payload(self, preview, method):
+        resolved, unmatched = resolve_payment_methods(self.budget, preview.cards, method)
+        mapping = preview.mapping
+        return {
+            "header": preview.header,
+            "mapping": {
+                "date": mapping.date,
+                "amount": mapping.amount,
+                "debit": mapping.debit,
+                "credit": mapping.credit,
+                "description": mapping.description,
+                "category": mapping.category,
+                "note": mapping.note,
+                "card": mapping.card,
+                "date_format": mapping.date_format,
+                "expenses_are_negative": mapping.expenses_are_negative,
+            },
+            "row_count": len(preview.rows),
+            "outflow_count": preview.outflow_count,
+            "inflow_count": preview.inflow_count,
+            "cards": preview.cards,
+            "unmatched_cards": unmatched,
+            "skipped": [{"line": line, "reason": reason} for line, reason in preview.skipped],
+            # Enough to see whether the columns landed where they should, without shipping the file back.
+            "sample": [
+                {
+                    "line": r.line_number,
+                    "date": str(r.date),
+                    "amount": str(r.amount),
+                    "direction": "in" if r.is_inflow else "out",
+                    "description": r.description,
+                    "category": r.category,
+                    "card": r.card,
+                }
+                for r in preview.rows[:8]
+            ],
+        }
+
+
 class TransactionExportView(BudgetMemberMixin, View):
     """
     Download the rows currently on the transactions page, one line per row.
@@ -1077,12 +1173,8 @@ class TransactionListView(BudgetMemberMixin, View):
                 last_day = calendar.monthrange(month_start.year, month_start.month)[1]
                 month_end = month_start.replace(day=last_day)
             qs = (
-                BankTransaction.objects.filter(
-                    bank_account__connection__user=request.user,
-                    bank_account__payment_method__budget=budget,
-                    status=status,
-                    posted_at__date__range=(month_start, month_end),
-                )
+                BankTransaction.objects.for_budget(budget, user=request.user)
+                .filter(status=status, posted_at__date__range=(month_start, month_end))
                 .select_related("bank_account")
                 .order_by("-posted_at")
             )
@@ -1630,19 +1722,20 @@ class RecurringDetailView(BudgetMemberMixin, View):
 
 def _bank_txn_for_budget(request, budget, pk) -> BankTransaction:
     """
-    Fetch a BankTransaction.
+    Fetch a BankTransaction that this budget is entitled to act on.
 
-    It must belong to (a) the requesting user and (b) the given budget, via its bank
-    account's payment_method mapping.
+    A synced row proves its budget through the payment method its account is mapped to. An imported
+    row may have no payment method — a file from another budgeting tool can cover several accounts —
+    so its account carries a direct budget link instead.
+
+    Every view in the confirm flow resolves rows through here, so requiring a connection and a
+    payment method made the whole workflow 404 for imported rows: they landed in review and then
+    could not be linked, categorised, marked as a transfer or ignored.
     """
-    qs = BankTransaction.objects.select_related("bank_account__payment_method", "bank_account__connection").filter(
-        bank_account__connection__user=request.user
+    qs = BankTransaction.objects.for_budget(budget, user=request.user).select_related(
+        "bank_account__payment_method", "bank_account__connection"
     )
-    bt = get_object_or_404(qs, pk=pk)
-    pm = bt.bank_account.payment_method
-    if pm is None or pm.budget_id != budget.pk:
-        raise Http404
-    return bt
+    return get_object_or_404(qs, pk=pk)
 
 
 class BankTransactionListView(BudgetMemberMixin, View):
@@ -1650,11 +1743,8 @@ class BankTransactionListView(BudgetMemberMixin, View):
 
     def get(self, request, budget_pk):
         qs = (
-            BankTransaction.objects.filter(
-                bank_account__connection__user=request.user,
-                bank_account__payment_method__budget=self.budget,
-                status=BankTransaction.Status.PENDING,
-            )
+            BankTransaction.objects.for_budget(self.budget, user=request.user)
+            .filter(status=BankTransaction.Status.PENDING)
             .select_related("bank_account")
             .order_by("-posted_at")
         )
@@ -1981,6 +2071,61 @@ class BankTransactionIgnoreView(BudgetMemberMixin, View):
         bt.ignore_reason = (data.get("reason") or "").strip()[:500]
         bt.save(update_fields=["status", "transaction", "ignore_reason", "last_seen_at"])
         return JsonResponse({"bank_transaction": serialize_bank_transaction(bt)})
+
+
+class BankTransactionDeleteView(BudgetMemberMixin, View):
+    """
+    Delete an imported bank row, or every row from one import.
+
+    Only imported rows. A synced row would reappear on the next sync, which is the whole reason
+    Ignore exists; nothing brings an imported row back, so Ignore would leave it as permanent
+    clutter and delete is the honest action.
+
+    A row that has been turned into a transaction is refused, because the transaction is the part
+    worth keeping and unlinking is already its own step. Undoing a whole import is the exception:
+    there, transactions the import itself created are removed with it, since nobody categorised
+    them by hand.
+    """
+
+    def delete(self, request, budget_pk, pk):
+        bt = _bank_txn_for_budget(request, self.budget, pk)
+        if bt.bank_account.connection_id is not None:
+            return JsonResponse(
+                {"errors": {"detail": ["A synced row cannot be deleted; the next sync would bring it back."]}},
+                status=400,
+            )
+        if bt.transaction_id is not None:
+            return JsonResponse(
+                {"errors": {"detail": ["This row is linked to a transaction. Unlink it first."]}},
+                status=400,
+            )
+        bt.delete()
+        return JsonResponse({}, status=204)
+
+
+class ImportBatchDeleteView(BudgetMemberMixin, View):
+    """Undo a whole import, including any transactions it logged outright."""
+
+    def delete(self, request, budget_pk, batch):
+        rows = BankTransaction.objects.for_budget(self.budget, user=request.user).filter(
+            raw__import_batch=batch, bank_account__connection__isnull=True
+        )
+        if not rows.exists():
+            raise Http404
+
+        # Only transactions the import logged itself. One categorised through review afterwards is
+        # someone's work and stays, detached from the row that is going away. Filtering on LINKED
+        # status instead would have destroyed both, since the two are indistinguishable by status.
+        auto_logged = Transaction.objects.filter(
+            pk__in=rows.filter(raw__auto_logged=True).values("transaction_id"),
+            budget=self.budget,
+        )
+        with db_transaction.atomic():
+            removed_transactions = auto_logged.count()
+            auto_logged.delete()
+            removed_rows = rows.count()
+            rows.delete()
+        return JsonResponse({"rows": removed_rows, "transactions": removed_transactions})
 
 
 class BankTransactionUnlinkView(BudgetMemberMixin, View):

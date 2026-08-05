@@ -12,12 +12,14 @@ import {
   PiggyBank,
   Search,
   Undo2,
+  Upload,
   X,
 } from "lucide-react";
 import { Fragment, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { DateRangeFilter } from "@/components/DateRangeFilter";
+import { TransactionImportModal } from "@/components/TransactionImportModal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -193,6 +195,7 @@ export default function Transactions({
   const hasFilters = Boolean(category_filter || method_filter || date_from || date_to || search);
   // Local so typing doesn't round-trip on every keystroke; submitted on Enter or the button.
   const [searchDraft, setSearchDraft] = useState(search);
+  const [importing, setImporting] = useState(false);
 
   async function patchTxn(id: number, data: Record<string, unknown>) {
     const updated = (await jsonFetch(`/budgets/${budget_pk}/transactions/${id}/edit/`, "PATCH", data)) as Transaction;
@@ -297,6 +300,22 @@ export default function Transactions({
       setBankTxns((prev) => [data.bank_transaction, ...prev]);
     } catch (err) {
       toast.error(errMsg(err, "Couldn't restore bank transaction."));
+    }
+  }
+
+  /**
+   * Remove an imported row outright.
+   *
+   * Ignoring one would leave it in the Ignored tab for good, since nothing re-syncs it back into
+   * relevance. Only offered for imported rows; the endpoint refuses a synced one.
+   */
+  async function deleteBankTxn(bt: BankTransaction) {
+    try {
+      await jsonFetch(`/budgets/${budget_pk}/bank-transactions/${bt.id}/delete/`, "DELETE");
+      setBankTxns((prev) => prev.filter((b) => b.id !== bt.id));
+      setIgnoredBankTxns((prev) => prev.filter((b) => b.id !== bt.id));
+    } catch (err) {
+      toast.error(errorMessage(err, "Couldn't delete that row."));
     }
   }
 
@@ -635,6 +654,10 @@ export default function Transactions({
               Export {hasFilters ? "these rows" : "this list"}
             </a>
           </Button>
+          <Button variant="outline" size="sm" onClick={() => setImporting(true)}>
+            <Upload aria-hidden className="size-4" />
+            Import
+          </Button>
           <Button data-tour="txn-add" onClick={() => setAddType("expense")}>
             + Add Transaction
           </Button>
@@ -857,6 +880,11 @@ export default function Transactions({
                                   >
                                     <Archive />
                                   </Button>
+                                  {/* Delete is offered only for an imported row. A synced one would
+                                      come back on the next sync, which is what Ignore is for. */}
+                                  {bt.is_imported && (
+                                    <ConfirmButton size="xs" label="Delete" onConfirm={() => deleteBankTxn(bt)} />
+                                  )}
                                 </div>
                               </TableCell>
                             </TableRow>
@@ -1035,6 +1063,17 @@ export default function Transactions({
             </Tabs>
           );
         })()
+      )}
+
+      {importing && (
+        <TransactionImportModal
+          budgetPk={budget_pk}
+          paymentMethods={payment_methods}
+          onClose={() => setImporting(false)}
+          // A reload rather than a local splice: imported rows arrive as bank transactions awaiting
+          // review, and some may have been logged outright, so both panes change at once.
+          onImported={() => router.reload({ only: ["transactions", "bank_transactions"] })}
+        />
       )}
 
       {/* Add / Edit Transaction Modal */}

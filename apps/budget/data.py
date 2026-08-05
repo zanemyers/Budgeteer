@@ -109,6 +109,11 @@ def serialize_bank_transaction(bt) -> dict:
         "bank_account_id": bt.bank_account_id,
         "bank_account_name": bt.bank_account.name,
         "org_name": bt.bank_account.org_name,
+        # Only an imported row can be deleted. A synced one would reappear on the next sync, which is
+        # why Ignore exists at all; nothing brings an imported row back, so Ignore would leave it as
+        # permanent clutter.
+        "is_imported": bt.bank_account.connection_id is None,
+        "import_batch": (bt.raw or {}).get("import_batch", ""),
     }
 
 
@@ -194,6 +199,12 @@ def find_transfer_candidates(txn: Transaction, *, day_window: int = 3) -> list[T
     return matches
 
 
+def _bank_txn_owner(bank_txn):
+    """Return the user behind a synced row, or None for an imported one, which has no connection."""
+    account = bank_txn.bank_account
+    return account.connection.user if account.connection_id else None
+
+
 def find_pending_bank_transfer_candidates(bt, budget, *, day_window: int = 3) -> list:
     """
     Other pending BankTransactions that look like the matching leg of a transfer.
@@ -209,9 +220,8 @@ def find_pending_bank_transfer_candidates(bt, budget, *, day_window: int = 3) ->
         return []
     posted = bt.posted_at.date()
     qs = (
-        BankTransaction.objects.filter(
-            bank_account__connection__user_id=bt.bank_account.connection.user_id,
-            bank_account__payment_method__budget=budget,
+        BankTransaction.objects.for_budget(budget, user=_bank_txn_owner(bt))
+        .filter(
             status=BankTransaction.Status.PENDING,
             posted_at__date__range=(
                 posted - datetime.timedelta(days=day_window),

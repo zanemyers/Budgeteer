@@ -169,11 +169,10 @@ def suggest_matches(bank_txn: BankTransaction, budget: Budget) -> list[dict]:
     from apps.banking.models import BankTransaction as BT  # avoid circular at module level
 
     history = (
-        BT.objects.filter(
-            bank_account__connection__user=bank_txn.bank_account.connection.user,
-            status=BT.Status.LINKED,
-            transaction__budget=budget,
-        )
+        # An imported row has no connection, so no owner to narrow by; a synced one keeps the
+        # narrowing it had, which is what stops a stranger's connection informing this budget.
+        BT.objects.for_budget(budget, user=_owner_of(bank_txn))
+        .filter(status=BT.Status.LINKED, transaction__budget=budget)
         .exclude(pk=bank_txn.pk)
         .select_related("transaction")
         .prefetch_related("transaction__lines__category")
@@ -218,3 +217,9 @@ def suggest_matches(bank_txn: BankTransaction, budget: Budget) -> list[dict]:
         if len(deduped) >= MAX_SUGGESTIONS:
             break
     return [asdict(s) for s in deduped]
+
+
+def _owner_of(bank_txn) -> object | None:
+    """Return the user behind a synced row, or None for an imported one, which has no connection."""
+    account = bank_txn.bank_account
+    return account.connection.user if account.connection_id else None
