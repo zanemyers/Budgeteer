@@ -33,6 +33,7 @@ erDiagram
 
     SimpleFINConnection ||--o{ BankAccount : ""
     BankAccount ||--o{ BankTransaction : ""
+    BankAccount ||--o{ BalanceSnapshot : "balance history"
     BankAccount ||--o{ Holding : ""
 
     Currency ||--o{ Transaction : "by code"
@@ -172,8 +173,17 @@ erDiagram
         string currency
         decimal balance
         decimal available_balance
-        datetime balance_as_of
+        datetime balance_as_of "latest only, overwritten each sync"
         bool is_hidden
+    }
+
+    BalanceSnapshot {
+        bigint id PK
+        bigint bank_account_id FK
+        decimal balance
+        decimal available_balance "nullable"
+        datetime as_of "bridge balance-date, unique with account"
+        datetime recorded_at
     }
 
     BankTransaction {

@@ -26,7 +26,8 @@ Budget
 
 SimpleFINConnection
  └── BankAccount
-      ├── PaymentMethod  (FK, optional — maps the account into a budget)
+      ├── PaymentMethod     (FK, optional — maps the account into a budget)
+      ├── BalanceSnapshot   (one row per distinct bridge balance-date)
       └── BankTransaction
 ```
 

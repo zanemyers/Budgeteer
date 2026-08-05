@@ -70,6 +70,37 @@ class BankAccount(models.Model):
         return f"{self.org_name} — {self.name}" if self.org_name else self.name
 
 
+class BalanceSnapshot(models.Model):
+    """
+    One balance reading for an account, kept so the series survives.
+
+    `BankAccount.balance` is overwritten in place by every sync, and the sync runs four times a
+    day, so the previous reading was discarded as fast as the next one arrived. Nothing could be
+    reconstructed after the fact — net worth over time needs the history, and history is the one
+    thing you cannot backfill later.
+
+    Keyed on the bridge's own `balance-date` rather than when we happened to ask, so four syncs
+    of an unchanged daily balance record one reading, not four. When a reading for a timestamp we
+    already hold comes back with a different amount, the newer amount wins.
+    """
+
+    bank_account = models.ForeignKey(BankAccount, on_delete=models.CASCADE, related_name="balance_snapshots")
+    balance = models.DecimalField(max_digits=16, decimal_places=2)
+    available_balance = models.DecimalField(max_digits=16, decimal_places=2, null=True, blank=True)
+    as_of = models.DateTimeField(help_text="The bridge's balance-date, or the sync time if it sent none.")
+    recorded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["bank_account", "as_of"], name="unique_balance_snapshot_per_as_of"),
+        ]
+        indexes = [models.Index(fields=["bank_account", "-as_of"], name="balance_snapshot_account_asof")]
+        ordering = ["-as_of"]
+
+    def __str__(self) -> str:
+        return f"{self.bank_account} at {self.as_of:%Y-%m-%d}: {self.balance}"
+
+
 class BankTransaction(models.Model):
     """A single transaction pulled from a SimpleFIN account."""
 
