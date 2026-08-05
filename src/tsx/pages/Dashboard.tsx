@@ -135,14 +135,24 @@ function SummaryCell({
   children: React.ReactNode;
 }) {
   const tint = accent === "moss" ? "bg-moss-soft/40" : accent === "alarm" ? "bg-expense-soft/40" : "";
-  const rules = [
-    index % 2 === 1 ? "border-l" : "",
-    index >= 2 ? "border-t" : "",
-    "sm:border-t-0",
-    index > 0 ? "sm:border-l" : "",
-  ].join(" ");
+
+  // Rules are inset elements rather than cell borders. A border runs the full edge and so meets the
+  // card's own outline at both ends, which reads as the card being cut into pieces; these stop short
+  // and read as a separator between figures.
+  //
+  // Which ones show still depends on the wrap. The left rule always belongs to the second of a pair,
+  // so cells 1 and 3 keep it at every width; cell 2 only earns one once the four sit in a single row.
+  // The top rule is the mobile-only divider between the two rows.
+  const leftRule = index === 0 ? null : index === 2 ? "hidden sm:block" : "block";
+  const topRule = index >= 2 ? "sm:hidden" : null;
+
+  // Left-aligned, but given room. At px-4 the figures sat hard against the rule beside them, which
+  // read as crowded rather than as a column; the extra padding lets each one breathe without moving
+  // the numbers off the shared left edge that makes them scannable down the row.
   return (
-    <div className={`px-4 py-3 ${rules} ${tint}`}>
+    <div className={`relative px-5 py-4 sm:px-6 ${tint}`}>
+      {leftRule && <span aria-hidden className={`absolute inset-y-3 left-0 w-px bg-border ${leftRule}`} />}
+      {topRule && <span aria-hidden className={`absolute inset-x-5 top-0 h-px bg-border sm:inset-x-6 ${topRule}`} />}
       <span className={`${SECTION_LABEL_CLASS} ${accent ? "text-ink" : "text-ink-quiet"}`}>{label}</span>
       <div className="mt-1.5">{children}</div>
     </div>
