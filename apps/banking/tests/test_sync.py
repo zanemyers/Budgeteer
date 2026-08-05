@@ -11,7 +11,7 @@ from apps.accounts.models import User
 # Intentionally unit-testing the command module's internal helpers.
 # noinspection PyProtectedMember
 from apps.banking.management.commands.sync_simplefin import _to_datetime, _to_decimal, sync_connection
-from apps.banking.models import BankAccount, BankTransaction, SimpleFINConnection
+from apps.banking.models import BalanceSnapshot, BankAccount, BankTransaction, SimpleFINConnection
 from apps.banking.simplefin import SimpleFINError
 from apps.investments.models import Holding
 
@@ -234,3 +234,90 @@ class TestSyncCommand(TestCase):
         call_command("sync_simplefin", connection=conn1.pk, stdout=StringIO())
         self.assertTrue(BankAccount.objects.filter(connection=conn1).exists())
         self.assertFalse(BankAccount.objects.filter(connection=conn2).exists())
+
+
+class TestBalanceSnapshots(TestCase):
+    """
+    A balance reading has to survive the next sync.
+
+    BankAccount.balance is overwritten in place on every run and the sync runs four times a day,
+    so each reading used to be discarded as fast as the next arrived. Nothing could reconstruct it
+    afterwards, which made net worth over time impossible to build later — history is the one
+    thing that cannot be backfilled.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="u", email="u@example.com", password="password")  # noqa: S106
+        self.conn = SimpleFINConnection.objects.create(user=self.user, access_url="https://x/access", label="B")
+
+    @patch(FETCH_PATH)
+    def test_a_sync_records_the_balance(self, mock_fetch):
+        mock_fetch.return_value = _payload()
+        summary = sync_connection(self.conn)
+
+        snapshot = BalanceSnapshot.objects.get()
+        self.assertEqual(snapshot.balance, Decimal("100.00"))
+        self.assertEqual(snapshot.available_balance, Decimal("90.00"))
+        self.assertEqual(snapshot.as_of, _to_datetime(1700000000))
+        self.assertEqual(summary["new_balances"], 1)
+
+    @patch(FETCH_PATH)
+    def test_resyncing_an_unchanged_balance_does_not_pile_up_rows(self, mock_fetch):
+        """Four syncs a day against a balance the bank restates once a day is one reading."""
+        mock_fetch.return_value = _payload()
+        for _ in range(4):
+            summary = sync_connection(self.conn)
+
+        self.assertEqual(BalanceSnapshot.objects.count(), 1)
+        self.assertEqual(summary["new_balances"], 0, "a repeat reading should not count as new")
+
+    @patch(FETCH_PATH)
+    def test_a_new_balance_date_starts_a_new_reading(self, mock_fetch):
+        mock_fetch.return_value = _payload()
+        sync_connection(self.conn)
+
+        later = _payload()
+        later["accounts"][0]["balance"] = "250.00"
+        later["accounts"][0]["balance-date"] = 1700086400
+        mock_fetch.return_value = later
+        sync_connection(self.conn)
+
+        self.assertEqual(BalanceSnapshot.objects.count(), 2)
+        self.assertEqual(
+            [s.balance for s in BalanceSnapshot.objects.all()],
+            [Decimal("250.00"), Decimal("100.00")],
+            "newest first, per Meta.ordering",
+        )
+
+    @patch(FETCH_PATH)
+    def test_a_corrected_amount_for_a_timestamp_we_hold_wins(self, mock_fetch):
+        """Same balance-date, different amount: the bank restated it, so keep the newer figure."""
+        mock_fetch.return_value = _payload()
+        sync_connection(self.conn)
+
+        corrected = _payload()
+        corrected["accounts"][0]["balance"] = "111.11"
+        mock_fetch.return_value = corrected
+        sync_connection(self.conn)
+
+        self.assertEqual(BalanceSnapshot.objects.count(), 1)
+        self.assertEqual(BalanceSnapshot.objects.get().balance, Decimal("111.11"))
+
+    @patch(FETCH_PATH)
+    def test_a_missing_balance_date_falls_back_to_the_sync_time(self, mock_fetch):
+        payload = _payload()
+        del payload["accounts"][0]["balance-date"]
+        mock_fetch.return_value = payload
+        sync_connection(self.conn)
+
+        snapshot = BalanceSnapshot.objects.get()
+        self.assertIsNotNone(snapshot.as_of)
+        self.assertEqual(snapshot.balance, Decimal("100.00"))
+
+    @patch(FETCH_PATH)
+    def test_snapshots_follow_the_account_when_it_is_deleted(self, mock_fetch):
+        mock_fetch.return_value = _payload()
+        sync_connection(self.conn)
+
+        BankAccount.objects.get().delete()
+        self.assertEqual(BalanceSnapshot.objects.count(), 0)

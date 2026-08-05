@@ -31,4 +31,5 @@ If the diagram doesn't render in your viewer, open [`database.svg`](database.svg
 | `Transaction`, `TransactionLine` | budget | The ledger. `transfer_partner_id` links two legs of a movement between accounts. |
 | `Currency` | base | ISO-4217 lookup; `rate_to_usd` refreshed daily |
 | `SimpleFINConnection`, `BankAccount`, `BankTransaction` | banking | SimpleFIN sync. `access_url` stored encrypted. |
+| `BalanceSnapshot` | banking | Balance history. `BankAccount.balance` is overwritten every sync, so each reading is kept here, keyed on the bridge's `balance-date`. |
 | `Holding` | investments | Investment positions inside SimpleFIN-capable `BankAccount`s |

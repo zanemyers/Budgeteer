@@ -4,11 +4,19 @@ from decimal import Decimal, InvalidOperation
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from apps.banking.models import BankAccount, BankTransaction, SimpleFINConnection
+from apps.banking.models import BalanceSnapshot, BankAccount, BankTransaction, SimpleFINConnection
 from apps.banking.simplefin import SimpleFINError, fetch_accounts
 from apps.investments.ingest import persist_holdings
 
-COUNT_KEYS = ("accounts", "new_txns", "updated_txns", "new_holdings", "updated_holdings", "removed_holdings")
+COUNT_KEYS = (
+    "accounts",
+    "new_balances",
+    "new_txns",
+    "updated_txns",
+    "new_holdings",
+    "updated_holdings",
+    "removed_holdings",
+)
 
 
 def _to_decimal(value, default: Decimal | None = Decimal("0")) -> Decimal | None:
@@ -58,6 +66,9 @@ def sync_connection(conn: SimpleFINConnection, days: int = 31) -> dict:
         if not sfin_id:
             continue
         org = acct.get("org") or {}
+        balance = _to_decimal(acct.get("balance"))
+        available = _to_decimal(acct.get("available-balance"), None)
+        balance_as_of = _to_datetime(acct.get("balance-date"))
         bank_account, _ = BankAccount.objects.update_or_create(
             connection=conn,
             simplefin_id=sfin_id,
@@ -66,12 +77,24 @@ def sync_connection(conn: SimpleFINConnection, days: int = 31) -> dict:
                 "org_name": (org.get("name") or "")[:255],
                 "org_domain": (org.get("domain") or "")[:255],
                 "currency": (acct.get("currency") or "USD")[:3],
-                "balance": _to_decimal(acct.get("balance")),
-                "available_balance": _to_decimal(acct.get("available-balance"), None),
-                "balance_as_of": _to_datetime(acct.get("balance-date")),
+                "balance": balance,
+                "available_balance": available,
+                "balance_as_of": balance_as_of,
             },
         )
         summary["accounts"] += 1
+
+        # The fields above are overwritten every run, so keep the reading before it is lost. Keyed
+        # on the bridge's balance-date so an unchanged daily balance records once across the four
+        # daily syncs rather than four times.
+        if balance is not None:
+            _, snapshot_created = BalanceSnapshot.objects.update_or_create(
+                bank_account=bank_account,
+                as_of=balance_as_of or timezone.now(),
+                defaults={"balance": balance, "available_balance": available},
+            )
+            if snapshot_created:
+                summary["new_balances"] += 1
 
         if "holdings" in acct:
             # Pass the value through unchanged. `or []` here would turn a null holdings
@@ -125,6 +148,7 @@ def _format_counts(c: dict) -> str:
     """Render a counts dict (per-connection result or grand totals) as one line."""
     return (
         f"{c['accounts']} accounts, "
+        f"{c['new_balances']} new balances, "
         f"{c['new_txns']} new / {c['updated_txns']} updated transactions, "
         f"{c['new_holdings']} new / {c['updated_holdings']} updated / {c['removed_holdings']} removed holdings"
     )
