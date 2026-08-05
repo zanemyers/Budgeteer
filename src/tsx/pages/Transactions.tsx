@@ -9,7 +9,9 @@ import {
   Landmark,
   Pencil,
   PiggyBank,
+  Search,
   Undo2,
+  X,
 } from "lucide-react";
 import { Fragment, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -53,6 +55,7 @@ interface Props {
   category_filter: string;
   method_filter: string;
   date_from: string;
+  search: string;
   date_to: string;
   transactions: Transaction[];
   bank_transactions?: BankTransaction[];
@@ -95,6 +98,7 @@ export default function Transactions({
   category_filter,
   method_filter,
   date_from,
+  search,
   date_to,
   transactions: initialTxns,
   bank_transactions: initialBankTxns,
@@ -176,6 +180,7 @@ export default function Transactions({
       ...(method_filter ? { method: method_filter } : {}),
       ...(date_from ? { date_from } : {}),
       ...(date_to ? { date_to } : {}),
+      ...(search ? { q: search } : {}),
     };
     for (const [key, value] of Object.entries(overrides)) {
       if (value === null || value === "") delete current[key];
@@ -184,7 +189,9 @@ export default function Transactions({
     return current;
   }
 
-  const hasFilters = Boolean(category_filter || method_filter || date_from || date_to);
+  const hasFilters = Boolean(category_filter || method_filter || date_from || date_to || search);
+  // Local so typing doesn't round-trip on every keystroke; submitted on Enter or the button.
+  const [searchDraft, setSearchDraft] = useState(search);
 
   async function patchTxn(id: number, data: Record<string, unknown>) {
     const updated = (await jsonFetch(`/budgets/${budget_pk}/transactions/${id}/edit/`, "PATCH", data)) as Transaction;
@@ -623,6 +630,37 @@ export default function Transactions({
 
       {/* Filter row */}
       <div className="flex flex-wrap items-center gap-3 mb-6 text-sm">
+        <div className="relative">
+          <Search aria-hidden className="absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-ink-quiet" />
+          <Input
+            type="search"
+            aria-label="Search transactions by description"
+            placeholder="Search all months"
+            className="h-8 w-[220px] pl-8 pr-8"
+            value={searchDraft}
+            onChange={(e) => setSearchDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") navigate(withFilters({ q: searchDraft.trim() || null }));
+              if (e.key === "Escape") {
+                setSearchDraft("");
+                if (search) navigate(withFilters({ q: null }));
+              }
+            }}
+          />
+          {searchDraft && (
+            <button
+              type="button"
+              aria-label="Clear search"
+              className="absolute right-2 top-1/2 -translate-y-1/2 cursor-pointer text-ink-quiet hover:text-ink"
+              onClick={() => {
+                setSearchDraft("");
+                if (search) navigate(withFilters({ q: null }));
+              }}
+            >
+              <X className="size-4" />
+            </button>
+          )}
+        </div>
         <span className="text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-ink-quiet mr-1">Filter</span>
         <Select
           value={category_filter || "all"}
@@ -697,9 +735,21 @@ export default function Transactions({
         )}
       </div>
 
+      {/* The heading still shows a month because the bank panes below stay scoped to it, but the
+          logged list does not while a search is running. Saying so beats letting the month label
+          imply a narrower result set than you are looking at. */}
+      {search && (
+        <p className="-mt-3 mb-6 text-sm text-ink-quiet">
+          Showing logged transactions from every month that match <span className="text-ink">{search}</span>. Awaiting
+          review stays on {formatMonth(month)}.
+        </p>
+      )}
+
       {transactions.length === 0 && bankTxns.length === 0 && ignoredBankTxns.length === 0 ? (
         <Card>
-          <CardContent className="text-muted-foreground py-12 text-center">Nothing logged for this period.</CardContent>
+          <CardContent className="text-muted-foreground py-12 text-center">
+            {search ? `No transactions match ${search}.` : "Nothing logged for this period."}
+          </CardContent>
         </Card>
       ) : (
         (() => {

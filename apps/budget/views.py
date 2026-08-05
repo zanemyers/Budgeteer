@@ -937,6 +937,7 @@ class TransactionListView(BudgetMemberMixin, View):
         method_filter = request.GET.get("method")
         date_from = request.GET.get("date_from")
         date_to = request.GET.get("date_to")
+        search = (request.GET.get("q") or "").strip()
         budget = self.budget
 
         def _bank_txns_with_status(status):
@@ -979,10 +980,24 @@ class TransactionListView(BudgetMemberMixin, View):
             qs = (
                 Transaction.objects.filter(budget=budget)
                 .annotate(effective_date=Coalesce("paid_date", "due_date"))
-                .filter(effective_date__range=(month_start, month_end))
                 .select_related("recurring__category", "payment_method")
                 .prefetch_related("lines__category", "bank_transaction__bank_account")
             )
+            # A search deliberately escapes the month window. "When did I last pay the vet?" is
+            # the question this exists to answer, and confining it to the month on screen would
+            # mean paging month by month — which is the thing being replaced. An explicit date
+            # range still narrows it, because that is the user asking for a window.
+            if search:
+                qs = qs.filter(
+                    Q(description__icontains=search)
+                    | Q(notes__icontains=search)
+                    | Q(lines__description__icontains=search)
+                    | Q(recurring__name__icontains=search)
+                    | Q(bank_transaction__description__icontains=search)
+                    | Q(bank_transaction__payee__icontains=search)
+                ).distinct()
+            else:
+                qs = qs.filter(effective_date__range=(month_start, month_end))
             if category_filter:
                 try:
                     cat_pk = int(category_filter)
@@ -1008,6 +1023,7 @@ class TransactionListView(BudgetMemberMixin, View):
                 "method_filter": method_filter or "",
                 "date_from": date_from or "",
                 "date_to": date_to or "",
+                "search": search,
                 "transactions": _transactions,
                 "bank_transactions": _bank_txns,
                 "ignored_bank_transactions": _ignored_bank_txns,
