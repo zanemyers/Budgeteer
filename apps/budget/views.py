@@ -1119,6 +1119,100 @@ class TransactionImportView(BudgetMemberMixin, View):
         }
 
 
+class TransactionBulkView(BudgetMemberMixin, View):
+    """
+    Apply one change to many transactions.
+
+    Reconciling a month means doing the same thing twenty times — especially after an import, where
+    forty rows arrive and most of them are groceries. Everything here is scoped to the budget from the
+    URL, so an id from somewhere else is silently absent rather than acted on.
+    """
+
+    ACTIONS = ("delete", "category", "payment_method", "mark_paid", "mark_unpaid")
+
+    def post(self, request, budget_pk):
+        data = parse_json_body(request)
+        action = data.get("action")
+        if action not in self.ACTIONS:
+            return JsonResponse({"errors": {"action": ["Unknown action."]}}, status=400)
+
+        raw_ids = data.get("ids") or []
+        if not isinstance(raw_ids, list) or not raw_ids:
+            return JsonResponse({"errors": {"ids": ["Select at least one transaction."]}}, status=400)
+        ids = [i for i in raw_ids if isinstance(i, int)]
+
+        transactions = list(
+            Transaction.objects.filter(budget=self.budget, pk__in=ids).prefetch_related("lines", "transfer_partner")
+        )
+        if not transactions:
+            return JsonResponse({"errors": {"ids": ["None of those are in this budget."]}}, status=400)
+
+        handler = getattr(self, f"_{action}")
+        with db_transaction.atomic():
+            changed, skipped = handler(request, transactions, data)
+        return JsonResponse({"changed": changed, "skipped": skipped})
+
+    def _delete(self, request, transactions, data):
+        # A transfer is two rows that only make sense together, so its partner goes with it rather
+        # than being left pointing at nothing.
+        partners = [t.transfer_partner for t in transactions if t.transfer_partner_id]
+        ids = {t.pk for t in transactions} | {p.pk for p in partners if p}
+        Transaction.objects.filter(budget=self.budget, pk__in=ids).delete()
+        return len(ids), []
+
+    def _category(self, request, transactions, data):
+        category = Category.objects.filter(pk=data.get("category"), budget=self.budget).first()
+        if category is None:
+            raise Http404
+        changed, skipped = 0, []
+        for txn in transactions:
+            lines = list(txn.lines.all())
+            # Recategorising a split would mean choosing which of its parts to destroy. Left alone and
+            # reported, so the count never claims to have changed something it did not.
+            if len(lines) != 1:
+                skipped.append({"id": txn.pk, "reason": "split across several categories"})
+                continue
+            line = lines[0]
+            line.category = category
+            line.save(update_fields=["category"])
+            # derive_transaction_type returns the stored value when there is one, so it has to be
+            # cleared first or the type never moves — an expense recategorised as income would keep
+            # counting against expenses on the dashboard. Mutating the cached line above is what lets
+            # the derive see the new category without another query.
+            txn.transaction_type = ""
+            txn.transaction_type = txn.derive_transaction_type()
+            txn.save(update_fields=["transaction_type"])
+            changed += 1
+        return changed, skipped
+
+    def _payment_method(self, request, transactions, data):
+        pm_id = data.get("payment_method")
+        method = PaymentMethod.objects.filter(pk=pm_id, budget=self.budget).first() if pm_id else None
+        if pm_id and method is None:
+            raise Http404
+        ids = [t.pk for t in transactions]
+        Transaction.objects.filter(pk__in=ids).update(payment_method=method)
+        return len(ids), []
+
+    def _mark_paid(self, request, transactions, data):
+        """
+        Stamp the local date, matching the single-row action.
+
+        Anything already paid keeps the date it has, so a stray selection cannot rewrite history.
+        """
+        today = timezone.localdate()
+        unpaid = [t for t in transactions if t.paid_date is None]
+        skipped = [{"id": t.pk, "reason": "already paid"} for t in transactions if t.paid_date is not None]
+        Transaction.objects.filter(pk__in=[t.pk for t in unpaid]).update(paid_date=today)
+        return len(unpaid), skipped
+
+    def _mark_unpaid(self, request, transactions, data):
+        paid = [t for t in transactions if t.paid_date is not None]
+        skipped = [{"id": t.pk, "reason": "already pending"} for t in transactions if t.paid_date is None]
+        Transaction.objects.filter(pk__in=[t.pk for t in paid]).update(paid_date=None)
+        return len(paid), skipped
+
+
 class TransactionExportView(BudgetMemberMixin, View):
     """
     Download the rows currently on the transactions page, one line per row.
@@ -2071,6 +2165,58 @@ class BankTransactionIgnoreView(BudgetMemberMixin, View):
         bt.ignore_reason = (data.get("reason") or "").strip()[:500]
         bt.save(update_fields=["status", "transaction", "ignore_reason", "last_seen_at"])
         return JsonResponse({"bank_transaction": serialize_bank_transaction(bt)})
+
+
+class BankTransactionBulkView(BudgetMemberMixin, View):
+    """
+    Apply one action to many bank rows.
+
+    Reviewing an import is the case this exists for: forty rows arrive and most of them get the same
+    treatment. Delete is only offered for imported rows, since a synced one returns on the next sync.
+    """
+
+    ACTIONS = ("delete", "ignore", "restore")
+
+    def post(self, request, budget_pk):
+        data = parse_json_body(request)
+        action = data.get("action")
+        if action not in self.ACTIONS:
+            return JsonResponse({"errors": {"action": ["Unknown action."]}}, status=400)
+
+        raw_ids = data.get("ids") or []
+        if not isinstance(raw_ids, list) or not raw_ids:
+            return JsonResponse({"errors": {"ids": ["Select at least one row."]}}, status=400)
+        ids = [i for i in raw_ids if isinstance(i, int)]
+
+        rows = list(
+            BankTransaction.objects.for_budget(self.budget, user=request.user)
+            .filter(pk__in=ids)
+            .select_related("bank_account")
+        )
+        if not rows:
+            return JsonResponse({"errors": {"ids": ["None of those are in this budget."]}}, status=400)
+
+        changed, skipped = 0, []
+        with db_transaction.atomic():
+            for bt in rows:
+                if action == "delete":
+                    if bt.bank_account.connection_id is not None:
+                        skipped.append({"id": bt.pk, "reason": "synced rows come back on the next sync"})
+                        continue
+                    if bt.transaction_id is not None:
+                        skipped.append({"id": bt.pk, "reason": "linked to a transaction"})
+                        continue
+                    bt.delete()
+                elif action == "ignore":
+                    bt.status = BankTransaction.Status.IGNORED
+                    bt.transaction = None
+                    bt.save(update_fields=["status", "transaction", "last_seen_at"])
+                else:
+                    bt.status = BankTransaction.Status.PENDING
+                    bt.ignore_reason = ""
+                    bt.save(update_fields=["status", "ignore_reason", "last_seen_at"])
+                changed += 1
+        return JsonResponse({"changed": changed, "skipped": skipped})
 
 
 class BankTransactionDeleteView(BudgetMemberMixin, View):

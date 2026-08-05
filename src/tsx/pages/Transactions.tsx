@@ -17,12 +17,13 @@ import {
 } from "lucide-react";
 import { Fragment, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { ConfirmButton } from "@/components/ConfirmButton";
 import { DateRangeFilter } from "@/components/DateRangeFilter";
 import { TransactionImportModal } from "@/components/TransactionImportModal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -51,6 +52,19 @@ import type {
 import { fmt, fmtConverted, fmtSigned, useCurrencyCode, useCurrencyRate, useCurrencySymbol } from "../utils/currency";
 import { fmtDate } from "../utils/date";
 import { formatMonth, getDefaultMonth, isAtBackLimit, nextMonth, prevMonth } from "../utils/month";
+
+/**
+ * A bank payee runs long — "POS PURCHASE TERMINAL 4471 COMMERCE BANK" — and left whole it pushes the
+ * row wide enough to shove the amount off a narrow screen. The full text stays in a title attribute.
+ */
+const DESCRIPTION_LIMIT = 25;
+
+function truncate(text: string): string {
+  return text.length > DESCRIPTION_LIMIT ? `${text.slice(0, DESCRIPTION_LIMIT).trimEnd()}…` : text;
+}
+
+/** What a bulk action can do. Mirrors TransactionBulkView.ACTIONS on the server. */
+type BulkAction = "delete" | "category" | "payment_method" | "mark_paid" | "mark_unpaid";
 
 interface Props {
   budget_pk: number;
@@ -196,6 +210,80 @@ export default function Transactions({
   // Local so typing doesn't round-trip on every keystroke; submitted on Enter or the button.
   const [searchDraft, setSearchDraft] = useState(search);
   const [importing, setImporting] = useState(false);
+  // Selection is per tab, cleared whenever the tab changes. A set that survived the switch would
+  // let someone act on rows they can no longer see, which is the opposite of deliberate.
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [bulkAction, setBulkAction] = useState<BulkAction | null>(null);
+  const [bulkValue, setBulkValue] = useState("");
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [activeTab, setActiveTab] = useState<string | null>(null);
+
+  // Bank rows select separately. They are not transactions yet, so what you can do to them differs —
+  // delete, ignore, restore — and one shared set would offer actions that cannot apply to half of
+  // what is ticked.
+  const [selectedBank, setSelectedBank] = useState<Set<number>>(new Set());
+  const [bankAction, setBankAction] = useState<"delete" | "ignore" | "restore" | null>(null);
+
+  function toggleBank(id: number) {
+    setSelectedBank((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelected(id: number) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  /**
+   * Apply one action to everything selected.
+   *
+   * Always behind the confirm dialog, never straight off the action bar: the whole point is that a
+   * change affecting twenty rows is deliberate, and the dialog is where the twenty are listed.
+   */
+  async function runBulk() {
+    if (!bulkAction || selected.size === 0) return;
+    setBulkBusy(true);
+    try {
+      const body: Record<string, unknown> = { action: bulkAction, ids: [...selected] };
+      if (bulkAction === "category") body.category = Number(bulkValue);
+      if (bulkAction === "payment_method") {
+        body.payment_method = bulkValue && bulkValue !== "none" ? Number(bulkValue) : null;
+      }
+      const res = (await jsonFetch(`/budgets/${budget_pk}/transactions/bulk/`, "POST", body)) as {
+        changed: number;
+        skipped: { id: number; reason: string }[];
+      } | null;
+      const changed = res?.changed ?? 0;
+      const skipped = res?.skipped ?? [];
+      toast.success(
+        skipped.length > 0
+          ? `${changed} updated. ${skipped.length} left alone: ${skipped[0].reason}.`
+          : `${changed} updated.`,
+      );
+      setSelected(new Set());
+      setBulkAction(null);
+      setBulkValue("");
+      // Re-fetch the current view discarding state, which is what `navigate` already does for every
+      // filter change. The rows on screen come from local state seeded once from props, so the
+      // partial reload this used to do refreshed the props and changed nothing visible: the action
+      // had worked and looked exactly as though it had not.
+      navigate(withFilters({}));
+    } catch (err) {
+      toast.error(errorMessage(err, "That change could not be applied."));
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  const selectedTxns = useMemo(() => transactions.filter((t) => selected.has(t.id)), [transactions, selected]);
 
   async function patchTxn(id: number, data: Record<string, unknown>) {
     const updated = (await jsonFetch(`/budgets/${budget_pk}/transactions/${id}/edit/`, "PATCH", data)) as Transaction;
@@ -282,15 +370,6 @@ export default function Transactions({
     if (updated) setTransactions((prev) => prev.map((t) => (t.id === editTxn.id ? updated : t)));
   }
 
-  async function deleteTxn(txn: Transaction) {
-    try {
-      await jsonFetch(`/budgets/${budget_pk}/transactions/${txn.id}/delete/`, "DELETE");
-      setTransactions((prev) => prev.filter((t) => t.id !== txn.id));
-    } catch (err) {
-      toast.error(errMsg(err, "Couldn't delete transaction."));
-    }
-  }
-
   async function restoreBankTxn(bt: BankTransaction) {
     try {
       const data = (await jsonFetch(`/budgets/${budget_pk}/bank-transactions/${bt.id}/unlink/`, "POST")) as {
@@ -309,13 +388,28 @@ export default function Transactions({
    * Ignoring one would leave it in the Ignored tab for good, since nothing re-syncs it back into
    * relevance. Only offered for imported rows; the endpoint refuses a synced one.
    */
-  async function deleteBankTxn(bt: BankTransaction) {
+  /** Apply one action to every selected bank row. Reached only through the confirm dialog. */
+  async function runBankBulk(action: "delete" | "ignore" | "restore") {
+    if (selectedBank.size === 0) return;
+    setBulkBusy(true);
     try {
-      await jsonFetch(`/budgets/${budget_pk}/bank-transactions/${bt.id}/delete/`, "DELETE");
-      setBankTxns((prev) => prev.filter((b) => b.id !== bt.id));
-      setIgnoredBankTxns((prev) => prev.filter((b) => b.id !== bt.id));
+      const res = (await jsonFetch(`/budgets/${budget_pk}/bank-transactions/bulk/`, "POST", {
+        action,
+        ids: [...selectedBank],
+      })) as { changed: number; skipped: { id: number; reason: string }[] } | null;
+      const skipped = res?.skipped ?? [];
+      toast.success(
+        skipped.length > 0
+          ? `${res?.changed ?? 0} updated. ${skipped.length} left alone: ${skipped[0].reason}.`
+          : `${res?.changed ?? 0} updated.`,
+      );
+      setSelectedBank(new Set());
+      setBankAction(null);
+      navigate(withFilters({}));
     } catch (err) {
-      toast.error(errorMessage(err, "Couldn't delete that row."));
+      toast.error(errorMessage(err, "That change could not be applied."));
+    } finally {
+      setBulkBusy(false);
     }
   }
 
@@ -379,6 +473,13 @@ export default function Transactions({
     return (
       <Fragment key={txn.id}>
         <TableRow className={`group ${txn.is_paid ? "text-muted-foreground" : ""}`}>
+          <TableCell className="w-8">
+            <Checkbox
+              checked={selected.has(txn.id)}
+              onCheckedChange={() => toggleSelected(txn.id)}
+              aria-label={`Select ${txn.description}`}
+            />
+          </TableCell>
           <TableCell>
             <div className="flex items-center gap-2 flex-wrap">
               {isEditingDesc ? (
@@ -403,8 +504,9 @@ export default function Transactions({
                   type="button"
                   className="text-left rounded-sm focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2 hover:underline"
                   onClick={() => setEditDesc((prev) => ({ ...prev, [txn.id]: txn.description }))}
+                  title={txn.description.length > DESCRIPTION_LIMIT ? txn.description : undefined}
                 >
-                  {txn.description}
+                  {truncate(txn.description)}
                 </button>
               )}
               {!opts.suppressStateMarkers && txn.recurring !== null && (
@@ -572,7 +674,6 @@ export default function Transactions({
               <Button variant="ghost" size="icon-sm" onClick={() => setEditTxn(txn)} aria-label="Edit transaction">
                 <Pencil />
               </Button>
-              <ConfirmButton size="xs" onConfirm={() => deleteTxn(txn)} label="Delete" />
             </div>
           </TableCell>
         </TableRow>
@@ -793,7 +894,16 @@ export default function Transactions({
           const ignoredCount = ignoredBankTxns.length;
           const defaultTab = pendingCount > 0 ? "pending" : "logged";
           return (
-            <Tabs defaultValue={defaultTab} className="gap-4">
+            <Tabs
+              value={activeTab ?? defaultTab}
+              onValueChange={(v) => {
+                setActiveTab(v);
+                // Per tab: a selection that survived the switch would let someone act on rows they
+                // can no longer see.
+                setSelected(new Set());
+              }}
+              className="gap-4"
+            >
               <TabsList data-tour="txn-tabs">
                 <TabsTrigger value="pending" disabled={pendingCount === 0}>
                   Pending {pendingCount > 0 && `(${pendingCount})`}
@@ -813,6 +923,24 @@ export default function Transactions({
                     <Table>
                       <TableHeader>
                         <TableRow>
+                          <TableHead className="w-8">
+                            {/* This tab lists two kinds of row — unpaid transactions and bank rows
+                                awaiting review — so select-all has to cover both. Keyed only to
+                                transactions it did nothing whenever the tab held only bank rows,
+                                which is the usual state right after an import. */}
+                            <Checkbox
+                              checked={
+                                pending.length + bankTxns.length > 0 &&
+                                pending.every((t) => selected.has(t.id)) &&
+                                bankTxns.every((b) => selectedBank.has(b.id))
+                              }
+                              onCheckedChange={(checked) => {
+                                setSelected(checked === true ? new Set(pending.map((t) => t.id)) : new Set());
+                                setSelectedBank(checked === true ? new Set(bankTxns.map((b) => b.id)) : new Set());
+                              }}
+                              aria-label="Select every row in this tab"
+                            />
+                          </TableHead>
                           <TableHead>Description</TableHead>
                           <TableHead>Paid</TableHead>
                           <TableHead className="hidden md:table-cell">Category</TableHead>
@@ -828,6 +956,13 @@ export default function Transactions({
                           const sourceLabel = bt.org_name || bt.bank_account_name;
                           return (
                             <TableRow key={`bt-${bt.id}`} className="group">
+                              <TableCell className="w-8">
+                                <Checkbox
+                                  checked={selectedBank.has(bt.id)}
+                                  onCheckedChange={() => toggleBank(bt.id)}
+                                  aria-label={`Select ${bt.payee || bt.description}`}
+                                />
+                              </TableCell>
                               <TableCell>
                                 <div className="flex flex-col gap-0.5">
                                   <div className="flex items-center gap-2 flex-wrap">
@@ -882,9 +1017,6 @@ export default function Transactions({
                                   </Button>
                                   {/* Delete is offered only for an imported row. A synced one would
                                       come back on the next sync, which is what Ignore is for. */}
-                                  {bt.is_imported && (
-                                    <ConfirmButton size="xs" label="Delete" onConfirm={() => deleteBankTxn(bt)} />
-                                  )}
                                 </div>
                               </TableCell>
                             </TableRow>
@@ -903,6 +1035,19 @@ export default function Transactions({
                     <Table>
                       <TableHeader>
                         <TableRow>
+                          <TableHead className="w-8">
+                            <Checkbox
+                              checked={
+                                ignoredBankTxns.length > 0 && ignoredBankTxns.every((b) => selectedBank.has(b.id))
+                              }
+                              onCheckedChange={(checked) =>
+                                setSelectedBank(
+                                  checked === true ? new Set(ignoredBankTxns.map((b) => b.id)) : new Set(),
+                                )
+                              }
+                              aria-label="Select every ignored row"
+                            />
+                          </TableHead>
                           <TableHead>Description</TableHead>
                           <TableHead>Paid</TableHead>
                           <TableHead className="hidden md:table-cell">Category</TableHead>
@@ -918,6 +1063,13 @@ export default function Transactions({
                           const sourceLabel = bt.org_name || bt.bank_account_name;
                           return (
                             <TableRow key={`ig-${bt.id}`} className="group text-muted-foreground">
+                              <TableCell className="w-8">
+                                <Checkbox
+                                  checked={selectedBank.has(bt.id)}
+                                  onCheckedChange={() => toggleBank(bt.id)}
+                                  aria-label={`Select ${bt.payee || bt.description}`}
+                                />
+                              </TableCell>
                               <TableCell>
                                 <div className="flex flex-col gap-0.5">
                                   <div className="flex items-center gap-2 flex-wrap">
@@ -1019,6 +1171,15 @@ export default function Transactions({
                       <Table>
                         <TableHeader>
                           <TableRow>
+                            <TableHead className="w-8">
+                              <Checkbox
+                                checked={sortedRest.length > 0 && sortedRest.every((t) => selected.has(t.id))}
+                                onCheckedChange={(checked) =>
+                                  setSelected(checked === true ? new Set(sortedRest.map((t) => t.id)) : new Set())
+                                }
+                                aria-label="Select every row in this tab"
+                              />
+                            </TableHead>
                             <SortHeader label="Description" sortKey="description" />
                             <SortHeader label="Date" sortKey="paid_date" />
                             <SortHeader label="Category" sortKey="category" />
@@ -1046,6 +1207,15 @@ export default function Transactions({
                       <Table>
                         <TableHeader>
                           <TableRow>
+                            <TableHead className="w-8">
+                              <Checkbox
+                                checked={sortedTransfers.length > 0 && sortedTransfers.every((t) => selected.has(t.id))}
+                                onCheckedChange={(checked) =>
+                                  setSelected(checked === true ? new Set(sortedTransfers.map((t) => t.id)) : new Set())
+                                }
+                                aria-label="Select every row in this tab"
+                              />
+                            </TableHead>
                             <SortHeader label="Description" sortKey="description" />
                             <SortHeader label="Date" sortKey="paid_date" />
                             <SortHeader label="Category" sortKey="category" />
@@ -1063,6 +1233,209 @@ export default function Transactions({
             </Tabs>
           );
         })()
+      )}
+
+      {/* Selection bar and its confirm step.
+
+          Nothing here acts on a click. Every action opens the dialog below, which lists the rows it
+          would touch, because a change affecting twenty rows should be something you agreed to
+          rather than something you triggered. */}
+      {/* Bank rows have their own bar: they are not transactions, so recategorising or marking them
+          paid means nothing until they have been confirmed into one. */}
+      {selectedBank.size > 0 && (
+        <div className="sticky bottom-4 z-10 mt-4 flex flex-wrap items-center gap-2 rounded-lg border border-border-strong bg-card p-3 shadow-lg">
+          <span className="text-sm font-medium">{selectedBank.size} bank rows selected</span>
+          <span className="flex-1" />
+          <Button size="sm" variant="outline" onClick={() => setBankAction("ignore")}>
+            Ignore
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => setBankAction("restore")}>
+            Restore to pending
+          </Button>
+          <Button size="sm" variant="destructive" onClick={() => setBankAction("delete")}>
+            Delete
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setSelectedBank(new Set())}>
+            Clear
+          </Button>
+        </div>
+      )}
+
+      {bankAction && (
+        <Dialog open onOpenChange={(open) => !open && setBankAction(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>
+                {bankAction === "delete" && `Delete ${selectedBank.size} bank rows?`}
+                {bankAction === "ignore" && `Ignore ${selectedBank.size} bank rows?`}
+                {bankAction === "restore" && `Restore ${selectedBank.size} to pending?`}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="flex flex-col gap-3 py-2">
+              <div className="max-h-64 overflow-y-auto rounded-md border border-border-strong">
+                <table className="w-full text-xs">
+                  <tbody>
+                    {[...bankTxns, ...ignoredBankTxns]
+                      .filter((bt) => selectedBank.has(bt.id))
+                      .map((bt) => (
+                        <tr key={bt.id} className="border-t first:border-t-0">
+                          <td className="px-2 py-1 tabular-nums text-ink-quiet">{bt.posted_date}</td>
+                          <td className="px-2 py-1" title={bt.payee || bt.description}>
+                            {truncate(bt.payee || bt.description || "—")}
+                          </td>
+                          <td className="px-2 py-1 text-right tabular-nums">{fmt(bt.amount, symbol)}</td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+              {bankAction === "delete" && (
+                <p className="text-xs text-alarm">
+                  This cannot be undone. A row that came from a bank sync is left alone, since the next sync would bring
+                  it straight back.
+                </p>
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setBankAction(null)} disabled={bulkBusy}>
+                Cancel
+              </Button>
+              <Button
+                variant={bankAction === "delete" ? "destructive" : "default"}
+                onClick={() => void runBankBulk(bankAction)}
+                disabled={bulkBusy}
+              >
+                {bulkBusy ? "Working…" : "Confirm"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {selected.size > 0 && (
+        <div className="sticky bottom-4 z-10 mt-4 flex flex-wrap items-center gap-2 rounded-lg border border-border-strong bg-card p-3 shadow-lg">
+          <span className="text-sm font-medium">{selected.size} selected</span>
+          <span className="flex-1" />
+          <Button size="sm" variant="outline" onClick={() => setBulkAction("category")}>
+            Recategorise
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => setBulkAction("payment_method")}>
+            Set method
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => setBulkAction("mark_paid")}>
+            Mark paid
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => setBulkAction("mark_unpaid")}>
+            Mark pending
+          </Button>
+          <Button size="sm" variant="destructive" onClick={() => setBulkAction("delete")}>
+            Delete
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
+            Clear
+          </Button>
+        </div>
+      )}
+
+      {bulkAction && (
+        <Dialog open onOpenChange={(open) => !open && setBulkAction(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>
+                {bulkAction === "delete" && `Delete ${selected.size} transaction${selected.size === 1 ? "" : "s"}?`}
+                {bulkAction === "category" && "Move these to a category"}
+                {bulkAction === "payment_method" && "Set the payment method on these"}
+                {bulkAction === "mark_paid" && `Mark ${selected.size} as paid?`}
+                {bulkAction === "mark_unpaid" && `Mark ${selected.size} as pending?`}
+              </DialogTitle>
+            </DialogHeader>
+
+            <div className="flex flex-col gap-3 py-2">
+              {bulkAction === "category" && (
+                <Select value={bulkValue} onValueChange={setBulkValue}>
+                  <SelectTrigger aria-label="Category to move these to">
+                    <SelectValue placeholder="Choose a category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories
+                      .filter((c) => !c.is_goal)
+                      .map((c) => (
+                        <SelectItem key={c.id} value={String(c.id)}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              )}
+
+              {bulkAction === "payment_method" && (
+                <Select value={bulkValue} onValueChange={setBulkValue}>
+                  <SelectTrigger aria-label="Payment method to set">
+                    <SelectValue placeholder="Choose a method" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {/* Radix throws on an empty value, so "none" stands in and is mapped back to
+                        null when the request is built. */}
+                    <SelectItem value="none">No method</SelectItem>
+                    {payment_methods.map((pm) => (
+                      <SelectItem key={pm.id} value={String(pm.id)}>
+                        {pm.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+
+              {/* The list is the point. A count alone would let someone confirm a change to rows they
+                  had forgotten were selected, which is how a bulk action does damage. */}
+              <div className="max-h-64 overflow-y-auto rounded-md border border-border-strong">
+                <table className="w-full text-xs">
+                  <tbody>
+                    {selectedTxns.map((txn) => (
+                      <tr key={txn.id} className="border-t first:border-t-0">
+                        <td className="px-2 py-1 tabular-nums text-ink-quiet">{txn.paid_date ?? txn.due_date}</td>
+                        <td className="px-2 py-1" title={txn.description}>
+                          {truncate(txn.description)}
+                        </td>
+                        <td className="px-2 py-1">
+                          {txn.lines.length > 1 ? (
+                            <span className="text-ink-quiet italic">split, will be left alone</span>
+                          ) : (
+                            (txn.lines[0]?.category_name ?? "")
+                          )}
+                        </td>
+                        <td className="px-2 py-1 text-right tabular-nums">{fmt(txn.total_amount, symbol)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {bulkAction === "category" && selectedTxns.some((t) => t.lines.length > 1) && (
+                <p className="text-xs text-ink-quiet">
+                  A split transaction is spread across several categories, so moving it would mean choosing which part
+                  to discard. Those are left as they are.
+                </p>
+              )}
+              {bulkAction === "delete" && (
+                <p className="text-xs text-alarm">This cannot be undone. A transfer takes its matching side with it.</p>
+              )}
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setBulkAction(null)} disabled={bulkBusy}>
+                Cancel
+              </Button>
+              <Button
+                variant={bulkAction === "delete" ? "destructive" : "default"}
+                onClick={() => void runBulk()}
+                disabled={bulkBusy || (bulkAction === "category" && !bulkValue)}
+              >
+                {bulkBusy ? "Working…" : "Confirm"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
 
       {importing && (
