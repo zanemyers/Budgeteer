@@ -1,3 +1,4 @@
+import datetime
 from datetime import UTC
 from decimal import Decimal
 from io import StringIO
@@ -5,6 +6,7 @@ from unittest.mock import patch
 
 from django.core.management import call_command
 from django.test import SimpleTestCase, TestCase
+from django.utils import timezone
 
 from apps.accounts.models import User
 
@@ -321,3 +323,86 @@ class TestBalanceSnapshots(TestCase):
 
         BankAccount.objects.get().delete()
         self.assertEqual(BalanceSnapshot.objects.count(), 0)
+
+
+class TestSyncStatusGrading(TestCase):
+    """
+    A blip and a broken connection must not look the same.
+
+    Every failure used to make sync_status "error", which the Banking page renders as a red alert.
+    A read timeout therefore looked exactly like a revoked access URL, and since only a later
+    success clears the stored message and the cron runs every six hours, one stall sat in a red
+    banner for most of a day. last_synced_at was also stamped on failed attempts, so the page
+    reported a failed run as the last successful sync.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="u", email="u@example.com", password="password")  # noqa: S106
+        self.conn = SimpleFINConnection.objects.create(user=self.user, access_url="https://x/access", label="B")
+
+    def test_never_attempted_is_pending(self):
+        self.assertEqual(self.conn.sync_status, "pending")
+
+    @patch(FETCH_PATH)
+    def test_a_clean_run_is_ok_and_records_a_success(self, mock_fetch):
+        mock_fetch.return_value = _payload()
+        sync_connection(self.conn)
+        self.conn.refresh_from_db()
+
+        self.assertEqual(self.conn.sync_status, "ok")
+        self.assertEqual(self.conn.last_success_at, self.conn.last_synced_at)
+
+    @patch(FETCH_PATH)
+    def test_a_failure_after_a_recent_success_is_only_stale(self, mock_fetch):
+        mock_fetch.return_value = _payload()
+        sync_connection(self.conn)
+
+        mock_fetch.side_effect = SimpleFINError("Read timed out")
+        sync_connection(self.conn)
+        self.conn.refresh_from_db()
+
+        self.assertEqual(self.conn.sync_status, "stale", "a single stall should not read as broken")
+        succeeded, attempted = self.conn.last_success_at, self.conn.last_synced_at
+        self.assertTrue(
+            succeeded is not None and attempted is not None and succeeded < attempted,
+            f"the failed attempt should not count as a success: succeeded={succeeded} attempted={attempted}",
+        )
+
+    @patch(FETCH_PATH)
+    def test_a_failure_with_no_recent_success_is_an_error(self, mock_fetch):
+        mock_fetch.return_value = _payload()
+        sync_connection(self.conn)
+
+        # Push the last success outside the grace window: this is no longer a blip.
+        stale_success = timezone.now() - SimpleFINConnection.STALE_GRACE - datetime.timedelta(minutes=1)
+        SimpleFINConnection.objects.filter(pk=self.conn.pk).update(last_success_at=stale_success)
+
+        mock_fetch.side_effect = SimpleFINError("Access URL is no longer valid. Re-link the connection.")
+        sync_connection(self.conn)
+        self.conn.refresh_from_db()
+
+        self.assertEqual(self.conn.sync_status, "error")
+
+    @patch(FETCH_PATH)
+    def test_a_failure_with_no_success_on_record_is_an_error(self, mock_fetch):
+        """A connection that has never worked gets no grace period it has not earned."""
+        mock_fetch.side_effect = SimpleFINError("Read timed out")
+        sync_connection(self.conn)
+        self.conn.refresh_from_db()
+
+        self.assertIsNone(self.conn.last_success_at)
+        self.assertEqual(self.conn.sync_status, "error")
+
+    @patch(FETCH_PATH)
+    def test_recovering_clears_the_error_and_moves_the_success(self, mock_fetch):
+        mock_fetch.side_effect = SimpleFINError("Read timed out")
+        sync_connection(self.conn)
+
+        mock_fetch.side_effect = None
+        mock_fetch.return_value = _payload()
+        sync_connection(self.conn)
+        self.conn.refresh_from_db()
+
+        self.assertEqual(self.conn.last_sync_error, "")
+        self.assertEqual(self.conn.sync_status, "ok")
+        self.assertIsNotNone(self.conn.last_success_at)

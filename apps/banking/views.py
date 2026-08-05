@@ -63,6 +63,7 @@ class BankingView(LoginRequiredMixin, View):
                     "id": conn.pk,
                     "label": conn.label or f"Connection #{conn.pk}",
                     "last_synced_at": conn.last_synced_at.isoformat() if conn.last_synced_at else None,
+                    "last_success_at": conn.last_success_at.isoformat() if conn.last_success_at else None,
                     "last_sync_status": conn.sync_status,
                     "last_sync_error": conn.last_sync_error,
                     "accounts": accounts,

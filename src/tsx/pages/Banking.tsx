@@ -52,7 +52,8 @@ interface Connection {
   id: number;
   label: string;
   last_synced_at: string | null;
-  last_sync_status: "ok" | "error" | "pending";
+  last_success_at: string | null;
+  last_sync_status: "ok" | "error" | "stale" | "pending";
   last_sync_error: string;
   accounts: BankAccount[];
 }
@@ -282,8 +283,24 @@ export default function Banking({ connections: initialConnections, payment_metho
         <section key={conn.id} className="mb-8">
           <div className="flex justify-between items-baseline mb-3">
             <h2 className="text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-ink-quiet">{conn.label}</h2>
-            <span className="text-xs text-ink-quiet">Last synced {fmtDateTime(conn.last_synced_at)}</span>
+            {/* The last attempt is not the last success, and this used to show whichever came
+                last regardless. A failed 04:00 run reported itself as "Last synced 04:00" beside
+                its own error message. */}
+            <span className="text-xs text-ink-quiet">
+              Last synced {fmtDateTime(conn.last_success_at ?? conn.last_synced_at)}
+            </span>
           </div>
+
+          {/* A stalled bridge and a revoked access URL used to look identical. The first needs
+              nothing from you and clears itself on the next run; the second needs re-linking and
+              will not. A failure is quiet while a recent success stands behind it, and turns red
+              once it has been failing long enough to mean something. */}
+          {conn.last_sync_status === "stale" && conn.last_sync_error && (
+            <p className="mb-3 text-xs text-ink-quiet">
+              The {fmtDateTime(conn.last_synced_at)} sync did not go through, so these figures are from{" "}
+              {fmtDateTime(conn.last_success_at)}. It will try again on its own.
+            </p>
+          )}
 
           {conn.last_sync_status === "error" && conn.last_sync_error && (
             <Alert variant="destructive" className="mb-3">

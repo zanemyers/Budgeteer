@@ -1,7 +1,9 @@
+import datetime
 from decimal import Decimal
 
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
 from apps.base.fields import EncryptedTextField
 
@@ -14,7 +16,8 @@ class SimpleFINConnection(models.Model):
     )
     label = models.CharField(max_length=100, blank=True, default="")
     access_url = EncryptedTextField()
-    last_synced_at = models.DateTimeField(null=True, blank=True)
+    last_synced_at = models.DateTimeField(null=True, blank=True, help_text="Last attempt, successful or not.")
+    last_success_at = models.DateTimeField(null=True, blank=True, help_text="Last attempt that returned data.")
     last_sync_error = models.TextField(blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -27,12 +30,32 @@ class SimpleFINConnection(models.Model):
     def __str__(self) -> str:
         return self.label or f"SimpleFIN connection #{self.pk}"
 
+    # How long a failure is treated as a blip. The bridge stalls past its read timeout every so
+    # often and the next attempt succeeds, so one failure says nothing about whether anything is
+    # actually wrong. Chosen over inspecting the error text: a persistent fault keeps failing, so
+    # it escalates on its own within a day, and no error string has to be pattern-matched.
+    STALE_GRACE = datetime.timedelta(hours=24)
+
     @property
     def sync_status(self) -> str:
-        """Derived: 'pending' before first sync, 'error' if last attempt failed, else 'ok'."""
+        """
+        Grade the last attempt.
+
+        'pending' before any attempt, 'ok' when the last one worked, 'stale' when it failed but
+        something worked recently, and 'error' once it has been failing long enough to act on.
+
+        Every failure used to be 'error', which the Banking page renders as a red alert. A single
+        read timeout therefore looked exactly like a revoked access URL, and since only a later
+        success clears the message and the cron runs every six hours, it sat there for most of a
+        day over nothing.
+        """
         if self.last_synced_at is None:
             return "pending"
-        return "error" if self.last_sync_error else "ok"
+        if not self.last_sync_error:
+            return "ok"
+        if self.last_success_at and timezone.now() - self.last_success_at < self.STALE_GRACE:
+            return "stale"
+        return "error"
 
 
 class BankAccount(models.Model):

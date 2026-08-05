@@ -138,9 +138,18 @@ def sync_connection(conn: SimpleFINConnection, days: int = 31) -> dict:
             else:
                 summary["updated_txns"] += 1
 
+    now = timezone.now()
     conn.last_sync_error = "; ".join(errors)[:1000]
-    conn.last_synced_at = timezone.now()
-    conn.save(update_fields=["last_sync_error", "last_synced_at"])
+    conn.last_synced_at = now
+    # Only a clean run moves last_success_at. last_synced_at records the attempt either way, which
+    # is what lets sync_status tell a blip apart from something that has been failing all day.
+    # A failed run leaves the column out of update_fields entirely rather than rewriting whatever
+    # the in-memory object happened to hold.
+    updated = ["last_sync_error", "last_synced_at"]
+    if not errors:
+        conn.last_success_at = now
+        updated.append("last_success_at")
+    conn.save(update_fields=updated)
     return {**summary, "errors": errors}
 
 
