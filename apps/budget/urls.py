@@ -96,4 +96,6 @@ urlpatterns = [
         views.BankTransactionUnlinkView.as_view(),
         name="bank-txn-unlink",
     ),
+    path("<int:budget_pk>/export/", views.BudgetExportView.as_view(), name="export"),
+    path("<int:budget_pk>/transactions/export/", views.TransactionExportView.as_view(), name="transaction-export"),
 ]

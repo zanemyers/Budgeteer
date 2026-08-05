@@ -10,7 +10,7 @@ from django.db import IntegrityError
 from django.db import transaction as db_transaction
 from django.db.models import ProtectedError, Q
 from django.db.models.functions import Coalesce
-from django.http import Http404, JsonResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.utils import timezone
@@ -37,6 +37,7 @@ from apps.budget.data import (
     serialize_recurring,
     serialize_transaction,
 )
+from apps.budget.export import build_flat_workbook, build_month_workbook, build_year_workbook, workbook_filename
 from apps.budget.models import (
     Budget,
     BudgetMembership,
@@ -972,6 +973,90 @@ class CategoryDeleteView(BudgetMemberMixin, View):
 # ---------------------------------------------------------------------------
 
 
+def filter_transactions(budget, params):
+    """
+    Apply the transactions page's filters to a Transaction queryset.
+
+    Shared with the export so the file someone downloads is exactly the rows they were looking at.
+    Duplicating the predicate was the alternative, and the two would have drifted the first time
+    either changed.
+    """
+    month_str = params.get("month") or _default_month()
+    search = (params.get("q") or "").strip()
+    try:
+        month_start = datetime.date.fromisoformat(month_str + "-01")
+    except (ValueError, TypeError):
+        month_start = timezone.localdate().replace(day=1)
+    last_day = calendar.monthrange(month_start.year, month_start.month)[1]
+    month_end = month_start.replace(day=last_day)
+
+    qs = Transaction.objects.filter(budget=budget).annotate(effective_date=Coalesce("paid_date", "due_date"))
+    # A search deliberately escapes the month window. "When did I last pay the vet?" is the question
+    # it exists to answer, and confining it to the month on screen would mean paging month by month,
+    # which is the thing being replaced. An explicit date range still narrows it, because that is
+    # the user asking for a window.
+    if search:
+        qs = qs.filter(
+            Q(description__icontains=search)
+            | Q(notes__icontains=search)
+            | Q(lines__description__icontains=search)
+            | Q(recurring__name__icontains=search)
+            | Q(bank_transaction__description__icontains=search)
+            | Q(bank_transaction__payee__icontains=search)
+        ).distinct()
+    else:
+        qs = qs.filter(effective_date__range=(month_start, month_end))
+
+    if params.get("category"):
+        try:
+            cat_pk = int(params["category"])
+            qs = qs.filter(Q(lines__category_id=cat_pk) | Q(recurring__category_id=cat_pk)).distinct()
+        except (ValueError, TypeError):
+            pass
+    if params.get("method"):
+        with contextlib.suppress(ValueError, TypeError):
+            qs = qs.filter(payment_method_id=int(params["method"]))
+    for key, lookup in (("date_from", "effective_date__gte"), ("date_to", "effective_date__lte")):
+        if params.get(key):
+            with contextlib.suppress(ValueError, TypeError):
+                qs = qs.filter(**{lookup: datetime.date.fromisoformat(params[key])})
+    return qs
+
+
+class TransactionExportView(BudgetMemberMixin, View):
+    """
+    Download the rows currently on the transactions page, one line per row.
+
+    Deliberately the flat shape rather than the full workbook: this is the sheet another budgeting
+    app will accept, and the page it hangs off is the one where you have already narrowed to the
+    rows you want. The whole month, with its overview and goals, is the dashboard's export.
+    """
+
+    def get(self, request, budget_pk):
+        rate = _get_user_currency_rate(request.user)
+        currency = request.user.currency or "USD"
+        transactions = filter_transactions(self.budget, request.GET)
+        search = (request.GET.get("q") or "").strip()
+        month_str = request.GET.get("month") or _default_month()
+
+        if search:
+            label = f"transactions matching {search}"
+        else:
+            try:
+                label = f"{datetime.date.fromisoformat(month_str + '-01'):%B %Y} transactions"
+            except (ValueError, TypeError):
+                return JsonResponse({"errors": {"month": ["Enter a month as YYYY-MM."]}}, status=400)
+
+        workbook = build_flat_workbook(transactions, rate, currency)
+        response = HttpResponse(
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        filename = workbook_filename(self.budget, label)
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        workbook.save(response)
+        return response
+
+
 class TransactionListView(BudgetMemberMixin, View):
     def get(self, request, budget_pk):
         month_str = request.GET.get("month") or _default_month()
@@ -1010,49 +1095,11 @@ class TransactionListView(BudgetMemberMixin, View):
             return _bank_txns_with_status(BankTransaction.Status.IGNORED)
 
         def _transactions():
-            try:
-                month_start = datetime.date.fromisoformat(month_str + "-01")
-                last_day = calendar.monthrange(month_start.year, month_start.month)[1]
-                month_end = month_start.replace(day=last_day)
-            except (ValueError, TypeError):
-                month_start = timezone.localdate().replace(day=1)
-                last_day = calendar.monthrange(month_start.year, month_start.month)[1]
-                month_end = month_start.replace(day=last_day)
-
             qs = (
-                Transaction.objects.filter(budget=budget)
-                .annotate(effective_date=Coalesce("paid_date", "due_date"))
+                filter_transactions(budget, request.GET)
                 .select_related("recurring__category", "payment_method")
                 .prefetch_related("lines__category", "bank_transaction__bank_account")
             )
-            # A search deliberately escapes the month window. "When did I last pay the vet?" is
-            # the question this exists to answer, and confining it to the month on screen would
-            # mean paging month by month — which is the thing being replaced. An explicit date
-            # range still narrows it, because that is the user asking for a window.
-            if search:
-                qs = qs.filter(
-                    Q(description__icontains=search)
-                    | Q(notes__icontains=search)
-                    | Q(lines__description__icontains=search)
-                    | Q(recurring__name__icontains=search)
-                    | Q(bank_transaction__description__icontains=search)
-                    | Q(bank_transaction__payee__icontains=search)
-                ).distinct()
-            else:
-                qs = qs.filter(effective_date__range=(month_start, month_end))
-            if category_filter:
-                try:
-                    cat_pk = int(category_filter)
-                    qs = qs.filter(Q(lines__category_id=cat_pk) | Q(recurring__category_id=cat_pk)).distinct()
-                except (ValueError, TypeError):
-                    pass
-            if method_filter:
-                with contextlib.suppress(ValueError, TypeError):
-                    qs = qs.filter(payment_method_id=int(method_filter))
-            for value, lookup in ((date_from, "effective_date__gte"), (date_to, "effective_date__lte")):
-                if value:
-                    with contextlib.suppress(ValueError, TypeError):
-                        qs = qs.filter(**{lookup: datetime.date.fromisoformat(value)})
             return [serialize_transaction(t) for t in qs.order_by("-effective_date")]
 
         return inertia_render(
@@ -1085,6 +1132,48 @@ class TransactionListView(BudgetMemberMixin, View):
                 "user_currency": request.user.currency or "USD",
             },
         )
+
+
+class BudgetExportView(BudgetMemberMixin, View):
+    """
+    Download the budget as a spreadsheet.
+
+    Exists so the data is not trapped in the app: a month is the everyday export, and `year=YYYY`
+    gives the whole year for a handover or for leaving. Both build the same five sheets, so
+    whichever someone receives, it reads the same way.
+    """
+
+    def get(self, request, budget_pk):
+        rate = _get_user_currency_rate(request.user)
+        currency = request.user.currency or "USD"
+        year_param = request.GET.get("year")
+
+        if year_param:
+            try:
+                year = int(year_param)
+            except (TypeError, ValueError):
+                return JsonResponse({"errors": {"year": ["Enter a four-digit year."]}}, status=400)
+            if not 1900 <= year <= 2999:  # noqa: PLR2004 - a sane calendar year, not a magic constant
+                return JsonResponse({"errors": {"year": ["Enter a four-digit year."]}}, status=400)
+            workbook = build_year_workbook(self.budget, year, rate, currency)
+            label = str(year)
+        else:
+            month_str = request.GET.get("month") or _default_month()
+            try:
+                month_start = datetime.date.fromisoformat(month_str + "-01")
+            except (TypeError, ValueError):
+                return JsonResponse({"errors": {"month": ["Enter a month as YYYY-MM."]}}, status=400)
+            workbook = build_month_workbook(self.budget, month_str, rate, currency)
+            label = f"{month_start:%B %Y}"
+
+        response = HttpResponse(
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        filename = workbook_filename(self.budget, label)
+        # quoted so a budget name with a space does not truncate the download name
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        workbook.save(response)
+        return response
 
 
 class TransactionCreateView(BudgetMemberMixin, View):

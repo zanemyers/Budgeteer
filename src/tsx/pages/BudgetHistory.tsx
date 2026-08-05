@@ -1,4 +1,5 @@
 import { router } from "@inertiajs/react";
+import { Download } from "lucide-react";
 
 interface BudgetEntry {
   id: number;
@@ -33,6 +34,19 @@ function YearStrip({ budgetId, year, activeMonths }: { budgetId: number; year: n
         <span className="archive-year-meta">
           {count} {count === 1 ? "entry" : "entries"}
         </span>
+        {/* This page already knows which years hold records, so the export hangs off the year it
+            covers rather than asking anyone to pick one from a list of guesses. Styled as a visible
+            control rather than another muted micro-label: sharing the meta label's size, colour and
+            letter-spacing made "9 ENTRIES EXPORT" read as one string. */}
+        <a
+          className="archive-year-export"
+          href={`/budgets/${budgetId}/export/?year=${year}`}
+          download
+          title={`Download ${year} as a spreadsheet`}
+        >
+          <Download aria-hidden size={12} />
+          Export {year}
+        </a>
       </div>
       <div className="archive-year-grid">
         {Array.from({ length: 12 }).map((_, idx) => {
@@ -264,6 +278,33 @@ export default function BudgetHistory({ budgets }: Props) {
           background: var(--rule);
           align-self: end;
           margin-bottom: 0.4rem;
+        }
+        .archive-year-export {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.375rem;
+          flex: none;
+          font-family: "Inter", system-ui, sans-serif;
+          font-size: 0.75rem;
+          font-weight: 500;
+          letter-spacing: 0;
+          text-transform: none;
+          color: var(--foreground);
+          text-decoration: none;
+          padding: 0.25rem 0.625rem;
+          border: 1px solid var(--border-strong, var(--rule));
+          border-radius: 0.375rem;
+          background: var(--card);
+          align-self: center;
+          transition: background 0.15s, border-color 0.15s;
+        }
+        .archive-year-export:hover,
+        .archive-year-export:focus-visible {
+          background: var(--moss-soft);
+          border-color: var(--moss);
+        }
+        @media (pointer: coarse) {
+          .archive-year-export { padding: 0.5rem 0.75rem; }
         }
         .archive-year-meta {
           font-family: ui-monospace, monospace;

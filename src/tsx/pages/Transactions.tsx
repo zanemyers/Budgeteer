@@ -6,6 +6,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronUp,
+  Download,
   Landmark,
   Pencil,
   PiggyBank,
@@ -622,6 +623,18 @@ export default function Transactions({
         </div>
         <div className="flex items-center gap-2">
           <PageTourButton stage="transactions" />
+          {/* Exports exactly what the filters and search have narrowed to, one row per line, in
+              the shape another budgeting app will accept. A plain link, so the browser handles the
+              download and the file is never held in memory here. */}
+          <Button asChild variant="outline" size="sm">
+            <a
+              href={`/budgets/${budget_pk}/transactions/export/?${new URLSearchParams(withFilters({})).toString()}`}
+              download
+            >
+              <Download aria-hidden className="size-4" />
+              Export {hasFilters ? "these rows" : "this list"}
+            </a>
+          </Button>
           <Button data-tour="txn-add" onClick={() => setAddType("expense")}>
             + Add Transaction
           </Button>

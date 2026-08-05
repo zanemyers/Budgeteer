@@ -1,5 +1,5 @@
 import { router } from "@inertiajs/react";
-import { ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, RotateCcw } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -398,7 +398,7 @@ export default function Dashboard({
   return (
     <div className="max-w-[1200px]">
       {/* Page header */}
-      <header className="mb-8 flex items-center gap-3">
+      <header className="mb-8 flex flex-wrap items-center gap-3">
         <Button
           variant="ghost"
           size="icon-sm"
@@ -417,6 +417,16 @@ export default function Dashboard({
           aria-label="Next month"
         >
           <ChevronRight />
+        </Button>
+
+        {/* The month's whole picture: figures, categories, goals and what was paid out of them.
+            A plain link, so the browser handles the download. The flat one-row-per-line sheet for
+            importing elsewhere lives on the Transactions page. */}
+        <Button asChild variant="outline" size="sm" className="ml-auto">
+          <a href={`/budgets/${budget_pk}/export/?month=${month}`} download>
+            <Download aria-hidden className="size-4" />
+            Export {formatMonth(month)}
+          </a>
         </Button>
       </header>
 
