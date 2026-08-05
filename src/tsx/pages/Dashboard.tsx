@@ -469,22 +469,25 @@ export default function Dashboard({
           </span>
         </SummaryBox>
 
+        {/* Number first, then its word — the same shape as the other three, and as the fourth box's
+            secondary line. This one used to sit its labels on the left with the figures right-aligned
+            against them, which read as a different kind of card in a row of four and put its numbers
+            nowhere near the others' eye line. */}
         <SummaryBox label="Goals">
-          <dl className="flex flex-col gap-1">
-            <div className="flex items-baseline justify-between gap-2">
-              <dt className="text-xs text-ink-quiet">Saved to</dt>
-              <dd className="tabular-nums text-fund">{fmt(overview.saved_to_goals_total, symbol)}</dd>
-            </div>
-            <div className="flex items-baseline justify-between gap-2">
-              <dt
-                className="text-xs text-ink-quiet"
-                title="Drawn from previously-saved balances, not this month's budget"
-              >
-                Spent from
-              </dt>
-              <dd className="tabular-nums text-fund">{fmt(sfMonthlySpending, symbol)}</dd>
-            </div>
-          </dl>
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl font-semibold tracking-tight tabular-nums text-fund">
+              {fmt(overview.saved_to_goals_total, symbol)}
+            </span>
+            <span className="text-xs text-ink-quiet">saved</span>
+          </div>
+          {sfMonthlySpending > 0.005 && (
+            <p
+              className="mt-1 text-sm text-ink-quiet"
+              title="Drawn from previously-saved balances, not this month's budget"
+            >
+              <span className="tabular-nums text-ink">{fmt(sfMonthlySpending, symbol)}</span> spent from goals
+            </p>
+          )}
         </SummaryBox>
 
         {/* The band follows the button: SummaryBox documents `accent` as marking the box that
