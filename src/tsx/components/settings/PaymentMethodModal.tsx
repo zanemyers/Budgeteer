@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { getCsrfToken } from "@/lib/api";
+import { errorMessage, jsonFetch } from "@/lib/api";
 import type { PaymentMethod } from "./PaymentMethodsPanel";
 
 interface TypeChoice {
@@ -48,24 +48,13 @@ export function PaymentMethodModal({ budgetPk, typeChoices, paymentMethod, onClo
     if (isEdit) body.is_active = isActive;
 
     try {
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        const data = (await res.json()) as { errors?: Record<string, string[]> };
-        const flat = Object.values(data.errors ?? data)
-          .flat()
-          .join(" ");
-        setError(flat || "Could not save.");
-        setSaving(false);
-        return;
-      }
-      const pm = (await res.json()) as PaymentMethod;
+      const pm = (await jsonFetch(url, method, body)) as PaymentMethod;
       onSaved(pm);
-    } catch {
-      setError("Network error.");
+    } catch (err) {
+      // Was a bare catch reporting "Network error." for every failure, including
+      // validation rejections, and the error branch above called res.json() unguarded
+      // so an HTML error page threw straight past it.
+      setError(errorMessage(err, "Could not save."));
       setSaving(false);
     }
   }

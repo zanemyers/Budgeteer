@@ -1,5 +1,6 @@
 import { router } from "@inertiajs/react";
 import { useState } from "react";
+import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,7 +15,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { jsonFetch } from "../lib/api";
+import { errorMessage, jsonFetch } from "../lib/api";
+import { fmtInCurrency } from "../utils/currency";
 import { fmtDate, fmtDateTime } from "../utils/date";
 
 interface BankTransactionLite {
@@ -68,17 +70,6 @@ interface Props {
   payment_methods: PaymentMethodOption[];
 }
 
-function fmtMoney(amount: string | null, currency: string): string {
-  if (amount === null) return "—";
-  const n = Number.parseFloat(amount);
-  if (Number.isNaN(n)) return amount;
-  try {
-    return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(n);
-  } catch {
-    return `${amount} ${currency}`;
-  }
-}
-
 function AccountCard({
   account,
   paymentMethods,
@@ -112,13 +103,17 @@ function AccountCard({
         },
       );
       if (updated) onUpdate({ ...account, payment_method_id: updated.payment_method_id });
+    } catch (err) {
+      // Without this the rejection escaped as an unhandled promise and the dropdown simply
+      // snapped back, giving no hint that the mapping had not been saved.
+      toast.error(errorMessage(err, "Couldn't map that account."));
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <Card className="mb-3 border-rule shadow-none">
+    <Card className="mb-3">
       <CardContent>
         <div className="flex justify-between items-start gap-4 flex-wrap">
           <div>
@@ -133,11 +128,11 @@ function AccountCard({
           </div>
           <div className="text-right">
             <div className="text-2xl font-semibold tracking-tight tabular-nums">
-              {fmtMoney(account.balance, account.currency)}
+              {fmtInCurrency(account.balance, account.currency)}
             </div>
             {account.available_balance && account.available_balance !== account.balance && (
               <div className="text-ink-quiet text-sm tabular-nums">
-                Avail. {fmtMoney(account.available_balance, account.currency)}
+                Avail. {fmtInCurrency(account.available_balance, account.currency)}
               </div>
             )}
           </div>
@@ -202,7 +197,7 @@ function AccountCard({
                         {t.status === "ignored" && <span className="text-xs text-ink-quiet">Ignored</span>}
                       </TableCell>
                       <TableCell className={`text-right tabular-nums ${negative ? "text-expense" : "text-income"}`}>
-                        {fmtMoney(t.amount, account.currency)}
+                        {fmtInCurrency(t.amount, account.currency)}
                       </TableCell>
                     </TableRow>
                   );
@@ -228,7 +223,10 @@ export default function Banking({ connections: initialConnections, payment_metho
       setTimeout(() => {
         router.reload({ onFinish: () => setSyncing(false) });
       }, 1500);
-    } catch {
+    } catch (err) {
+      // The bare catch here reported nothing, so a queue failure looked exactly like a
+      // successful sync that happened to find no new transactions.
+      toast.error(errorMessage(err, "Couldn't start a sync."));
       setSyncing(false);
     }
   }
@@ -270,7 +268,7 @@ export default function Banking({ connections: initialConnections, payment_metho
       </header>
 
       {connections.length === 0 && (
-        <Card className="border-rule shadow-none">
+        <Card>
           <CardContent className="text-center py-12">
             <p className="mb-4 text-ink-quiet">No SimpleFIN connections yet.</p>
             <Button asChild>

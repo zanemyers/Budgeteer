@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { getCsrfToken } from "../lib/api";
+import { errorMessage, jsonFetch } from "../lib/api";
 import type { BudgetOverviewCategory } from "../types";
 import { fmt, useCurrencySymbol } from "../utils/currency";
 
@@ -95,19 +96,32 @@ export default function CleanupAssignedModal({ budgetPk, month, categories, over
         return;
       }
 
-      await Promise.all(
+      // allSettled, not all: these are N independent writes, so a rejection partway through
+      // leaves earlier ones already committed. Promise.all would abort here and skip
+      // onSaved(), so the successful writes stayed invisible until the next page load.
+      const results = await Promise.allSettled(
         updates.map((u) =>
-          fetch(`/budgets/${budgetPk}/category-budgets/${u.catId}/`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() },
-            body: JSON.stringify({ assigned: u.newAssigned, month }),
-          }),
+          jsonFetch(`/budgets/${budgetPk}/category-budgets/${u.catId}/`, "PATCH", { assigned: u.newAssigned, month }),
         ),
       );
-
+      const rejected = results.filter((r) => r.status === "rejected");
+      if (rejected.length === 0) {
+        onSaved();
+        return;
+      }
+      const reason = errorMessage((rejected[0] as PromiseRejectedResult).reason, "Something went wrong.");
+      if (rejected.length === results.length) {
+        // Nothing landed, so keep the modal open with the amounts intact to retry.
+        setError(reason);
+        setSaving(false);
+        return;
+      }
+      // Some landed. Reload so the figures match the server, and toast because onSaved()
+      // closes the modal and would take an in-modal message with it.
+      toast.error(`Saved ${results.length - rejected.length} of ${results.length}. ${reason}`);
       onSaved();
-    } catch {
-      setError("Something went wrong. Please try again.");
+    } catch (err) {
+      setError(errorMessage(err, "Something went wrong. Please try again."));
       setSaving(false);
     }
   }
@@ -175,6 +189,7 @@ export default function CleanupAssignedModal({ budgetPk, month, categories, over
                         step="0.01"
                         max={cat.assigned}
                         placeholder="0"
+                        aria-label={`Reduce ${cat.name} by`}
                         className="h-9 rounded-l-none tabular-nums"
                         value={draftVal}
                         onChange={(e) => setDraft(cat.id, e.target.value)}

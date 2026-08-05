@@ -1,11 +1,12 @@
 import { router } from "@inertiajs/react";
 import { useState } from "react";
+import { toast } from "sonner";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { SettingsRow } from "@/components/settings/SettingsRow";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { getCsrfToken } from "@/lib/api";
+import { errorMessage, jsonFetch } from "@/lib/api";
 
 export interface BudgetSummary {
   pk: number;
@@ -17,9 +18,14 @@ export interface BudgetSummary {
 interface Props {
   budget: BudgetSummary;
   onChange: (next: BudgetSummary) => void;
+  /**
+   * Extra sections — currently Members — rendered after the budget's own settings but before
+   * the destructive row, so "Delete budget" stays the last thing on the tab.
+   */
+  children?: React.ReactNode;
 }
 
-export function BudgetPanel({ budget, onChange }: Props) {
+export function BudgetPanel({ budget, onChange, children }: Props) {
   const [name, setName] = useState(budget.name);
   const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
@@ -34,19 +40,14 @@ export function BudgetPanel({ budget, onChange }: Props) {
     setError(null);
     setSavedFlash(false);
     try {
-      const res = await fetch(`/budgets/${budget.pk}/edit/`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() },
-        body: JSON.stringify({ name: name.trim() }),
-      });
-      if (res.ok) {
-        const data = (await res.json()) as { name: string };
-        onChange({ ...budget, name: data.name });
-        setSavedFlash(true);
-        setTimeout(() => setSavedFlash(false), 1500);
-      } else {
-        setError("Could not save budget name.");
-      }
+      const data = (await jsonFetch(`/budgets/${budget.pk}/edit/`, "PATCH", { name: name.trim() })) as {
+        name: string;
+      };
+      onChange({ ...budget, name: data.name });
+      setSavedFlash(true);
+      setTimeout(() => setSavedFlash(false), 1500);
+    } catch (err) {
+      setError(errorMessage(err, "Could not save budget name."));
     } finally {
       setSaving(false);
     }
@@ -55,22 +56,24 @@ export function BudgetPanel({ budget, onChange }: Props) {
   async function setDefault() {
     setSettingDefault(true);
     try {
-      await fetch(`/budgets/${budget.pk}/set-default/`, {
-        method: "POST",
-        headers: { "X-CSRFToken": getCsrfToken() },
-      });
+      await jsonFetch(`/budgets/${budget.pk}/set-default/`, "POST");
       onChange({ ...budget, is_default: true });
+    } catch (err) {
+      toast.error(errorMessage(err, "Couldn't set this budget as default."));
     } finally {
       setSettingDefault(false);
     }
   }
 
   async function deleteBudget() {
-    await fetch(`/budgets/${budget.pk}/delete/`, {
-      method: "DELETE",
-      headers: { "X-CSRFToken": getCsrfToken() },
-    });
-    router.visit("/budgets/");
+    try {
+      await jsonFetch(`/budgets/${budget.pk}/delete/`, "DELETE");
+      router.visit("/budgets/");
+    } catch (err) {
+      // The navigation used to happen regardless of the response, so a refused deletion of an
+      // entire budget looked like it had succeeded.
+      toast.error(errorMessage(err, "Couldn't delete this budget."));
+    }
   }
 
   return (
@@ -108,6 +111,8 @@ export function BudgetPanel({ budget, onChange }: Props) {
           </Button>
         )}
       </SettingsRow>
+
+      {children && <div className="border-t py-6">{children}</div>}
 
       {budget.is_owner && (
         <SettingsRow

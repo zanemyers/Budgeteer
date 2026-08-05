@@ -8,6 +8,7 @@ import {
   ChevronUp,
   Landmark,
   Pencil,
+  PiggyBank,
   Undo2,
 } from "lucide-react";
 import { Fragment, useMemo, useState } from "react";
@@ -32,7 +33,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import BankTransactionConfirmModal from "../components/BankTransactionConfirmModal";
 import { PageTourButton } from "../components/PageTourButton";
 import TransactionModal from "../components/TransactionModal";
-import { jsonFetch } from "../lib/api";
+import { errorMessage, jsonFetch } from "../lib/api";
 import { usePageTour } from "../lib/onboardingTour";
 import type {
   BankTransaction,
@@ -154,7 +155,7 @@ export default function Transactions({
           title="Click to sort, shift+click to add a secondary sort"
         >
           {label}
-          <span className={active ? "text-moss" : "text-muted-foreground/40"}>
+          <span className={active ? "text-moss" : "text-muted-foreground"}>
             {dir === "desc" ? <ChevronDown className="size-3" /> : <ChevronUp className="size-3" />}
           </span>
           {rank ? <span className="text-[0.65rem] text-muted-foreground">{rank}</span> : null}
@@ -191,8 +192,10 @@ export default function Transactions({
     return updated;
   }
 
+  // Delegates to the shared helper: reading only `err.error` meant every field-validation
+  // message from the server was discarded in favour of the generic fallback.
   function errMsg(err: unknown, fallback: string): string {
-    return (err as { error?: string })?.error ?? fallback;
+    return errorMessage(err, fallback);
   }
 
   async function saveDesc(txn: Transaction) {
@@ -378,18 +381,14 @@ export default function Transactions({
                 </button>
               )}
               {!opts.suppressStateMarkers && txn.recurring !== null && (
-                <span className="text-xs italic text-ink-quiet" role="img" aria-label="Recurring">
-                  recurring
-                </span>
+                <span className="text-xs italic text-ink-quiet">recurring</span>
               )}
               {txn.bank_linked && (
                 <span
                   className="inline-flex items-center gap-1 text-xs text-ink-quiet"
                   title="Linked to a bank transaction"
-                  role="img"
-                  aria-label="Linked to bank"
                 >
-                  <Landmark className="size-3" />
+                  <Landmark aria-hidden className="size-3" />
                   bank
                 </span>
               )}
@@ -405,6 +404,16 @@ export default function Transactions({
                 >
                   {isExpanded ? "Hide" : `${txn.lines.length} items`}
                 </button>
+              )}
+            </div>
+            {/* Stands in for the Category and Method columns, which are hidden below md. */}
+            <div className="md:hidden mt-1 text-xs text-muted-foreground flex items-center gap-1.5 flex-wrap">
+              <span>{isSplit ? "Split" : (primaryCategory?.category_name ?? "—")}</span>
+              {txn.payment_method_name && (
+                <>
+                  <span aria-hidden>·</span>
+                  <span>{txn.payment_method_name}</span>
+                </>
               )}
             </div>
           </TableCell>
@@ -449,14 +458,19 @@ export default function Transactions({
             )}
           </TableCell>
 
-          <TableCell className="text-sm text-muted-foreground">
+          <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
             {isSplit ? <span className="italic">Split</span> : primaryCategory ? primaryCategory.category_name : "—"}
           </TableCell>
 
           <TableCell className={`text-right font-medium tabular-nums ${amountClass}`}>
-            <span role="img" aria-label={isIncome ? "Income" : isTransfer ? "Transfer" : "Expense"}>
+            {/* No role="img" here: it makes the element a leaf in the accessibility tree and
+                lets aria-label replace its contents, so the amount itself never gets read.
+                The visible +/− prefix carries the direction; the sr-only word names the type
+                without hiding the number. */}
+            <span>
               {isExpense ? "−" : isIncome ? "+" : ""}
               {fmtConverted(txn.total_amount, txn.exchange_rate_to_usd, userRate, symbol)}
+              <span className="sr-only">{isIncome ? " income" : isTransfer ? " transfer" : " expense"}</span>
             </span>
             {txn.currency !== userCurrencyCode && (
               <div className="text-muted-foreground font-normal text-[0.7rem]">
@@ -465,7 +479,7 @@ export default function Transactions({
             )}
           </TableCell>
 
-          <TableCell>
+          <TableCell className="hidden md:table-cell">
             {isEditingPM ? (
               <Select
                 defaultValue={txn.payment_method ? String(txn.payment_method) : "none"}
@@ -499,7 +513,7 @@ export default function Transactions({
           </TableCell>
 
           <TableCell className="text-right whitespace-nowrap">
-            <div className="inline-flex items-center gap-1 opacity-60 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+            <div className="inline-flex items-center gap-1 opacity-60 group-hover:opacity-100 touch:opacity-100 focus-within:opacity-100 transition-opacity">
               <Button
                 variant="ghost"
                 size="icon-sm"
@@ -646,7 +660,8 @@ export default function Transactions({
                   .filter((c) => c.is_goal)
                   .map((c) => (
                     <SelectItem key={c.id} value={String(c.id)}>
-                      ◎ {c.name}
+                      <PiggyBank aria-hidden />
+                      {c.name}
                     </SelectItem>
                   ))}
               </SelectGroup>
@@ -683,7 +698,7 @@ export default function Transactions({
       </div>
 
       {transactions.length === 0 && bankTxns.length === 0 && ignoredBankTxns.length === 0 ? (
-        <Card className="border-rule shadow-none">
+        <Card>
           <CardContent className="text-muted-foreground py-12 text-center">Nothing logged for this period.</CardContent>
         </Card>
       ) : (
@@ -707,16 +722,16 @@ export default function Transactions({
               </TabsList>
 
               <TabsContent value="pending">
-                <Card className="overflow-hidden p-0 border-rule shadow-none">
+                <Card className="overflow-hidden p-0">
                   <div className="overflow-x-auto">
                     <Table>
                       <TableHeader>
                         <TableRow>
                           <TableHead>Description</TableHead>
                           <TableHead>Paid</TableHead>
-                          <TableHead>Category</TableHead>
+                          <TableHead className="hidden md:table-cell">Category</TableHead>
                           <TableHead className="text-right">Amount</TableHead>
-                          <TableHead>Method</TableHead>
+                          <TableHead className="hidden md:table-cell">Method</TableHead>
                           <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -734,10 +749,8 @@ export default function Transactions({
                                     <span
                                       className="inline-flex items-center gap-1 text-xs text-ink-quiet"
                                       title={`From ${sourceLabel}`}
-                                      role="img"
-                                      aria-label="Pending from bank"
                                     >
-                                      <Landmark className="size-3" />
+                                      <Landmark aria-hidden className="size-3" />
                                       bank
                                     </span>
                                   </div>
@@ -750,17 +763,19 @@ export default function Transactions({
                                 </div>
                               </TableCell>
                               <TableCell className="tabular-nums">{fmtDate(bt.posted_date)}</TableCell>
-                              <TableCell className="text-sm text-muted-foreground italic">Unassigned</TableCell>
+                              <TableCell className="hidden md:table-cell text-sm text-muted-foreground italic">
+                                Unassigned
+                              </TableCell>
                               <TableCell
                                 className={`text-right font-medium tabular-nums ${negative ? "text-expense" : "text-income"}`}
                               >
                                 {fmtSigned(amt, symbol)}
                               </TableCell>
-                              <TableCell>
+                              <TableCell className="hidden md:table-cell">
                                 <span className="text-muted-foreground italic">—</span>
                               </TableCell>
                               <TableCell className="text-right whitespace-nowrap">
-                                <div className="inline-flex items-center gap-1 opacity-60 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                                <div className="inline-flex items-center gap-1 opacity-60 group-hover:opacity-100 touch:opacity-100 focus-within:opacity-100 transition-opacity">
                                   <Button
                                     variant="ghost"
                                     size="icon-sm"
@@ -792,14 +807,14 @@ export default function Transactions({
               </TabsContent>
 
               <TabsContent value="ignored">
-                <Card className="overflow-hidden p-0 border-rule shadow-none">
+                <Card className="overflow-hidden p-0">
                   <div className="overflow-x-auto">
                     <Table>
                       <TableHeader>
                         <TableRow>
                           <TableHead>Description</TableHead>
                           <TableHead>Paid</TableHead>
-                          <TableHead>Category</TableHead>
+                          <TableHead className="hidden md:table-cell">Category</TableHead>
                           <TableHead>Reason</TableHead>
                           <TableHead className="text-right">Amount</TableHead>
                           <TableHead className="text-right">Actions</TableHead>
@@ -820,7 +835,7 @@ export default function Transactions({
                                       className="inline-flex items-center gap-1 text-xs"
                                       title={`From ${sourceLabel}`}
                                     >
-                                      <Landmark className="size-3" />
+                                      <Landmark aria-hidden className="size-3" />
                                       bank
                                     </span>
                                   </div>
@@ -833,7 +848,7 @@ export default function Transactions({
                                 </div>
                               </TableCell>
                               <TableCell className="tabular-nums">{fmtDate(bt.posted_date)}</TableCell>
-                              <TableCell className="text-sm italic">Ignored</TableCell>
+                              <TableCell className="hidden md:table-cell text-sm italic">Ignored</TableCell>
                               <TableCell className="max-w-[220px]">
                                 {bt.id in editReason ? (
                                   <Input
@@ -876,12 +891,12 @@ export default function Transactions({
                                 )}
                               </TableCell>
                               <TableCell
-                                className={`text-right font-medium tabular-nums ${negative ? "text-expense/70" : "text-income/70"}`}
+                                className={`text-right font-medium tabular-nums ${negative ? "text-expense" : "text-income"}`}
                               >
                                 {fmtSigned(amt, symbol)}
                               </TableCell>
                               <TableCell className="text-right whitespace-nowrap">
-                                <div className="inline-flex items-center gap-1 opacity-60 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                                <div className="inline-flex items-center gap-1 opacity-60 group-hover:opacity-100 touch:opacity-100 focus-within:opacity-100 transition-opacity">
                                   <Button
                                     variant="ghost"
                                     size="icon-sm"
@@ -903,7 +918,7 @@ export default function Transactions({
               </TabsContent>
 
               <TabsContent value="logged">
-                <Card className="overflow-hidden p-0 border-rule shadow-none">
+                <Card className="overflow-hidden p-0">
                   {rest.length === 0 ? (
                     <CardContent className="text-muted-foreground py-12 text-center">
                       Nothing recorded yet for this period.
@@ -929,7 +944,7 @@ export default function Transactions({
               </TabsContent>
 
               <TabsContent value="transfers">
-                <Card className="overflow-hidden p-0 border-rule shadow-none">
+                <Card className="overflow-hidden p-0">
                   {transfers.length === 0 ? (
                     <CardContent className="text-muted-foreground py-12 text-center">
                       No linked transfers yet. Link two halves of a money movement (e.g. checking → savings) from a

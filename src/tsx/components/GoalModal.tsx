@@ -5,7 +5,8 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { getCsrfToken } from "@/lib/api";
+import { errorMessage, jsonFetch } from "@/lib/api";
+import { useCurrencySymbol } from "@/utils/currency";
 
 export interface GoalCategory {
   id: number;
@@ -48,10 +49,13 @@ function CurrencyInput({
   min?: string;
   step?: string;
 }) {
+  // Was a hard-coded "$": every other money field uses the user's symbol, so a non-USD user
+  // saw dollars on the goal amount fields alone.
+  const symbol = useCurrencySymbol();
   return (
     <div className="flex">
       <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-input bg-muted text-muted-foreground text-sm">
-        $
+        {symbol}
       </span>
       <Input
         id={id}
@@ -108,24 +112,13 @@ export default function GoalModal({ budgetPk, goal, onClose, onSaved }: Props) {
     const method = isEdit ? "PATCH" : "POST";
 
     try {
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        const data = (await res.json()) as { errors?: Record<string, string[]> };
-        const flat = Object.values(data.errors ?? data)
-          .flat()
-          .join(" ");
-        setError(flat || "Could not save.");
-        setSaving(false);
-        return;
-      }
-      const cat = (await res.json()) as GoalCategory;
+      const cat = (await jsonFetch(url, method, body)) as GoalCategory;
       onSaved(cat);
-    } catch {
-      setError("Network error.");
+    } catch (err) {
+      // Was a bare catch reporting "Network error." for every failure, including
+      // validation rejections, and the error branch above called res.json() unguarded
+      // so an HTML error page threw straight past it.
+      setError(errorMessage(err, "Could not save."));
       setSaving(false);
     }
   }

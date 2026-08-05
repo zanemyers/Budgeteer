@@ -1,4 +1,4 @@
-import { Pencil } from "lucide-react";
+import { CornerDownRight, Pencil } from "lucide-react";
 import { useState } from "react";
 import CategoryModal from "@/components/CategoryModal";
 import { ConfirmButton } from "@/components/ConfirmButton";
@@ -60,7 +60,7 @@ export function CategoriesPanel({ budgetPk, type, categories, onCategoriesChange
       >
         <span className="flex items-center gap-2">
           <span>
-            {isChild && <span className="text-muted-foreground mr-1">↳</span>}
+            {isChild && <CornerDownRight aria-hidden className="size-3.5 text-muted-foreground mr-1 inline shrink-0" />}
             {cat.name}
           </span>
           {cat.rollover && (

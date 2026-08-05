@@ -20,15 +20,19 @@ const buttonVariants = cva(
         ghost: "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50",
         link: "text-primary underline-offset-4 hover:underline",
       },
+      // Every size was below the 44x44 minimum PRODUCT.md commits to for touch — the smallest
+      // were 24px, and every destructive row action used one. On a coarse pointer each grows
+      // to at least 44px; on a mouse the compact sizes are unchanged, so desktop density is
+      // preserved. Rows getting taller on a phone is the desired outcome, not a side effect.
       size: {
-        default: "h-9 px-4 py-2 has-[>svg]:px-3",
-        xs: "h-6 gap-1 rounded-md px-2 text-xs has-[>svg]:px-1.5 [&_svg:not([class*='size-'])]:size-3",
-        sm: "h-8 gap-1.5 rounded-md px-3 has-[>svg]:px-2.5",
-        lg: "h-10 rounded-md px-6 has-[>svg]:px-4",
-        icon: "size-9",
-        "icon-xs": "size-6 rounded-md [&_svg:not([class*='size-'])]:size-3",
-        "icon-sm": "size-8",
-        "icon-lg": "size-10",
+        default: "h-9 px-4 py-2 has-[>svg]:px-3 touch:min-h-11",
+        xs: "h-6 gap-1 rounded-md px-2 text-xs has-[>svg]:px-1.5 [&_svg:not([class*='size-'])]:size-3 touch:min-h-11 touch:px-3",
+        sm: "h-8 gap-1.5 rounded-md px-3 has-[>svg]:px-2.5 touch:min-h-11",
+        lg: "h-10 rounded-md px-6 has-[>svg]:px-4 touch:min-h-11",
+        icon: "size-9 touch:size-11",
+        "icon-xs": "size-6 rounded-md [&_svg:not([class*='size-'])]:size-3 touch:size-11",
+        "icon-sm": "size-8 touch:size-11",
+        "icon-lg": "size-10 touch:size-11",
       },
     },
     defaultVariants: {

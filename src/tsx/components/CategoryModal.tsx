@@ -7,7 +7,8 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { getCsrfToken } from "@/lib/api";
+import { errorMessage, jsonFetch } from "@/lib/api";
+import { useCurrencySymbol } from "@/utils/currency";
 
 interface CategoryShape {
   id: number;
@@ -54,6 +55,11 @@ export default function CategoryModal({
   const [parentId, setParentId] = useState(initialParent ? String(initialParent) : "none");
   const [rollover, setRollover] = useState(category?.rollover ?? false);
   const [baseAmount, setBaseAmount] = useState(category?.base_amount ?? "");
+  // A non-rollover category's target lives on monthly_budget; a rollover one's is base_amount
+  // plus whatever carried over. One field is shown for either, sourced from the right column.
+  const [monthlyBudget, setMonthlyBudget] = useState(
+    category && parseFloat(category.monthly_budget) > 0 ? category.monthly_budget : "",
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -66,6 +72,8 @@ export default function CategoryModal({
   const [newChildName, setNewChildName] = useState("");
   const [addingChild, setAddingChild] = useState(false);
   const [childError, setChildError] = useState("");
+  // Was a hard-coded "$" on the rollover base amount field.
+  const symbol = useCurrencySymbol();
 
   const eligibleParents = categories.filter(
     (c) => c.category_type === type && !c.is_goal && c.parent_id === null && (!isEdit || c.id !== category!.id),
@@ -86,6 +94,9 @@ export default function CategoryModal({
     if (type === "expense") {
       body.rollover = rollover;
       body.base_amount = rollover ? baseAmount || "0" : "0";
+      // Left alone while a category is in rollover mode, so unticking the box restores the
+      // target that was there before rather than a zero.
+      if (!rollover) body.monthly_budget = monthlyBudget || "0";
     }
 
     const url = isEdit
@@ -94,24 +105,13 @@ export default function CategoryModal({
     const method = isEdit ? "PATCH" : "POST";
 
     try {
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        const data = (await res.json()) as { errors?: Record<string, string[]> };
-        const flat = Object.values(data.errors ?? data)
-          .flat()
-          .join(" ");
-        setError(flat || "Could not save.");
-        setSaving(false);
-        return;
-      }
-      const cat = (await res.json()) as CategoryShape;
+      const cat = (await jsonFetch(url, method, body)) as CategoryShape;
       onSaved(cat);
-    } catch {
-      setError("Network error.");
+    } catch (err) {
+      // Was a bare catch reporting "Network error." for every failure, including
+      // validation rejections, and the error branch above called res.json() unguarded
+      // so an HTML error page threw straight past it.
+      setError(errorMessage(err, "Could not save."));
       setSaving(false);
     }
   }
@@ -122,41 +122,26 @@ export default function CategoryModal({
     setAddingChild(true);
     setChildError("");
     try {
-      const res = await fetch(`/budgets/${budgetPk}/categories/create/`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() },
-        body: JSON.stringify({
-          name: newChildName.trim(),
-          category_type: type,
-          parent_id: category.id,
-        }),
-      });
-      if (!res.ok) {
-        const data = (await res.json()) as { errors?: Record<string, string[]> };
-        setChildError(
-          Object.values(data.errors ?? data)
-            .flat()
-            .join(" ") || "Could not add.",
-        );
-        return;
-      }
-      const child = (await res.json()) as CategoryShape;
+      const child = (await jsonFetch(`/budgets/${budgetPk}/categories/create/`, "POST", {
+        name: newChildName.trim(),
+        category_type: type,
+        parent_id: category.id,
+      })) as CategoryShape;
       onChildSaved?.(child);
       setNewChildName("");
+    } catch (err) {
+      setChildError(errorMessage(err, "Could not add."));
     } finally {
       setAddingChild(false);
     }
   }
 
   async function deleteChild(child: CategoryShape) {
-    const res = await fetch(`/budgets/${budgetPk}/categories/${child.id}/delete/`, {
-      method: "DELETE",
-      headers: { "X-CSRFToken": getCsrfToken() },
-    });
-    if (res.ok || res.status === 204) {
+    try {
+      await jsonFetch(`/budgets/${budgetPk}/categories/${child.id}/delete/`, "DELETE");
       onChildDeleted?.(child.id);
-    } else {
-      setChildError(`Could not delete ${child.name}.`);
+    } catch (err) {
+      setChildError(errorMessage(err, `Could not delete ${child.name}.`));
     }
   }
 
@@ -224,17 +209,40 @@ export default function CategoryModal({
                   <div className="flex flex-col gap-0.5">
                     <Label htmlFor="cat-rollover">Roll over leftover balance</Label>
                     <small className="text-muted-foreground">
-                      Budget a set amount each month; unspent money carries into the next month instead of resetting —
-                      good for saving toward something bigger.
+                      Whatever you don't spend stays in the category next month instead of resetting, and counts as
+                      already assigned. Good for saving toward something bigger.
                     </small>
                   </div>
                 </div>
-                {rollover && (
-                  <div className="flex flex-col gap-2 pl-7">
-                    <Label htmlFor="cat-base">Base amount / month</Label>
+                {!rollover && (
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="cat-monthly">Monthly target</Label>
                     <div className="flex">
                       <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-input bg-muted text-muted-foreground text-sm">
-                        $
+                        {symbol}
+                      </span>
+                      <Input
+                        id="cat-monthly"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        className="rounded-l-none"
+                        placeholder="e.g. 200"
+                        value={monthlyBudget}
+                        onChange={(e) => setMonthlyBudget(e.target.value)}
+                      />
+                    </div>
+                    <small className="text-muted-foreground">
+                      What you aim to assign here each month. Optional — leave blank for no target.
+                    </small>
+                  </div>
+                )}
+                {rollover && (
+                  <div className="flex flex-col gap-2 pl-7">
+                    <Label htmlFor="cat-base">Monthly target</Label>
+                    <div className="flex">
+                      <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-input bg-muted text-muted-foreground text-sm">
+                        {symbol}
                       </span>
                       <Input
                         id="cat-base"
@@ -248,9 +256,9 @@ export default function CategoryModal({
                       />
                     </div>
                     <small className="text-muted-foreground">
-                      Budgeted automatically each month
-                      {isEdit && category?.rollover_start ? "" : ", starting this month"}. Replaces manual assigning for
-                      this category.
+                      The amount you aim to have in this category each month
+                      {isEdit && category?.rollover_start ? "" : ", starting this month"}. It sets the target only — you
+                      still assign the money, and anything carried over from last month counts toward it.
                     </small>
                   </div>
                 )}
@@ -275,6 +283,7 @@ export default function CategoryModal({
                 <div className="flex gap-2 items-center">
                   <Input
                     placeholder="Add a subcategory…"
+                    aria-label="New subcategory name"
                     value={newChildName}
                     onChange={(e) => setNewChildName(e.target.value)}
                     onKeyDown={(e) => {

@@ -1,3 +1,4 @@
+import { Check, PiggyBank } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -18,6 +19,7 @@ import {
 } from "@/components/ui/select";
 import { jsonFetch } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { todayLocal } from "@/utils/date";
 import type {
   Category,
   CurrencyOption,
@@ -91,8 +93,8 @@ function buildInitial(
   const defaultCategory = String(categories.find((c) => c.category_type === resolvedType)?.id ?? "");
   return {
     description: "",
-    due_date: new Date().toISOString().split("T")[0],
-    paid_date: new Date().toISOString().split("T")[0],
+    due_date: todayLocal(),
+    paid_date: todayLocal(),
     budget_month: "",
     notes: "",
     payment_method: "",
@@ -281,8 +283,14 @@ export default function TransactionModal({
               </Alert>
             )}
 
+            {/* A segmented control whose selection was expressed only as a background colour,
+                on the one input that decides whether money is coming in or going out.
+                aria-pressed states it; the check mark is the non-colour cue. */}
             {!isEdit && (
-              <div className="flex w-full rounded-md overflow-hidden border border-border-strong">
+              <fieldset className="flex w-full min-w-0 rounded-md overflow-hidden border border-border-strong">
+                {/* sr-only legend rather than aria-label on a div: a real fieldset/legend is
+                    the semantic grouping, and the legend is clipped so layout is unaffected. */}
+                <legend className="sr-only">Is this money going out or coming in?</legend>
                 {(["expense", "income"] as const).map((t) => {
                   const active = form.categoryType === t;
                   const activeClass =
@@ -295,8 +303,11 @@ export default function TransactionModal({
                     <button
                       type="button"
                       key={t}
+                      aria-pressed={active}
                       className={cn(
                         "flex-1 py-2 text-sm font-medium transition-colors capitalize cursor-pointer",
+                        "inline-flex items-center justify-center gap-1.5",
+                        "focus-visible:outline-2 focus-visible:outline-ring focus-visible:-outline-offset-2",
                         active ? activeClass : "bg-card hover:bg-muted",
                       )}
                       onClick={() => {
@@ -304,11 +315,12 @@ export default function TransactionModal({
                         update("lines", [{ category: "", amount: "", description: "" }]);
                       }}
                     >
+                      {active && <Check aria-hidden className="size-3.5" />}
                       {t === "income" && allLinesSF ? "Deposit" : t}
                     </button>
                   );
                 })}
-              </div>
+              </fieldset>
             )}
 
             {transaction?.linked_bank_transactions && transaction.linked_bank_transactions.length > 0 && (
@@ -558,7 +570,7 @@ export default function TransactionModal({
                 <div className="col-span-12 md:col-span-5 flex flex-col gap-1.5">
                   <Label className="text-sm">Category</Label>
                   <Select value={line.category} onValueChange={(v) => updateLine(idx, "category", v)}>
-                    <SelectTrigger className="w-full">
+                    <SelectTrigger className="w-full" aria-label={`Line ${idx + 1} category`}>
                       <SelectValue placeholder="-- Select --" />
                     </SelectTrigger>
                     <SelectContent>
@@ -584,7 +596,8 @@ export default function TransactionModal({
                                 <SelectLabel>Goals</SelectLabel>
                                 {goals.map((c) => (
                                   <SelectItem key={c.id} value={String(c.id)}>
-                                    ◎ {c.name}
+                                    <PiggyBank aria-hidden />
+                                    {c.name}
                                   </SelectItem>
                                 ))}
                               </SelectGroup>
@@ -601,6 +614,7 @@ export default function TransactionModal({
                     type="number"
                     step="0.01"
                     min="0.01"
+                    aria-label={`Line ${idx + 1} amount`}
                     value={line.amount}
                     onChange={(e) => updateLine(idx, "amount", e.target.value)}
                     required
@@ -608,7 +622,11 @@ export default function TransactionModal({
                 </div>
                 <div className="col-span-12 md:col-span-3 flex flex-col gap-1.5">
                   <Label className="text-sm">Note</Label>
-                  <Input value={line.description} onChange={(e) => updateLine(idx, "description", e.target.value)} />
+                  <Input
+                    aria-label={`Line ${idx + 1} note`}
+                    value={line.description}
+                    onChange={(e) => updateLine(idx, "description", e.target.value)}
+                  />
                 </div>
                 <div className="col-span-12 md:col-span-1">
                   {form.lines.length > 1 && (

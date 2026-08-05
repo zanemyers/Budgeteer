@@ -122,7 +122,6 @@ export interface RecurringTransaction {
   interval: number;
   start_date: string;
   end_date: string | null;
-  is_active: boolean;
   generated_through: string | null;
   next_due_date: string | null;
   created_at: string;
@@ -145,6 +144,9 @@ export interface BudgetOverviewCategory {
   activity: string;
   available: string;
   rollover: boolean;
+  base_amount: string;
+  /** Balance carried in from last month. Null for non-rollover rows. */
+  rollover_carry: string | null;
   is_goal: boolean;
   goal_target: string | null;
   goal_due_date: string | null;

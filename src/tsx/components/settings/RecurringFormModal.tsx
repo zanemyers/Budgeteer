@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,7 +14,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { getCsrfToken } from "@/lib/api";
+import { fieldErrors, jsonFetch } from "@/lib/api";
+import { todayLocal } from "@/utils/date";
 
 export interface RecurringFormCategory {
   id: number;
@@ -45,7 +45,6 @@ export interface RecurringRecord {
   interval: number;
   start_date: string;
   end_date: string | null;
-  is_active: boolean;
   payment_method: number | null;
 }
 
@@ -75,12 +74,10 @@ export function RecurringFormModal({
   const [amount, setAmount] = useState(recurring?.amount ?? "");
   const [frequency, setFrequency] = useState(recurring?.frequency ?? freqChoices[0]?.value ?? "monthly");
   const [interval, setIntervalValue] = useState(String(recurring?.interval ?? "1"));
-  const [startDate, setStartDate] = useState(recurring?.start_date ?? new Date().toISOString().split("T")[0]);
+  const [startDate, setStartDate] = useState(recurring?.start_date ?? todayLocal());
   const [endDate, setEndDate] = useState(recurring?.end_date ?? "");
   const [description, setDescription] = useState(recurring?.description ?? "");
   const [paymentMethod, setPaymentMethod] = useState(String(recurring?.payment_method ?? ""));
-  const [isActive, setIsActive] = useState(recurring?.is_active ?? true);
-  const [deleteFutureUnpaid, setDeleteFutureUnpaid] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string[]>>({});
 
@@ -99,35 +96,25 @@ export function RecurringFormModal({
       amount,
       frequency,
       start_date: startDate,
-      is_active: isActive,
+      // Always sent, even empty: clearing the end date is how a stopped schedule is restarted,
+      // and omitting the key would leave the old date in place.
+      end_date: endDate || null,
     };
     if (frequency === "every_n_months") payload.interval = parseInt(interval, 10);
-    if (endDate) payload.end_date = endDate;
     if (description) payload.description = description;
     if (paymentMethod) payload.payment_method = parseInt(paymentMethod, 10);
-    if (isEdit && deleteFutureUnpaid) payload.delete_future_unpaid = true;
 
     const url = isEdit ? `/budgets/${budgetPk}/recurring/${recurring!.id}/` : `/budgets/${budgetPk}/recurring/create/`;
 
     try {
-      const res = await fetch(url, {
-        method: isEdit ? "PATCH" : "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Requested-With": "XMLHttpRequest",
-          "X-CSRFToken": getCsrfToken(),
-        },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        const data = (await res.json()) as { errors?: Record<string, string[]> };
-        setErrors(data.errors ?? { non_field_errors: ["Something went wrong."] });
-        setSubmitting(false);
-        return;
-      }
+      await jsonFetch(url, isEdit ? "PATCH" : "POST", payload);
       onSaved();
-    } catch {
-      setErrors({ non_field_errors: ["Something went wrong."] });
+    } catch (err) {
+      // fieldErrors keeps a validation map intact and routes everything else — session
+      // expiry, a dropped connection, an HTML error page — to non_field_errors. Previously
+      // the bare catch flattened all of those into one generic string, and the branch above
+      // called res.json() unguarded so an HTML response threw past it entirely.
+      setErrors(fieldErrors(err));
       setSubmitting(false);
     }
   }
@@ -150,19 +137,6 @@ export function RecurringFormModal({
               <Alert variant="destructive">
                 <AlertDescription>{errors.non_field_errors.join(" ")}</AlertDescription>
               </Alert>
-            )}
-
-            {isEdit && (
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="delete_future_unpaid"
-                  checked={deleteFutureUnpaid}
-                  onCheckedChange={(c) => setDeleteFutureUnpaid(c === true)}
-                />
-                <Label htmlFor="delete_future_unpaid" className="font-normal text-sm">
-                  Delete and regenerate future unpaid instances with new settings
-                </Label>
-              </div>
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -319,15 +293,6 @@ export function RecurringFormModal({
                 onChange={(e) => setDescription(e.target.value)}
               />
             </div>
-
-            {isEdit && (
-              <div className="flex items-center gap-2">
-                <Checkbox id="rt-is-active" checked={isActive} onCheckedChange={(c) => setIsActive(c === true)} />
-                <Label htmlFor="rt-is-active" className="font-normal">
-                  Active
-                </Label>
-              </div>
-            )}
           </div>
 
           <DialogFooter>

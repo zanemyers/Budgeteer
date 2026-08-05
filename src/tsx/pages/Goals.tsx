@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card";
 import GoalModal, { type GoalCategory } from "../components/GoalModal";
 import { PageTourButton } from "../components/PageTourButton";
 import TransactionModal from "../components/TransactionModal";
-import { getCsrfToken } from "../lib/api";
+import { errorMessage, jsonFetch } from "../lib/api";
 import { usePageTour } from "../lib/onboardingTour";
 import type {
   BudgetOverview,
@@ -40,6 +40,11 @@ function toGoalCategory(cat: BudgetOverviewCategory): GoalCategory {
     category_type: cat.category_type,
     parent_id: cat.parent_id,
     monthly_budget: cat.budgeted,
+    rollover: cat.rollover,
+    // The overview serializer doesn't carry these two, and a goal never uses rollover
+    // accrual anyway, so they're filled with the model defaults rather than left missing.
+    base_amount: "0.00",
+    rollover_start: null,
     is_goal: cat.is_goal,
     goal_target: cat.goal_target,
     goal_due_date: cat.goal_due_date,
@@ -72,27 +77,20 @@ export default function Goals({
   }
 
   async function createTransaction(data: Partial<Transaction>) {
-    const res = await fetch(`/budgets/${budget_pk}/transactions/create/`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() },
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) {
-      const json = (await res.json()) as { errors?: Record<string, string[]> };
-      throw json.errors ?? json;
-    }
+    // jsonFetch throws the same shape this built by hand; the modal needs the throw to
+    // render its field errors.
+    await jsonFetch(`/budgets/${budget_pk}/transactions/create/`, "POST", data);
     router.reload({ only: ["overview"] });
   }
 
   async function handleDelete(cat: BudgetOverviewCategory) {
-    const res = await fetch(`/budgets/${budget_pk}/categories/${cat.id}/delete/`, {
-      method: "DELETE",
-      headers: { "X-CSRFToken": getCsrfToken() },
-    });
-    if (res.ok || res.status === 204) {
+    try {
+      await jsonFetch(`/budgets/${budget_pk}/categories/${cat.id}/delete/`, "DELETE");
       router.reload({ only: ["overview", "categories"] });
-    } else {
-      setDeleteError((prev) => ({ ...prev, [cat.id]: "Cannot delete — goal has transactions." }));
+    } catch (err) {
+      // The view already explains why a delete was refused; asserting "has transactions"
+      // here was a guess that also covered 500s and network failures.
+      setDeleteError((prev) => ({ ...prev, [cat.id]: errorMessage(err, "Couldn't delete that goal.") }));
     }
   }
 
@@ -113,7 +111,7 @@ export default function Goals({
           ? ""
           : `due ${dueDate.toLocaleDateString("en-US", { month: "short", year: "numeric" })} · ${cat.goal_months_remaining}mo left`
         : isOngoing
-          ? "↺ ongoing"
+          ? "ongoing"
           : "";
 
     const showMonthly = monthly > 0 && !isComplete;
@@ -151,7 +149,7 @@ export default function Goals({
             )}
             {dueMeta && <div className="text-ink-quiet text-[0.7rem]">{dueMeta}</div>}
           </div>
-          <div className="flex items-center gap-1 shrink-0 opacity-60 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+          <div className="flex items-center gap-1 shrink-0 opacity-60 group-hover:opacity-100 touch:opacity-100 focus-within:opacity-100 transition-opacity">
             <Button variant="ghost" size="icon-sm" onClick={() => setEditing(cat)} aria-label="Edit goal">
               <Pencil />
             </Button>
@@ -203,7 +201,7 @@ export default function Goals({
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-          <Card data-tour="goal-card" className="md:col-span-8 p-0 gap-0 overflow-hidden border-rule shadow-none">
+          <Card data-tour="goal-card" className="md:col-span-8 p-0 gap-0 overflow-hidden">
             <div className="bg-fund-soft px-4 py-2 flex justify-between items-center">
               <span className={`${SECTION_LABEL_CLASS} text-ink`}>All Goals</span>
               <div className="flex gap-2">
@@ -217,7 +215,7 @@ export default function Goals({
             </div>
             <div>{goals.map((cat) => renderGoalCard(cat))}</div>
           </Card>
-          <Card className="md:col-span-4 p-0 border-rule shadow-none h-fit">
+          <Card className="md:col-span-4 p-0 h-fit">
             <div className="px-5 py-4 flex flex-col gap-2">
               <span className={`${SECTION_LABEL_CLASS} text-ink-quiet mb-1`}>Totals</span>
               <div className="flex justify-between items-baseline">

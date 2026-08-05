@@ -1,6 +1,7 @@
 import { router, usePage } from "@inertiajs/react";
-import { Menu } from "lucide-react";
-import { useState } from "react";
+import { ChevronDown, Menu } from "lucide-react";
+import { useEffect, useState } from "react";
+import { FlashToaster } from "@/components/FlashToaster";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -9,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Toaster } from "@/components/ui/sonner";
+import { getCsrfToken } from "@/lib/api";
 import ThemeToggle from "../components/ThemeToggle";
 import { startFullTour } from "../lib/onboardingTour";
 
@@ -29,6 +30,8 @@ interface PageProps {
   budget_pk?: number;
   month?: string;
   has_investments?: boolean;
+  // Inertia's usePage generic requires an index signature; page props are an open bag.
+  [key: string]: unknown;
 }
 
 function NavLink({
@@ -63,11 +66,17 @@ function NavLink({
   );
 }
 
-function logout() {
-  void fetch("/accounts/logout/", {
-    method: "POST",
-    headers: { "X-CSRFToken": document.cookie.match(/csrftoken=([^;]+)/)?.[1] ?? "" },
-  }).then(() => router.visit("/accounts/login/"));
+async function logout() {
+  try {
+    await fetch("/accounts/logout/", {
+      method: "POST",
+      headers: { "X-CSRFToken": getCsrfToken() },
+    });
+  } catch {
+    // Fall through to the redirect regardless: the session may already be gone, and leaving
+    // the user on an authenticated-looking page is worse than an extra bounce through login.
+  }
+  router.visit("/accounts/login/");
 }
 
 function UserMenu({ user, budgetPk }: { user: AuthUser; budgetPk?: number }) {
@@ -79,7 +88,7 @@ function UserMenu({ user, budgetPk }: { user: AuthUser; budgetPk?: number }) {
             <img src={user.gravatar} alt={user.name} width="26" height="26" className="rounded-full" />
           </span>
           <span className="sidebar-user-name">{user.email}</span>
-          <span className="sidebar-user-chevron">▾</span>
+          <ChevronDown aria-hidden className="sidebar-user-chevron size-3.5" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="start" className="w-56">
@@ -104,6 +113,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { props, url } = usePage<PageProps>();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const user = props.auth?.user;
+
+  useEffect(() => {
+    if (!sidebarOpen) return;
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSidebarOpen(false);
+    };
+    document.addEventListener("keydown", onEsc);
+    return () => document.removeEventListener("keydown", onEsc);
+  }, [sidebarOpen]);
+
   const sidebarBudget = props.current_budget ?? null;
   const sidebarBudgetPk = props.budget_pk ?? sidebarBudget?.pk;
   const month = props.month;
@@ -114,7 +133,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen">
-      <Toaster position="bottom-right" richColors closeButton />
+      <FlashToaster />
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[60] focus:rounded-md focus:bg-popover focus:px-3 focus:py-2 focus:text-sm focus:outline-2 focus:outline-ring"
+      >
+        Skip to content
+      </a>
       {/* Mobile overlay */}
       {sidebarOpen && (
         <button
@@ -130,13 +155,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         className="sidebar fixed lg:static inset-y-0 left-0 z-50 lg:z-auto"
         data-sidebar-open={sidebarOpen || undefined}
       >
-        <style>{`
-          @media (max-width: 1023px) {
-            [data-sidebar-open] { transform: translateX(0) !important; }
-            .sidebar:not([data-sidebar-open]) { transform: translateX(-100%); }
-          }
-        `}</style>
-
         {/* Brand */}
         <div className="sidebar-brand-wrap">
           <a href="/" className="sidebar-brand">
@@ -160,7 +178,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* Nav */}
-        <nav className="sidebar-nav">
+        <nav aria-label="Main" className="sidebar-nav">
           {user ? (
             <>
               {sidebarBudgetPk ? (
@@ -177,9 +195,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     title={`${sidebarBudget?.name ?? "Budget"} — switch budget`}
                   >
                     <span className="truncate">{sidebarBudget?.name || "Current Budget"}</span>
-                    <span aria-hidden className="text-ink-quiet text-xs shrink-0">
-                      ▾
-                    </span>
+                    <ChevronDown aria-hidden className="size-3.5 text-ink-quiet shrink-0" />
                   </a>
                   <NavLink
                     href={`/budgets/${sidebarBudgetPk}/`}
@@ -259,7 +275,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </a>
         </header>
 
-        <main className="grow flex flex-col p-4 lg:p-6">{children}</main>
+        <main id="main" className="grow flex flex-col p-4 lg:p-6">
+          {children}
+        </main>
 
         <footer className="shrink-0 border-t px-4 py-2">
           <p className="text-sm text-muted-foreground">© Budgeteer {new Date().getFullYear()}</p>

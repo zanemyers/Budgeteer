@@ -7,7 +7,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.db import transaction as db_transaction
 from django.db.models import Q, Sum
-from django.db.models.constraints import UniqueConstraint
+from django.db.models.constraints import CheckConstraint, UniqueConstraint
 
 
 def add_months(d: datetime.date, months: int) -> datetime.date:
@@ -506,14 +506,19 @@ class RecurringTransaction(models.Model):
         help_text="Number of months between occurrences. Used only when frequency is 'Every N Months'.",
     )
     start_date = models.DateField(help_text="Date of the first occurrence.")
+    # Stopping a schedule is an end date, not a flag. `next_due_date_after` and
+    # `generate_instances_up_to` both already honour it, so a separate is_active boolean only
+    # gave two ways to express the same state — and PaySchedule never had one.
     end_date = models.DateField(null=True, blank=True, help_text="No new instances are generated after this date.")
-    is_active = models.BooleanField(default=True)
     generated_through = models.DateField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["name"]
+        constraints = [
+            CheckConstraint(condition=Q(interval__gte=1), name="recurring_interval_at_least_one"),
+        ]
 
     def __str__(self) -> str:
         return f"{self.name} ({self.get_frequency_display()})"
@@ -532,7 +537,10 @@ class RecurringTransaction(models.Model):
         if self.frequency == self.FREQ_MONTHLY:
             months = 1
         elif self.frequency == self.FREQ_EVERY_N:
-            months = self.interval
+            # Clamped to >= 1: a zero interval would return `date` unchanged, making every
+            # caller that walks forward (next_due_date_after, generate_instances_up_to) spin
+            # forever. The DB constraint and the view both reject 0, this is the last line.
+            months = max(1, self.interval)
         else:  # annually
             months = 12
         month = date.month + months
@@ -667,6 +675,22 @@ class Transaction(models.Model):
 
     class Meta:
         ordering = ["-due_date"]
+        constraints = [
+            # Both generators create their instances with get_or_create(schedule, due_date),
+            # which is only atomic when a unique constraint backs the lookup. Without these,
+            # the nightly cron overlapping an on-demand run duplicates paychecks and bills.
+            # Partial, because manually-entered transactions have both FKs null.
+            UniqueConstraint(
+                fields=["pay_schedule", "due_date"],
+                condition=Q(pay_schedule__isnull=False),
+                name="unique_pay_schedule_instance_per_due_date",
+            ),
+            UniqueConstraint(
+                fields=["recurring", "due_date"],
+                condition=Q(recurring__isnull=False),
+                name="unique_recurring_instance_per_due_date",
+            ),
+        ]
 
     def __str__(self) -> str:
         return f"{self.description} — {self.due_date}"

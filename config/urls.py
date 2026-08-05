@@ -30,8 +30,6 @@ urlpatterns += [
     path("", SiteIndexView.as_view(), name="site_index"),
     path("onboarding/", OnboardingView.as_view(), name="onboarding"),
     path("-/", include("django_alive.urls")),
-    path("500/", http_500),
-    path("404/", http_404),
     path("accounts/history/", BudgetHistoryView.as_view(), name="budget_history"),
     path("accounts/settings/", AccountSettingsView.as_view(), name="account_settings"),
     path("accounts/avatar/", AvatarUploadView.as_view(), name="account_avatar"),
@@ -67,6 +65,13 @@ if settings.DEBUG is True:
     urlpatterns += [
         path("__debug__/", include(debug_toolbar.urls)),
         path("admin/doc/", include("django.contrib.admindocs.urls")),
+        # Error-page previews. Kept behind DEBUG so they aren't a public exception trigger.
+        path("500/", http_500),
+        path("404/", http_404),
     ]
 
-urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+# Serve user-uploaded media in development only, and only when both settings are real.
+# A blank MEDIA_URL resolves to "/", which would make this a catch-all that serves every
+# file in the project root (.env included) and shadows the custom 404 handler.
+if settings.DEBUG and settings.MEDIA_ROOT and settings.MEDIA_URL not in ("", "/"):
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

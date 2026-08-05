@@ -95,21 +95,27 @@ const TOURS: Record<TourStage, DriveStep[]> = {
         description: "Each tab configures one part of the budget. Here is a look at each.",
       },
     },
-    tabStep("budget", "Budget", "Rename this budget, make it your default, or delete it."),
+    tabStep(
+      "budget",
+      "Budget",
+      "Rename this budget, make it your default, and invite a partner or household member. Deleting the budget lives here too.",
+    ),
+    tabStep(
+      "categories",
+      "Categories",
+      "Where income is recorded, and the spending envelopes it gets assigned to. Group them and set a monthly target for each.",
+    ),
     tabStep(
       "pay-schedule",
       "Pay schedule",
       "Describe how you are paid so income lands in the right month and matches automatically.",
     ),
-    tabStep("expense", "Expense categories", "Your spending envelopes. Group them and set a monthly target for each."),
-    tabStep("income", "Income categories", "Where paychecks and other income are recorded."),
-    tabStep("payment-methods", "Payment methods", "The accounts and cards you spend from."),
     tabStep(
       "recurring",
       "Recurring transactions",
       "Bills and subscriptions that repeat. Budgeteer schedules them for you.",
     ),
-    tabStep("members", "Members", "Invite a partner or household member and choose who can manage the budget."),
+    tabStep("payment-methods", "Payment methods", "The accounts and cards you spend from."),
   ],
   account: [
     {
@@ -152,10 +158,12 @@ const setFullRun = (budgetPk: number) => sessionStorage.setItem(FLAG, String(bud
 const clearFullRun = () => sessionStorage.removeItem(FLAG);
 
 function markOnboarded() {
+  // Silent by design: if this fails the tour simply offers itself again, which is a far
+  // better outcome than an error toast. The catch is here to avoid an unhandled rejection.
   void fetch("/onboarding/", {
     method: "POST",
     headers: { "X-CSRFToken": getCsrfToken(), "X-Requested-With": "XMLHttpRequest" },
-  });
+  }).catch(() => {});
 }
 
 /** Run one stage's tour. In full mode, advances to the next stage on completion. */

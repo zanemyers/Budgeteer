@@ -1,11 +1,12 @@
 import { router } from "@inertiajs/react";
-import { Pause, Pencil, RotateCcw } from "lucide-react";
+import { Pencil } from "lucide-react";
 import { Fragment, useState } from "react";
+import { toast } from "sonner";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { getCsrfToken } from "@/lib/api";
+import { errorMessage, jsonFetch } from "@/lib/api";
 import { fmt, useCurrencySymbol } from "@/utils/currency";
 import { fmtDate } from "@/utils/date";
 import {
@@ -63,37 +64,12 @@ export function RecurringPanel({ budgetPk, recurring, categories, paymentMethods
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<RecurringPanelItem | null>(null);
 
-  async function handleDeactivate(rt: RecurringPanelItem) {
-    const res = await fetch(`/budgets/${budgetPk}/recurring/${rt.id}/`, {
-      method: "DELETE",
-      headers: { "X-CSRFToken": getCsrfToken() },
-    });
-    if (res.ok || res.status === 204) {
-      onChange(
-        recurring.map((r) =>
-          r.id === rt.id ? { ...r, is_active: false, end_date: new Date().toISOString().split("T")[0] } : r,
-        ),
-      );
-    }
-  }
-
-  async function handleReactivate(rt: RecurringPanelItem) {
-    const res = await fetch(`/budgets/${budgetPk}/recurring/${rt.id}/`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() },
-      body: JSON.stringify({ is_active: true, end_date: null }),
-    });
-    if (!res.ok) return;
-    onChange(recurring.map((r) => (r.id === rt.id ? { ...r, is_active: true, end_date: null } : r)));
-  }
-
   async function handleDelete(rt: RecurringPanelItem) {
-    const res = await fetch(`/budgets/${budgetPk}/recurring/${rt.id}/?permanent=true`, {
-      method: "DELETE",
-      headers: { "X-CSRFToken": getCsrfToken() },
-    });
-    if (res.ok || res.status === 204) {
+    try {
+      await jsonFetch(`/budgets/${budgetPk}/recurring/${rt.id}/`, "DELETE");
       onChange(recurring.filter((r) => r.id !== rt.id));
+    } catch (err) {
+      toast.error(errorMessage(err, "Couldn't delete that recurring transaction."));
     }
   }
 
@@ -115,11 +91,11 @@ export function RecurringPanel({ budgetPk, recurring, categories, paymentMethods
       </div>
 
       {recurring.length === 0 ? (
-        <Card className="border-rule shadow-none">
+        <Card>
           <CardContent className="text-ink-quiet py-12 text-center">No recurring transactions yet.</CardContent>
         </Card>
       ) : (
-        <Card className="overflow-hidden p-0 border-rule shadow-none">
+        <Card className="overflow-hidden p-0">
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
@@ -129,8 +105,8 @@ export function RecurringPanel({ budgetPk, recurring, categories, paymentMethods
                   <TableHead className="w-[16%]">Payment Method</TableHead>
                   <TableHead className="w-[11%] text-right">Amount</TableHead>
                   <TableHead className="w-[12%]">Start</TableHead>
-                  <TableHead className="w-[9%]">Status</TableHead>
-                  <TableHead className="w-[13%] text-right">Actions</TableHead>
+                  <TableHead className="w-[12%]">Next due</TableHead>
+                  <TableHead className="w-[18%] text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -147,7 +123,7 @@ export function RecurringPanel({ budgetPk, recurring, categories, paymentMethods
                       </TableCell>
                     </TableRow>
                     {group.items.map((rt) => (
-                      <TableRow key={rt.id} className={`group ${!rt.is_active ? "text-ink-quiet" : ""}`}>
+                      <TableRow key={rt.id} className="group">
                         <TableCell>
                           <span className="font-medium">{rt.name}</span>
                         </TableCell>
@@ -162,15 +138,13 @@ export function RecurringPanel({ budgetPk, recurring, categories, paymentMethods
                           {fmt(rt.amount, symbol)}
                         </TableCell>
                         <TableCell className="text-sm tabular-nums">{fmtDate(rt.start_date)}</TableCell>
-                        <TableCell>
-                          {rt.is_active ? (
-                            <span className="text-xs text-moss font-medium">Active</span>
-                          ) : (
-                            <span className="text-xs italic text-ink-quiet">inactive</span>
-                          )}
+                        {/* Empty means the schedule has stopped — it is past its end date. That
+                            reading replaces the Active/inactive status column. */}
+                        <TableCell className="text-sm tabular-nums">
+                          {rt.next_due_date ? fmtDate(rt.next_due_date) : <span className="text-ink-quiet">—</span>}
                         </TableCell>
                         <TableCell className="text-right whitespace-nowrap">
-                          <div className="inline-flex gap-1 items-center opacity-60 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                          <div className="inline-flex gap-1 items-center opacity-60 group-hover:opacity-100 touch:opacity-100 focus-within:opacity-100 transition-opacity">
                             <Button
                               variant="ghost"
                               size="icon-sm"
@@ -182,15 +156,6 @@ export function RecurringPanel({ budgetPk, recurring, categories, paymentMethods
                             >
                               <Pencil />
                             </Button>
-                            {rt.is_active ? (
-                              <Button variant="ghost" size="xs" onClick={() => void handleDeactivate(rt)}>
-                                <Pause className="size-3" /> Deactivate
-                              </Button>
-                            ) : (
-                              <Button variant="ghost" size="xs" onClick={() => void handleReactivate(rt)}>
-                                <RotateCcw className="size-3" /> Reactivate
-                              </Button>
-                            )}
                             <ConfirmButton size="xs" onConfirm={() => handleDelete(rt)} label="Delete" />
                           </div>
                         </TableCell>

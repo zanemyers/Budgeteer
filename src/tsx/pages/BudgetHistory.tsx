@@ -108,7 +108,7 @@ export default function BudgetHistory({ budgets }: Props) {
         .archive {
           --rule: var(--border-strong);
           --grid-gap: 0.375rem;
-          font-family: "DM Sans", system-ui, -apple-system, sans-serif;
+          font-family: "Inter", system-ui, -apple-system, sans-serif;
           padding: 0.5rem 0 5rem;
           max-width: 56rem;
           margin: 0 auto;
@@ -119,7 +119,7 @@ export default function BudgetHistory({ budgets }: Props) {
         }
 
         .archive-eyebrow {
-          font-family: "DM Mono", ui-monospace, monospace;
+          font-family: ui-monospace, monospace;
           font-size: 0.6875rem;
           font-weight: 500;
           letter-spacing: 0.32em;
@@ -139,7 +139,7 @@ export default function BudgetHistory({ budgets }: Props) {
         }
 
         .archive-headline {
-          font-family: "DM Sans", system-ui, sans-serif;
+          font-family: "Inter", system-ui, sans-serif;
           font-size: clamp(2rem, 5vw, 3rem);
           font-weight: 600;
           line-height: 1.05;
@@ -188,7 +188,7 @@ export default function BudgetHistory({ budgets }: Props) {
           margin-bottom: 0.625rem;
         }
         .archive-folio {
-          font-family: "DM Mono", ui-monospace, monospace;
+          font-family: ui-monospace, monospace;
           font-size: 0.6875rem;
           font-weight: 500;
           letter-spacing: 0.18em;
@@ -201,7 +201,7 @@ export default function BudgetHistory({ budgets }: Props) {
         }
 
         .archive-default-tag {
-          font-family: "DM Mono", ui-monospace, monospace;
+          font-family: ui-monospace, monospace;
           font-size: 0.625rem;
           font-weight: 600;
           letter-spacing: 0.18em;
@@ -213,7 +213,7 @@ export default function BudgetHistory({ budgets }: Props) {
         }
 
         .archive-title {
-          font-family: "DM Sans", system-ui, sans-serif;
+          font-family: "Inter", system-ui, sans-serif;
           font-size: clamp(1.5rem, 3vw, 1.875rem);
           font-weight: 600;
           line-height: 1.1;
@@ -223,7 +223,7 @@ export default function BudgetHistory({ budgets }: Props) {
         }
 
         .archive-meta {
-          font-family: "DM Mono", ui-monospace, monospace;
+          font-family: ui-monospace, monospace;
           font-size: 0.7rem;
           letter-spacing: 0.12em;
           text-transform: uppercase;
@@ -249,7 +249,7 @@ export default function BudgetHistory({ budgets }: Props) {
           margin-bottom: 0.625rem;
         }
         .archive-year-num {
-          font-family: "DM Sans", system-ui, sans-serif;
+          font-family: "Inter", system-ui, sans-serif;
           font-size: 1.5rem;
           font-weight: 600;
           line-height: 1;
@@ -266,7 +266,7 @@ export default function BudgetHistory({ budgets }: Props) {
           margin-bottom: 0.4rem;
         }
         .archive-year-meta {
-          font-family: "DM Mono", ui-monospace, monospace;
+          font-family: ui-monospace, monospace;
           font-size: 0.6875rem;
           font-weight: 500;
           letter-spacing: 0.18em;
@@ -289,7 +289,7 @@ export default function BudgetHistory({ budgets }: Props) {
           justify-content: center;
           height: 2.625rem;
           padding: 0;
-          font-family: "DM Mono", ui-monospace, monospace;
+          font-family: ui-monospace, monospace;
           font-size: 0.7rem;
           font-weight: 500;
           letter-spacing: 0.18em;

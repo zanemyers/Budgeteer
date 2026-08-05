@@ -48,7 +48,21 @@ class TestTransactionTotal(BaseTest):
             due_date=datetime.date.today(),
         )
         TransactionLine.objects.create(transaction=t, category=self.cat, amount="50.00", amount_usd="50.00")
-        self.assertEqual(t.transaction_type, Category.TYPE_EXPENSE)
+        # The type is derived from the first line, not stored: nothing populates the
+        # `transaction_type` column on save, so it stays blank unless set explicitly.
+        self.assertEqual(t.transaction_type, "")
+        self.assertEqual(t.derive_transaction_type(), Category.TYPE_EXPENSE)
+
+    def test_explicit_transaction_type_wins_over_the_derived_one(self):
+        t = Transaction.objects.create(
+            budget=self.budget,
+            created_by=self.user,
+            description="Moved to savings",
+            due_date=datetime.date.today(),
+            transaction_type="transfer",
+        )
+        TransactionLine.objects.create(transaction=t, category=self.cat, amount="50.00", amount_usd="50.00")
+        self.assertEqual(t.derive_transaction_type(), "transfer")
 
 
 class TestRecurringGeneration(BaseTest):

@@ -38,8 +38,17 @@ class TestViteAssetDevModeOn(BaseViteTest):
             assert result == '<script type="module" src="http://example.com:9999/static/js/main.js"></script>'
 
     def test_css_asset(self):
+        # In dev mode the stylesheet is served straight off the Vite dev server, unhashed.
+        # app.html requests 'css/main.css' this way, so returning "" here would leave the
+        # SPA unstyled in development.
         result = vite_asset("js/main.css")
-        assert result == ""
+        assert result == '<link rel="stylesheet" href="http://localhost:3000/public/static/js/main.css">'
+
+        with override_settings(
+            VITE_SERVER_HOST=VITE_SERVER_HOST, VITE_SERVER_PORT=VITE_SERVER_PORT, STATIC_URL=STATIC_URL
+        ):
+            result = vite_asset("js/main.css")
+            assert result == '<link rel="stylesheet" href="http://example.com:9999/static/js/main.css">'
 
 
 @override_settings(VITE_DEV_MODE=False, VITE_MANIFEST_FILE=VITE_MANIFEST_FILE)

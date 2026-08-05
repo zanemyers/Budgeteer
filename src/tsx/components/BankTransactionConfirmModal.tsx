@@ -1,4 +1,4 @@
-import { Plus, Trash2 } from "lucide-react";
+import { PiggyBank, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -416,7 +416,7 @@ export default function BankTransactionConfirmModal({ bankTxn, budgetPk, categor
                 <div key={idx} className="grid grid-cols-12 gap-2 items-center">
                   <div className="col-span-6">
                     <Select value={line.category} onValueChange={(v) => updateLine(idx, { category: v })}>
-                      <SelectTrigger size="sm" className="w-full">
+                      <SelectTrigger size="sm" className="w-full" aria-label={`Split ${idx + 1} category`}>
                         <SelectValue placeholder="Pick a category" />
                       </SelectTrigger>
                       <SelectContent>
@@ -449,7 +449,8 @@ export default function BankTransactionConfirmModal({ bankTxn, budgetPk, categor
                                 .filter((c) => c.is_goal)
                                 .map((c) => (
                                   <SelectItem key={c.id} value={String(c.id)}>
-                                    ◎ {c.name}
+                                    <PiggyBank aria-hidden />
+                                    {c.name}
                                   </SelectItem>
                                 ))}
                             </SelectGroup>
@@ -463,12 +464,14 @@ export default function BankTransactionConfirmModal({ bankTxn, budgetPk, categor
                     type="number"
                     step="0.01"
                     min="0.01"
+                    aria-label={`Split ${idx + 1} amount`}
                     value={line.amount}
                     onChange={(e) => updateLine(idx, { amount: e.target.value })}
                   />
                   <Input
                     className="col-span-2"
                     placeholder="Note"
+                    aria-label={`Split ${idx + 1} note`}
                     value={line.description}
                     onChange={(e) => updateLine(idx, { description: e.target.value })}
                   />

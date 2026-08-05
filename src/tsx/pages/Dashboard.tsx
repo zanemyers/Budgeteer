@@ -1,6 +1,7 @@
 import { router } from "@inertiajs/react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, RotateCcw } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -9,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import AssignModal from "../components/AssignModal";
 import CleanupAssignedModal from "../components/CleanupAssignedModal";
 import TransactionModal from "../components/TransactionModal";
-import { getCsrfToken } from "../lib/api";
+import { errorMessage, jsonFetch } from "../lib/api";
 import { usePageTour } from "../lib/onboardingTour";
 import type {
   BudgetOverview,
@@ -47,6 +48,8 @@ interface CurrencyEditCellProps {
   saving: boolean;
   valueClass?: string;
   title?: string;
+  /** Right for the numeric column; left for the target line under a category name. */
+  align?: "left" | "right";
 }
 
 function CurrencyEditCell({
@@ -60,11 +63,12 @@ function CurrencyEditCell({
   saving,
   valueClass,
   title,
+  align = "right",
 }: CurrencyEditCellProps) {
   const numeric = parseFloat(value);
   if (editing !== undefined) {
     return (
-      <div className="flex justify-end">
+      <div className={align === "right" ? "flex justify-end" : "flex justify-start"}>
         <div className="flex items-center gap-0 max-w-[130px]">
           <span className="inline-flex items-center px-2 h-8 rounded-l-md border border-r-0 border-input bg-muted text-muted-foreground text-sm">
             {symbol}
@@ -91,7 +95,7 @@ function CurrencyEditCell({
   return (
     <button
       type="button"
-      className="text-right cursor-pointer rounded-sm hover:underline focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
+      className={`${align === "right" ? "text-right" : "text-left"} cursor-pointer rounded-sm hover:underline focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2`}
       title={title}
       onClick={onStart}
     >
@@ -101,6 +105,33 @@ function CurrencyEditCell({
         <span className="text-muted-foreground italic">—</span>
       )}
     </button>
+  );
+}
+
+/**
+ * One figure in the month's summary strip.
+ *
+ * `accent` marks the box that carries an action rather than just a number, so the four don't
+ * read as an identical tiled row — DESIGN.md calls that out as the default-finance-dashboard
+ * reflex and asks for size and emphasis to vary deliberately.
+ */
+function SummaryBox({
+  label,
+  accent,
+  children,
+}: {
+  label: string;
+  accent?: "moss" | "alarm";
+  children: React.ReactNode;
+}) {
+  const band = accent === "moss" ? "bg-moss-soft" : accent === "alarm" ? "bg-expense-soft" : "";
+  return (
+    <Card className="p-0 gap-0 overflow-hidden">
+      <div className={`px-4 py-2 ${band}`}>
+        <span className={`${SECTION_LABEL_CLASS} ${accent ? "text-ink" : "text-ink-quiet"}`}>{label}</span>
+      </div>
+      <div className="px-4 py-3">{children}</div>
+    </Card>
   );
 }
 
@@ -120,6 +151,10 @@ export default function Dashboard({
   const [editingBudgeted, setEditingBudgeted] = useState<Record<number, string>>({});
   const [savingAssigned, setSavingAssigned] = useState<Record<number, boolean>>({});
   const [savingBudgeted, setSavingBudgeted] = useState<Record<number, boolean>>({});
+  // The last value submitted per cell. The input commits on blur as well as Enter, so without
+  // this a failed save — which deliberately keeps the cell editable so the typed value isn't
+  // lost — re-sent the same value and re-toasted on every subsequent blur.
+  const [lastTried, setLastTried] = useState<Record<string, string>>({});
   const [addTransactionType, setAddTransactionType] = useState<"income" | "expense" | null>(null);
   const [assigning, setAssigning] = useState(false);
   const [cleaning, setCleaning] = useState(false);
@@ -133,32 +168,43 @@ export default function Dashboard({
     router.get(`/budgets/${budget_pk}/`, { month: m }, { preserveState: false });
   }
 
+  function clearEditAssigned(id: number) {
+    setEditingAssigned((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  }
+
+  function clearEditBudgeted(id: number) {
+    setEditingBudgeted((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  }
+
   async function saveAssigned(cat: BudgetOverviewCategory) {
     const val = editingAssigned[cat.id];
-    if (val === undefined || val === "") {
-      setEditingAssigned((prev) => {
-        const next = { ...prev };
-        delete next[cat.id];
-        return next;
-      });
+    if (val !== undefined && val === lastTried[`assigned:${cat.id}`]) return;
+    // Nothing to do when the field is empty, or unchanged — it opens seeded with the persisted
+    // value, so clicking in and out without editing would otherwise write on every blur.
+    if (val === undefined || val === "" || val === cat.assigned) {
+      clearEditAssigned(cat.id);
       return;
     }
     setSavingAssigned((prev) => ({ ...prev, [cat.id]: true }));
+    setLastTried((prev) => ({ ...prev, [`assigned:${cat.id}`]: val }));
     try {
-      const res = await fetch(`/budgets/${budget_pk}/category-budgets/${cat.id}/`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() },
-        body: JSON.stringify({ assigned: val, month }),
-      });
-      if (res.ok || res.redirected) {
-        router.reload({ only: ["overview"] });
-      }
+      await jsonFetch(`/budgets/${budget_pk}/category-budgets/${cat.id}/`, "PATCH", { assigned: val, month });
+      // Only discard the edit buffer once the save actually landed. Clearing it in a
+      // `finally` threw away what the user typed on failure and silently restored the old
+      // number, which is indistinguishable from a successful save.
+      clearEditAssigned(cat.id);
+      router.reload({ only: ["overview"] });
+    } catch (err) {
+      toast.error(errorMessage(err, "Couldn't save that amount."));
     } finally {
-      setEditingAssigned((prev) => {
-        const next = { ...prev };
-        delete next[cat.id];
-        return next;
-      });
       setSavingAssigned((prev) => {
         const next = { ...prev };
         delete next[cat.id];
@@ -169,30 +215,22 @@ export default function Dashboard({
 
   async function saveBudgeted(cat: BudgetOverviewCategory) {
     const val = editingBudgeted[cat.id];
-    if (val === undefined || val === "") {
-      setEditingBudgeted((prev) => {
-        const next = { ...prev };
-        delete next[cat.id];
-        return next;
-      });
+    if (val !== undefined && val === lastTried[`budgeted:${cat.id}`]) return;
+    // Nothing to do when the field is empty, or unchanged — it opens seeded with the persisted
+    // value, so clicking in and out without editing would otherwise write on every blur.
+    if (val === undefined || val === "" || val === cat.budgeted) {
+      clearEditBudgeted(cat.id);
       return;
     }
     setSavingBudgeted((prev) => ({ ...prev, [cat.id]: true }));
+    setLastTried((prev) => ({ ...prev, [`budgeted:${cat.id}`]: val }));
     try {
-      const res = await fetch(`/budgets/${budget_pk}/categories/${cat.id}/edit/`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() },
-        body: JSON.stringify({ monthly_budget: val }),
-      });
-      if (res.ok) {
-        router.reload({ only: ["overview"] });
-      }
+      await jsonFetch(`/budgets/${budget_pk}/categories/${cat.id}/edit/`, "PATCH", { monthly_budget: val });
+      clearEditBudgeted(cat.id);
+      router.reload({ only: ["overview"] });
+    } catch (err) {
+      toast.error(errorMessage(err, "Couldn't save that budget."));
     } finally {
-      setEditingBudgeted((prev) => {
-        const next = { ...prev };
-        delete next[cat.id];
-        return next;
-      });
       setSavingBudgeted((prev) => {
         const next = { ...prev };
         delete next[cat.id];
@@ -202,34 +240,33 @@ export default function Dashboard({
   }
 
   async function createTransaction(data: Partial<Transaction>) {
-    const res = await fetch(`/budgets/${budget_pk}/transactions/create/`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() },
-      body: JSON.stringify(data),
-    });
-    if (!res.ok) {
-      const json = (await res.json()) as { errors?: Record<string, string[]> };
-      throw json.errors ?? json;
-    }
+    // jsonFetch throws the same `errors ?? body` shape this used to build by hand, and also
+    // catches the redirect-to-login case. The modal relies on the throw to show field errors.
+    await jsonFetch(`/budgets/${budget_pk}/transactions/create/`, "POST", data);
     router.reload({ only: ["overview", "pending_count"] });
   }
 
   function renderCategoryRow(cat: BudgetOverviewCategory, isChild = false) {
-    const available = parseFloat(cat.available);
     const budgeted = parseFloat(cat.budgeted);
     const assigned = parseFloat(cat.assigned);
-    const activity = parseFloat(cat.activity);
-    const isExpense = cat.category_type === "expense";
+    // A carried balance pre-fills `assigned` without being charged to Ready to Assign, so it's
+    // worth explaining wherever that figure appears.
+    const carried = cat.rollover_carry !== null && parseFloat(cat.rollover_carry) > 0;
 
-    const budgetedClass = budgeted > 0 && activity > budgeted ? "text-expense" : "";
-    const assignedClass = budgeted > 0 && assigned === budgeted ? "text-moss" : "";
-    const availableClass = isExpense
-      ? available < 0
-        ? "text-expense font-semibold"
-        : available === 0
-          ? "text-muted-foreground"
-          : "text-moss"
-      : "text-moss";
+    // Epsilon rather than `===` because both sides come from parseFloat over serialized decimals.
+    const onTarget = Math.abs(assigned - budgeted) < 0.005;
+    // Guarded on a target existing: without it, any assignment to a category with no target read
+    // as "over", which is a comparison against nothing — and now that the target is hidden once
+    // met, there would be no visible figure to explain the red.
+    const overTarget = budgeted > 0 && assigned - budgeted > 0.005;
+    const overBy = assigned - budgeted;
+    // The target is a reference for a row still working toward one. Once assigned has reached or
+    // passed it, restating it is clutter — the colour says it was met, and the overage says by how
+    // much it was passed.
+    const showTarget = budgeted - assigned > 0.005;
+    // Reuses the epsilon: an exact === on parseFloat results missed rows that were on target by
+    // any floating-point residue.
+    const assignedClass = budgeted > 0 && onTarget ? "text-moss" : "";
 
     return (
       <TableRow key={cat.id}>
@@ -241,73 +278,76 @@ export default function Dashboard({
             {cat.name}
           </a>
           {cat.rollover && !cat.is_goal && (
-            <span
-              className="ml-1.5 text-moss"
-              title="Leftover rolls over to next month"
-              role="img"
-              aria-label="Rolls over"
-            >
-              ↻
+            <span className="ml-1.5 inline-flex text-moss" title="Leftover rolls over to next month">
+              <RotateCcw aria-hidden className="size-3" />
+              <span className="sr-only">Rolls over</span>
             </span>
           )}
         </TableCell>
         <TableCell className="text-right">
-          {cat.rollover && !cat.is_goal ? (
-            <span className={`tabular-nums ${budgetedClass}`} title="Auto-budgeted: base + carried-over balance">
-              {fmt(cat.budgeted, symbol)}
-            </span>
-          ) : (
-            <CurrencyEditCell
-              symbol={symbol}
-              value={cat.budgeted}
-              editing={editingBudgeted[cat.id]}
-              onStart={() => setEditingBudgeted((prev) => ({ ...prev, [cat.id]: "" }))}
-              onChange={(v) => setEditingBudgeted((prev) => ({ ...prev, [cat.id]: v }))}
-              onCommit={() => void saveBudgeted(cat)}
-              onCancel={() =>
-                setEditingBudgeted((prev) => {
-                  const n = { ...prev };
-                  delete n[cat.id];
-                  return n;
-                })
-              }
-              saving={savingBudgeted[cat.id] ?? false}
-              valueClass={budgetedClass}
-              title="Click to set monthly target"
-            />
-          )}
-        </TableCell>
-        <TableCell className="text-right">
-          {cat.rollover && !cat.is_goal ? (
-            <span
-              className="tabular-nums text-muted-foreground"
-              title="Rollover categories aren't assigned from Ready to Assign — the base sets the budget"
-            >
-              —
-            </span>
-          ) : (
+          <div className="flex flex-wrap items-baseline justify-end gap-x-1">
             <CurrencyEditCell
               symbol={symbol}
               value={cat.assigned}
               editing={editingAssigned[cat.id]}
-              onStart={() => setEditingAssigned((prev) => ({ ...prev, [cat.id]: "" }))}
+              onStart={() => {
+                setEditingAssigned((prev) => ({ ...prev, [cat.id]: cat.assigned }));
+              }}
               onChange={(v) => setEditingAssigned((prev) => ({ ...prev, [cat.id]: v }))}
               onCommit={() => void saveAssigned(cat)}
-              onCancel={() =>
-                setEditingAssigned((prev) => {
-                  const n = { ...prev };
-                  delete n[cat.id];
-                  return n;
-                })
-              }
+              onCancel={() => clearEditAssigned(cat.id)}
               saving={savingAssigned[cat.id] ?? false}
-              valueClass={assignedClass}
-              title="Click to set assigned amount"
+              valueClass={overTarget ? "text-expense" : assignedClass}
+              title={
+                carried
+                  ? `${fmt(cat.rollover_carry, symbol)} carried over from last month. Reduce this to move it elsewhere.`
+                  : "Click to set assigned amount"
+              }
             />
-          )}
+            {showTarget && (
+              <>
+                <span aria-hidden className="text-muted-foreground">
+                  /
+                </span>
+                {/* A rollover category's target is base + carried balance, computed rather than
+                    typed, so it is read-only here and explained on hover. */}
+                {cat.rollover && !cat.is_goal ? (
+                  <span
+                    className="text-sm tabular-nums text-muted-foreground"
+                    title={
+                      carried
+                        ? `${fmt(cat.base_amount, symbol)} base + ${fmt(cat.rollover_carry, symbol)} carried over`
+                        : "Target for this month (base amount)"
+                    }
+                  >
+                    {fmt(cat.budgeted, symbol)}
+                  </span>
+                ) : (
+                  <CurrencyEditCell
+                    symbol={symbol}
+                    value={cat.budgeted}
+                    editing={editingBudgeted[cat.id]}
+                    onStart={() => {
+                      setEditingBudgeted((prev) => ({ ...prev, [cat.id]: cat.budgeted }));
+                    }}
+                    onChange={(v) => setEditingBudgeted((prev) => ({ ...prev, [cat.id]: v }))}
+                    onCommit={() => void saveBudgeted(cat)}
+                    onCancel={() => clearEditBudgeted(cat.id)}
+                    saving={savingBudgeted[cat.id] ?? false}
+                    valueClass="text-sm tabular-nums text-muted-foreground"
+                    title="Click to set monthly target"
+                  />
+                )}
+              </>
+            )}
+            {overTarget && (
+              <span className="whitespace-nowrap text-xs text-expense">
+                &middot; {fmt(String(overBy), symbol)} over
+              </span>
+            )}
+          </div>
         </TableCell>
         <TableCell className="text-right">{fmt(cat.activity, symbol)}</TableCell>
-        <TableCell className={`text-right ${availableClass}`}>{fmt(cat.available, symbol)}</TableCell>
       </TableRow>
     );
   }
@@ -332,15 +372,28 @@ export default function Dashboard({
   }
 
   const sfMonthlySpending = parseFloat(overview.goal_monthly_spending);
-  // Monthly Spent is the budget-side flow only: non-SF expense category activity.
-  // SF spending is shown on its own line and excluded from Kept, since it draws
-  // from previously-saved funds, not this month's budget.
+  // The budget-side flow only: non-goal expense category activity. Goal spending is shown on its
+  // own line and excluded here, since it draws from previously-saved funds rather than this
+  // month's budget. This is the figure Remaining is measured against.
   const totalSpent = expense.reduce((sum, c) => sum + parseFloat(c.activity), 0);
-  const sfSaved = parseFloat(overview.saved_to_goals_total);
-  const incomeTotal = parseFloat(overview.income_total);
-  const netAmount = incomeTotal - totalSpent - sfSaved;
-  const netPositive = netAmount >= 0;
   const rta = parseFloat(overview.ready_to_assign);
+  // Income that hasn't gone out the door, deliberately the difference between the first two
+  // boxes on this strip so the three can be checked against each other by eye. Not the same
+  // question as `rta`, which is income that hasn't been *assigned* — money can sit assigned but
+  // unspent in a category, and then what's assignable is the smaller of the two.
+  const remaining = parseFloat(overview.income_total) - totalSpent;
+
+  // The fourth box changes character with the month. While there is money to assign it is the
+  // place you assign it; once there isn't, leading with a 0.00 said nothing, so it becomes a
+  // plain readout of what is left. Over-assignment outranks the empty case so a budget with no
+  // income but money already assigned still shows the problem rather than a welcome message.
+  const overAssigned = rta < -0.005;
+  const hasToAssign = rta > 0.005;
+  const noIncomeYet = !overAssigned && Math.abs(parseFloat(overview.income_total)) < 0.005;
+  const headline = hasToAssign || overAssigned ? parseFloat(overview.ready_to_assign) : remaining;
+  // Suppressed at zero as well as when equal: "0.00 remaining" under a figure it already
+  // contradicts or restates is noise either way.
+  const showRemainingLine = Math.abs(remaining - rta) >= 0.005 && Math.abs(remaining) >= 0.005;
 
   return (
     <div className="max-w-[1200px]">
@@ -367,46 +420,9 @@ export default function Dashboard({
         </Button>
       </header>
 
-      {/* Ready to Assign — this month's income minus what's assigned and saved to goals. */}
-      {(incomeTotal > 0 || parseFloat(overview.expense_assigned) > 0) && Math.abs(rta) >= 0.005 && (
-        <Alert
-          variant={rta >= 0 ? "success" : "destructive"}
-          className={isCurrentMonth && pending_count > 0 ? "mb-4" : "mb-8"}
-        >
-          <AlertDescription>
-            <div className="flex justify-between items-center w-full gap-4 flex-wrap">
-              <div>
-                <strong className="font-semibold">Ready to Assign</strong>
-                <div className="text-sm text-muted-foreground">
-                  Income {fmt(overview.income_total, symbol)} &minus; Assigned {fmt(overview.expense_assigned, symbol)}
-                  {parseFloat(overview.saved_to_goals_total) > 0 && (
-                    <> &minus; Saved {fmt(overview.saved_to_goals_total, symbol)}</>
-                  )}
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-2xl font-semibold tracking-tight tabular-nums">
-                  {fmt(overview.ready_to_assign, symbol)}
-                </span>
-                {rta > 0 && (
-                  <Button size="sm" onClick={() => setAssigning(true)}>
-                    Assign
-                  </Button>
-                )}
-                {rta < 0 && (
-                  <Button size="sm" onClick={() => setCleaning(true)}>
-                    Reduce
-                  </Button>
-                )}
-              </div>
-            </div>
-          </AlertDescription>
-        </Alert>
-      )}
-
       {/* Pending review */}
       {isCurrentMonth && pending_count > 0 && (
-        <Alert className="mb-8 border-fund/30 bg-fund-soft text-ink *:data-[slot=alert-description]:text-ink/90">
+        <Alert className="mb-4 border-fund/30 bg-fund-soft text-ink *:data-[slot=alert-description]:text-ink">
           <AlertDescription>
             <div className="flex justify-between items-center w-full gap-4">
               <div>
@@ -427,6 +443,91 @@ export default function Dashboard({
         </Alert>
       )}
 
+      {/* This month at a glance. Previously a card in the income column — which meant a budget
+          with no income categories rendered no summary at all — plus a separate Ready to Assign
+          alert saying the same thing twice. */}
+      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <SummaryBox label="Total income">
+          <span className="text-2xl font-semibold tracking-tight tabular-nums text-income">
+            {fmt(overview.income_total, symbol)}
+          </span>
+        </SummaryBox>
+
+        <SummaryBox label="Total expenses">
+          <span className="text-2xl font-semibold tracking-tight tabular-nums text-expense">
+            {fmt(totalSpent, symbol)}
+          </span>
+        </SummaryBox>
+
+        <SummaryBox label="Goals">
+          <dl className="flex flex-col gap-1">
+            <div className="flex items-baseline justify-between gap-2">
+              <dt className="text-xs text-ink-quiet">Saved to</dt>
+              <dd className="tabular-nums text-fund">{fmt(overview.saved_to_goals_total, symbol)}</dd>
+            </div>
+            <div className="flex items-baseline justify-between gap-2">
+              <dt
+                className="text-xs text-ink-quiet"
+                title="Drawn from previously-saved balances, not this month's budget"
+              >
+                Spent from
+              </dt>
+              <dd className="tabular-nums text-fund">{fmt(sfMonthlySpending, symbol)}</dd>
+            </div>
+          </dl>
+        </SummaryBox>
+
+        {/* The band follows the button: SummaryBox documents `accent` as marking the box that
+            carries an action, and it used to be applied unconditionally, emphasising this one even
+            in the states where it offers nothing to do. */}
+        <SummaryBox
+          label={overAssigned ? "Over-assigned" : hasToAssign ? "To assign" : "Remaining"}
+          accent={overAssigned ? "alarm" : hasToAssign || noIncomeYet ? "moss" : undefined}
+        >
+          {noIncomeYet ? (
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm text-ink-quiet">No income recorded yet.</p>
+              <Button size="sm" variant="outline" onClick={() => setAddTransactionType("income")}>
+                Add income
+              </Button>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between gap-3">
+                <span
+                  className={`text-2xl font-semibold tracking-tight tabular-nums ${
+                    headline < -0.005 ? "text-expense" : "text-moss"
+                  }`}
+                >
+                  {fmt(headline, symbol)}
+                </span>
+                {hasToAssign && (
+                  <Button size="sm" onClick={() => setAssigning(true)}>
+                    Assign
+                  </Button>
+                )}
+                {overAssigned && (
+                  <Button size="sm" variant="destructive" onClick={() => setCleaning(true)}>
+                    Reduce
+                  </Button>
+                )}
+              </div>
+              {/* Only when the headline is the assignable figure and what's left after spending
+                  is a different, non-zero number. In the Remaining state the headline already is
+                  that figure, so the box is a label and a number like the other three. */}
+              {(hasToAssign || overAssigned) && showRemainingLine && (
+                <p
+                  className="mt-1 text-sm text-ink-quiet"
+                  title="Income minus expenses. Differs from what is assignable when money is assigned but not yet spent."
+                >
+                  <span className="tabular-nums text-ink">{fmt(remaining, symbol)}</span> remaining
+                </p>
+              )}
+            </>
+          )}
+        </SummaryBox>
+      </div>
+
       {/* Budget Grid */}
       {overview.categories.length === 0 ? (
         <div className="text-muted-foreground text-center py-16">
@@ -440,7 +541,7 @@ export default function Dashboard({
           {income.length > 0 && (
             <div className="md:col-span-4 flex flex-col gap-6">
               {/* Income card — short */}
-              <Card className="p-0 gap-0 overflow-hidden border-rule shadow-none">
+              <Card className="p-0 gap-0 overflow-hidden">
                 <div className="flex justify-between items-center px-4 py-2 bg-moss-soft text-ink">
                   <span className={SECTION_LABEL_CLASS}>Income</span>
                   <Button
@@ -491,55 +592,13 @@ export default function Dashboard({
                   </TableBody>
                 </Table>
               </Card>
-
-              {/* This month summary — single coherent card, plain header */}
-              <Card className="border-rule shadow-none">
-                <div className="px-5 py-4 flex flex-col gap-2.5">
-                  <span className={`${SECTION_LABEL_CLASS} text-ink-quiet`}>This month</span>
-                  <dl className="flex flex-col gap-1.5">
-                    <div className="flex justify-between items-baseline">
-                      <dt className="text-sm text-ink-quiet">Total Income</dt>
-                      <dd className="text-income tabular-nums">{fmt(overview.income_total, symbol)}</dd>
-                    </div>
-                    <div className="flex justify-between items-baseline">
-                      <dt className="text-sm text-ink-quiet">Spent</dt>
-                      <dd className="text-expense tabular-nums">{fmt(totalSpent, symbol)}</dd>
-                    </div>
-                    <div className="flex justify-between items-baseline">
-                      <dt className="text-sm text-ink-quiet">Saved to goals</dt>
-                      <dd className="text-fund tabular-nums">{fmt(sfSaved, symbol)}</dd>
-                    </div>
-                    <hr className="border-rule my-1.5" />
-                    {sfMonthlySpending > 0 && (
-                      <div className="flex justify-between items-baseline">
-                        <dt
-                          className="text-sm text-ink-quiet"
-                          title="Drawn from previously-saved goal balances, not this month's budget"
-                        >
-                          Paid from goals
-                        </dt>
-                        <dd className="text-fund tabular-nums">{fmt(sfMonthlySpending, symbol)}</dd>
-                      </div>
-                    )}
-                    <div className="flex justify-between items-baseline">
-                      <dt className="text-sm font-medium">Kept</dt>
-                      <dd
-                        className={`text-xl font-semibold tracking-tight tabular-nums ${netPositive ? "text-moss" : "text-expense"}`}
-                      >
-                        {netPositive ? "" : "−"}
-                        {fmt(Math.abs(netAmount), symbol)}
-                      </dd>
-                    </div>
-                  </dl>
-                </div>
-              </Card>
             </div>
           )}
 
           {/* Expenses — primary, full-height column */}
           {expense.length > 0 && (
             <div className="md:col-span-8 flex flex-col gap-6">
-              <Card className="p-0 gap-0 overflow-hidden border-rule shadow-none">
+              <Card className="p-0 gap-0 overflow-hidden">
                 <div className="flex justify-between items-center px-4 py-2 bg-expense-soft text-ink">
                   <span className={SECTION_LABEL_CLASS}>Expenses</span>
                   <Button
@@ -555,10 +614,8 @@ export default function Dashboard({
                   <TableHeader>
                     <TableRow>
                       <TableHead>Category</TableHead>
-                      <TableHead className="text-right">Budgeted</TableHead>
-                      <TableHead className="text-right">Assigned</TableHead>
+                      <TableHead className="text-right">Assigned / target</TableHead>
                       <TableHead className="text-right">Spent</TableHead>
-                      <TableHead className="text-right">Available</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>{renderHierarchical(expense)}</TableBody>

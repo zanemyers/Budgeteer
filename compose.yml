@@ -9,7 +9,8 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data/
     ports:
-      - "5432:5432"
+      # Loopback-only: the database must never be reachable from the LAN.
+      - "127.0.0.1:5432:5432"
     env_file:
       - .env
     healthcheck:
@@ -58,8 +59,9 @@ services:
     volumes:
       - minio_data:/data
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      # Loopback-only: MinIO runs with default minioadmin credentials.
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 10s
@@ -82,8 +84,10 @@ services:
       - .:/srv/app:cached
 
     ports:
+      # 8000 stays on all interfaces so the app can be opened from a phone on the LAN.
       - "8000:8000"
-      - "5678:5678"  # debugpy port for VS Code/LazyVim debugging
+      # debugpy is a remote-code-execution listener — loopback only.
+      - "127.0.0.1:5678:5678"  # debugpy port for VS Code/LazyVim debugging
 
     depends_on:
       node:

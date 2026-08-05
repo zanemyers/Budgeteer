@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getCsrfToken } from "@/lib/api";
+import { errorMessage, getCsrfToken } from "@/lib/api";
 import { PasswordInput } from "../components/PasswordInput";
 import AuthLayout from "../layouts/AuthLayout";
 
@@ -63,6 +63,8 @@ export default function Signup({ errors: initialErrors, next }: Props) {
       setErrors(
         Object.keys(collected).length ? collected : { __all__: "Could not create your account. Please try again." },
       );
+    } catch (err) {
+      setErrors({ __all__: errorMessage(err, "Could not create your account. Please try again.") });
     } finally {
       setLoading(false);
     }

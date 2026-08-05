@@ -1,4 +1,16 @@
 /**
+ * Today's date as YYYY-MM-DD in the *browser's* timezone.
+ *
+ * Not `toISOString()`, which is UTC: west of UTC that returns tomorrow's date all
+ * evening, so a transaction logged at night would be dated to the following day
+ * (and near a month boundary, into the next budget month).
+ */
+export function todayLocal(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/**
  * Format an ISO date string (YYYY-MM-DD) as a short, locale-aware date.
  * Returns "—" when the input is null/empty.
  *

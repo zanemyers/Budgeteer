@@ -40,6 +40,28 @@ INSTANCE = env("INSTANCE", default="dev")
 
 ALLOWED_HOSTS: list[str] = env.list("ALLOWED_HOSTS", default=[])
 INTERNAL_IPS = env.list("INTERNAL_IPS", default=["127.0.0.1"])
+CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[])
+
+# Transport security. All of this is off under DEBUG so local http:// development works.
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_REFERRER_POLICY = "same-origin"
+X_FRAME_OPTIONS = "DENY"
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+SECURE_SSL_REDIRECT = env.bool("SECURE_SSL_REDIRECT", default=not DEBUG)
+
+# Only set when a reverse proxy actually terminates TLS *and* strips a client-supplied
+# X-Forwarded-Proto. Trusting this header unconditionally lets a client claim HTTPS.
+if env.bool("BEHIND_TLS_PROXY", default=False):
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+# Starts at one hour rather than a year: a misconfigured HSTS header is not
+# recoverable for visitors who already cached it, so raise this deliberately.
+SECURE_HSTS_SECONDS = 0 if DEBUG else env.int("SECURE_HSTS_SECONDS", default=3600)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG
+SECURE_HSTS_PRELOAD = False
 
 # Get the IP to use for Django Debug Toolbar when developing with docker
 if env.bool("USE_DOCKER", default=False) is True:
@@ -206,6 +228,11 @@ if "s3boto3" in DEFAULT_FILE_STORAGE_BACKEND.lower():
         STORAGES["default"]["BACKEND"] = "apps.base.storage.S3MediaStorage"
         STORAGES["default"]["OPTIONS"]["url_endpoint_url"] = MEDIA_S3_URL_ENDPOINT_URL
     STATIC_URL = "/public/static/"
+    # Media is served by the storage backend, not Django, so these are only here to keep
+    # MEDIA_URL/MEDIA_ROOT from defaulting to "" — an empty MEDIA_URL resolves to "/" and
+    # turns the static() helper in config/urls.py into a catch-all that serves the repo root.
+    MEDIA_ROOT = PUBLIC_ROOT.joinpath("media")
+    MEDIA_URL = "/public/media/"
 
 elif DEFAULT_FILE_STORAGE_BACKEND.endswith("MediaS3Storage"):
     STORAGES["staticfiles"]["BACKEND"] = env("STATICFILES_STORAGE")
@@ -224,6 +251,14 @@ else:
     STATIC_URL = "/public/static/"
 
 EXCHANGERATE_API_KEY = env("EXCHANGERATE_API_KEY", default="")
+
+# How far ahead the nightly job materializes recurring bills and expected paychecks.
+# Deliberately days, not months: a schedule only becomes a real Transaction shortly before
+# it's due, so the register shows what's actually imminent instead of a month of rows on the
+# 1st that can't be reconciled until the end of it. Widening this is safe; narrowing it
+# leaves already-generated instances behind, so follow it with
+# `generate_recurring_instances --prune`.
+BUDGET_RECURRING_LOOKAHEAD_DAYS = env.int("BUDGET_RECURRING_LOOKAHEAD_DAYS", default=3)
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/6.0/ref/settings/#default-auto-field

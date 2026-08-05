@@ -1,11 +1,12 @@
 import { router } from "@inertiajs/react";
 import { Pencil } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { getCsrfToken } from "@/lib/api";
+import { errorMessage, jsonFetch } from "@/lib/api";
 import { fmt, useCurrencySymbol } from "@/utils/currency";
 import {
   type PaySchedule,
@@ -50,12 +51,11 @@ export function PaySchedulePanel({
   const [editing, setEditing] = useState<PaySchedule | null>(null);
 
   async function handleDelete(schedule: PaySchedule) {
-    const res = await fetch(`/budgets/${budgetPk}/pay-schedules/${schedule.id}/`, {
-      method: "DELETE",
-      headers: { "X-CSRFToken": getCsrfToken() },
-    });
-    if (res.ok || res.status === 204) {
+    try {
+      await jsonFetch(`/budgets/${budgetPk}/pay-schedules/${schedule.id}/`, "DELETE");
       router.reload({ only: ["pay_schedules"] });
+    } catch (err) {
+      toast.error(errorMessage(err, "Couldn't delete that pay schedule."));
     }
   }
 
@@ -81,11 +81,11 @@ export function PaySchedulePanel({
       </p>
 
       {paySchedules.length === 0 ? (
-        <Card className="border-rule shadow-none">
+        <Card>
           <CardContent className="text-ink-quiet py-12 text-center">No pay schedules yet.</CardContent>
         </Card>
       ) : (
-        <Card className="overflow-hidden p-0 border-rule shadow-none">
+        <Card className="overflow-hidden p-0">
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
@@ -110,7 +110,7 @@ export function PaySchedulePanel({
                     <TableCell className="text-sm text-ink-quiet">{matchSummary(schedule, symbol)}</TableCell>
                     {isOwner && (
                       <TableCell className="text-right whitespace-nowrap">
-                        <div className="inline-flex gap-1 items-center opacity-60 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                        <div className="inline-flex gap-1 items-center opacity-60 group-hover:opacity-100 touch:opacity-100 focus-within:opacity-100 transition-opacity">
                           <Button
                             variant="ghost"
                             size="icon-sm"

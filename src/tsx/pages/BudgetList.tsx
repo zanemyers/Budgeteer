@@ -1,5 +1,6 @@
 import { router } from "@inertiajs/react";
 import { useState } from "react";
+import { toast } from "sonner";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,7 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { getCsrfToken } from "@/lib/api";
+import { errorMessage, jsonFetch } from "@/lib/api";
 import { fmtDate } from "@/utils/date";
 
 interface Budget {
@@ -69,15 +70,10 @@ export default function BudgetList({ budgets: initial }: Props) {
       } else {
         body.add_default_categories = addDefaults;
       }
-      const res = await fetch("/budgets/create/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() },
-        body: JSON.stringify(body),
-      });
-      if (res.ok) {
-        const { id } = (await res.json()) as { id: number };
-        router.visit(`/budgets/${id}/`);
-      }
+      const { id } = (await jsonFetch("/budgets/create/", "POST", body)) as { id: number };
+      router.visit(`/budgets/${id}/`);
+    } catch (err) {
+      toast.error(errorMessage(err, "Couldn't create that budget."));
     } finally {
       setCreating(false);
     }
@@ -85,23 +81,28 @@ export default function BudgetList({ budgets: initial }: Props) {
 
   async function saveName(budget: Budget) {
     const val = editingName[budget.id];
-    setEditingName((prev) => {
-      const n = { ...prev };
-      delete n[budget.id];
-      return n;
-    });
-    if (val === undefined || val === budget.name) return;
+    const clearBuffer = () =>
+      setEditingName((prev) => {
+        const n = { ...prev };
+        delete n[budget.id];
+        return n;
+      });
+    if (val === undefined || val === budget.name) {
+      clearBuffer();
+      return;
+    }
     setSavingId(budget.id);
     try {
-      const res = await fetch(`/budgets/${budget.id}/edit/`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() },
-        body: JSON.stringify({ name: val }),
-      });
-      if (res.ok) {
-        const updated = (await res.json()) as { id: number; name: string };
-        setBudgets((prev) => prev.map((b) => (b.id === updated.id ? { ...b, name: updated.name } : b)));
-      }
+      const updated = (await jsonFetch(`/budgets/${budget.id}/edit/`, "PATCH", { name: val })) as {
+        id: number;
+        name: string;
+      };
+      setBudgets((prev) => prev.map((b) => (b.id === updated.id ? { ...b, name: updated.name } : b)));
+      // Only drop the edit buffer once saved, so a failure leaves the typed name in place
+      // to correct rather than silently reverting to the old one.
+      clearBuffer();
+    } catch (err) {
+      toast.error(errorMessage(err, "Couldn't rename that budget."));
     } finally {
       setSavingId(null);
     }
@@ -110,22 +111,24 @@ export default function BudgetList({ budgets: initial }: Props) {
   async function setDefault(id: number) {
     setSettingDefaultId(id);
     try {
-      await fetch(`/budgets/${id}/set-default/`, {
-        method: "POST",
-        headers: { "X-CSRFToken": getCsrfToken() },
-      });
+      await jsonFetch(`/budgets/${id}/set-default/`, "POST");
       setBudgets((prev) => prev.map((b) => ({ ...b, is_default: b.id === id })));
+    } catch (err) {
+      toast.error(errorMessage(err, "Couldn't set that budget as default."));
     } finally {
       setSettingDefaultId(null);
     }
   }
 
   async function deleteBudget(id: number) {
-    await fetch(`/budgets/${id}/delete/`, {
-      method: "DELETE",
-      headers: { "X-CSRFToken": getCsrfToken() },
-    });
-    setBudgets((prev) => prev.filter((b) => b.id !== id));
+    // The local removal has to be gated on the response: doing it unconditionally made a
+    // failed delete look like it worked, and the budget reappeared on the next page load.
+    try {
+      await jsonFetch(`/budgets/${id}/delete/`, "DELETE");
+      setBudgets((prev) => prev.filter((b) => b.id !== id));
+    } catch (err) {
+      toast.error(errorMessage(err, "Couldn't delete that budget."));
+    }
   }
 
   return (
@@ -136,7 +139,7 @@ export default function BudgetList({ budgets: initial }: Props) {
       </header>
 
       {newName !== null && (
-        <Card className="mb-6 border-rule shadow-none">
+        <Card className="mb-6">
           <CardContent className="flex flex-col gap-4">
             <div className="flex flex-col gap-2">
               <Label htmlFor="budget-name" className="font-semibold">
@@ -149,7 +152,9 @@ export default function BudgetList({ budgets: initial }: Props) {
                 autoFocus
                 onChange={(e) => setNewName(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") void createBudget();
+                  // The `creating` guard is on the submit button but was missing here, so two
+                  // quick Enter presses created two budgets.
+                  if (e.key === "Enter" && !creating) void createBudget();
                   if (e.key === "Escape") resetForm();
                 }}
               />
@@ -282,7 +287,7 @@ export default function BudgetList({ budgets: initial }: Props) {
                 </div>
 
                 {budget.is_owner && (
-                  <div className="flex items-center gap-2 shrink-0 opacity-60 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                  <div className="flex items-center gap-2 shrink-0 opacity-60 group-hover:opacity-100 touch:opacity-100 focus-within:opacity-100 transition-opacity">
                     {!budget.is_default && (
                       <Button
                         variant="ghost"

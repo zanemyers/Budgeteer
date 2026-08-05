@@ -1,8 +1,10 @@
+import { FlashToaster } from "../components/FlashToaster";
 import ThemeToggle from "../components/ThemeToggle";
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen flex flex-col">
+      <FlashToaster />
       <div className="flex justify-between items-center px-4 pt-4 pb-2">
         <a href="/" className="font-semibold no-underline text-foreground text-lg">
           Budgeteer

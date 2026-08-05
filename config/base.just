@@ -99,10 +99,14 @@ db_restore dump_file="":
     else
       DUMP_FILE="{{dump_file}}"
     fi
+    if test ! -r "${DUMP_FILE}"; then
+      echo "Refusing to restore: dump file '${DUMP_FILE}' is missing or unreadable." >&2
+      exit 1
+    fi
     just _start_msg "Restoring the database "${POSTGRES_DB}" from the latest dump file in ${DUMP_FILE}"
     docker compose up --wait -d db
-    docker compose exec -T db psql -h db -U ${POSTGRES_DB} -d postgres -c "DROP DATABASE IF EXISTS ${POSTGRES_DB};" > /dev/null
-    docker compose exec -T db psql -h db -U ${POSTGRES_DB} -d postgres -c "CREATE DATABASE ${POSTGRES_DB};" > /dev/null
+    docker compose exec -T db psql -h db -U ${POSTGRES_USER} -d postgres -c "DROP DATABASE IF EXISTS ${POSTGRES_DB};" > /dev/null
+    docker compose exec -T db psql -h db -U ${POSTGRES_USER} -d postgres -c "CREATE DATABASE ${POSTGRES_DB};" > /dev/null
     docker compose exec -T db pg_restore -d ${DATABASE_URL} --no-owner --no-privileges < "${DUMP_FILE}"
 
 # Format all code

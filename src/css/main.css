@@ -3,6 +3,23 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Touch input, keyed on pointer type rather than viewport width — a tablet is coarse-pointer
+   but wider than any breakpoint, and a narrow desktop window is still a mouse. Used for the
+   44px minimum target size PRODUCT.md commits to, and to stop hover-only affordances from
+   hiding controls on devices that can't hover. */
+@custom-variant touch (@media (pointer: coarse));
+
+/* A strip that can scroll sideways on a narrow viewport without drawing a scrollbar. Used by
+   the tab lists: the bar sits inside a fixed-height strip, and with macOS set to "Show scroll
+   bars: Always" it is painted even when nothing overflows. Swipe and trackpad scrolling still
+   work. */
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 /* ── Design tokens (OKLCH paper / moss palette) ──────────────────────── */
 :root {
   /* Paper neutrals — warm off-white tinted toward moss */
@@ -22,9 +39,13 @@
   --income: oklch(52% 0.06 145);
   --expense: oklch(50% 0.1 25);
   --expense-soft: oklch(90% 0.045 25);
-  --fund: oklch(60% 0.08 70);
+  /* Darkened from 60%: it was 3.78:1 on --paper and 3.57:1 on --surface, below the 4.5:1 AA
+     minimum, and it carries 12px text (goal "/mo" figures, due-date meta). Now 5.07 / 4.78.
+     Hue and chroma unchanged so the warm-earth intent survives. */
+  --fund: oklch(53% 0.08 70);
   --fund-soft: oklch(90% 0.06 70);
-  --ongoing: oklch(55% 0.07 250);
+  /* 4.05:1 on --surface-strong at 55%, under the 4.5 AA minimum; 5.01:1 at 50%. */
+  --ongoing: oklch(50% 0.07 250);
   --alarm: oklch(45% 0.13 25);
 
   /* shadcn token mapping (re-routed to the palette above) */
@@ -46,7 +67,12 @@
   --destructive-foreground: var(--moss-foreground);
   --border: var(--rule);
   --border-strong: oklch(82% 0.01 110);
-  --input: var(--rule);
+  /* Split from --rule rather than aliasing it. --rule is a decorative hairline (88%), right
+     for dividers but only 1.35:1 on --paper — so every input, select and textarea border was
+     effectively invisible, against the 3:1 WCAG 1.4.11 requires to identify a UI component.
+     Inputs sit on --surface-strong, the hardest of the three backgrounds: 3.31:1 here.
+     The dark theme must override this too, since it no longer inherits via var(--rule). */
+  --input: oklch(60% 0.01 110);
   --ring: var(--moss);
 
   /* Chart colors — moss family for cohesion in any future viz */
@@ -77,9 +103,13 @@
   --fund: oklch(75% 0.1 70);
   --fund-soft: oklch(34% 0.07 70);
   --ongoing: oklch(72% 0.08 250);
-  --alarm: oklch(65% 0.14 25);
+  /* Lightened from 65%: 3.94:1 on dark --surface-strong, and --alarm is used as text
+     (text-destructive) as well as a button background. 4.78:1 at 70%. */
+  --alarm: oklch(70% 0.14 25);
 
   --border-strong: oklch(38% 0.012 130);
+  /* 3.19:1 on dark --surface-strong; dark --rule would have been 1.33:1. */
+  --input: oklch(58% 0.012 130);
 }
 
 /* Tailwind v4 binds bare `border` utilities to currentColor by default. Restore
@@ -305,10 +335,23 @@ input[type="number"],
 
 @media (max-width: 1023px) {
   .sidebar {
+    /* visibility, not just transform: translated off-screen alone left every nav link, the
+       budget switcher and the user menu in the tab order and the accessibility tree, so on a
+       phone a keyboard or switch-access user traversed the whole closed drawer before
+       reaching page content. visibility removes it; the 0s delay holds it until the
+       slide-out has finished so the animation is still seen. */
+    visibility: hidden;
     transform: translateX(-100%);
+    transition:
+      transform 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+      visibility 0s 0.2s;
   }
   .sidebar[data-sidebar-open] {
+    visibility: visible;
     transform: translateX(0);
+    transition:
+      transform 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+      visibility 0s;
   }
 }
 
@@ -319,6 +362,11 @@ input[type="number"],
   *::after {
     animation-duration: 0ms !important;
     transition-duration: 0ms !important;
+    /* Delays too: zeroing only the durations left staggered entrances (BudgetHistory's
+       per-row animation-delay) invisible for their full delay before snapping in, which is
+       exactly the effect the preference asks to remove. */
+    animation-delay: 0ms !important;
+    transition-delay: 0ms !important;
   }
 }
 
