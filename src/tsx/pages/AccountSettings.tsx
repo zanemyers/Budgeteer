@@ -285,7 +285,7 @@ function NameTab({
     setSuccess(false);
     setError(null);
     try {
-      await jsonFetch("/accounts/settings/", "PATCH", { first_name: fn, last_name: ln });
+      await jsonFetch("/accounts/settings/", "PATCH", { action: "update_name", first_name: fn, last_name: ln });
       setSuccess(true);
       onSaved(fn, ln);
     } catch (err) {
@@ -510,7 +510,7 @@ function EmailTab({
                   {busy === addr.id ? "Sending…" : "Resend"}
                 </Button>
               )}
-              {!addr.primary && (
+              {!addr.primary && addr.verified && (
                 <Button variant="outline" size="sm" disabled={busy === addr.id} onClick={() => void makePrimary(addr)}>
                   Make primary
                 </Button>

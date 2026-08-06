@@ -13,22 +13,12 @@ from allauth.account.forms import ChangePasswordForm
 from allauth.account.models import EmailAddress
 from allauth.account.views import (
     ConfirmEmailView as AllAuthConfirmEmailView,
-)
-from allauth.account.views import (
     LoginView,
-    SignupView,
-)
-from allauth.account.views import (
     PasswordResetDoneView as AllAuthPasswordResetDoneView,
-)
-from allauth.account.views import (
     PasswordResetFromKeyDoneView as AllAuthPasswordResetFromKeyDoneView,
-)
-from allauth.account.views import (
     PasswordResetFromKeyView as AllAuthPasswordResetFromKeyView,
-)
-from allauth.account.views import (
     PasswordResetView as AllAuthPasswordResetView,
+    SignupView,
 )
 from allauth.core import ratelimit
 from inertia import render as inertia_render
@@ -39,24 +29,25 @@ from apps.banking.simplefin import SimpleFINError, claim_setup_token
 from apps.base.http import parse_json_body
 from apps.base.models import Currency
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
 
 class InertiaAllauthMixin:
     """
     Intercept allauth's render_to_response to return Inertia or JSON.
 
-    Each concrete subclass is wrapped with @ensure_csrf_cookie so every GET to
-    an auth page seeds the csrftoken cookie — the SPA reads it via JS to set
-    X-CSRFToken on its POST, and Django only sets the cookie on demand.
+    Comes first in every subclass's MRO, so wrapping dispatch here seeds the csrftoken
+    cookie on every auth page — the SPA reads it to set X-CSRFToken on its POST, and
+    Django only sets the cookie on demand.
     """
 
     inertia_component: str
+    inertia_props: dict = {}
+
+    @method_decorator(ensure_csrf_cookie)
+    def dispatch(self, request, *args, **kwargs):
+        return super().dispatch(request, *args, **kwargs)  # type: ignore[misc]
 
     def get_inertia_props(self, context: dict) -> dict:
-        return {}
+        return self.inertia_props
 
     def render_to_response(self, context: dict) -> JsonResponse:
         form = context.get("form")
@@ -66,53 +57,42 @@ class InertiaAllauthMixin:
 
         props = {"errors": errors, **self.get_inertia_props(context)}
 
-        # Only explicit form-submit fetches (our Login/Signup/PasswordReset flows) get the JSON
-        # error shape — Inertia SPA navigations also set X-Requested-With, but they must receive
-        # an Inertia response or the client throws "expected valid Inertia response, got plain JSON".
+        # Only our form-submit fetches get the JSON error shape. Inertia SPA navigations also set
+        # X-Requested-With, but they must get an Inertia response or the client throws.
         headers = self.request.headers  # type: ignore[attr-defined]
         if headers.get("X-Requested-With") == "XMLHttpRequest" and not headers.get("X-Inertia"):
             return JsonResponse(props, status=422 if errors else 200)
         return inertia_render(self.request, self.inertia_component, props)  # type: ignore[attr-defined]
 
 
-# ---------------------------------------------------------------------------
-# Auth views
-# ---------------------------------------------------------------------------
+# --- Auth views ---
 
 
-@method_decorator(ensure_csrf_cookie, name="dispatch")
-class SignInView(InertiaAllauthMixin, LoginView):
+class NextPropMixin(InertiaAllauthMixin):
+    """Pass ?next= through to the SPA so it can resume where the user was headed."""
+
+    def get_inertia_props(self, context: dict) -> dict:
+        return {"next": self.request.GET.get("next") or self.request.POST.get("next") or ""}  # type: ignore[attr-defined]
+
+
+class SignInView(NextPropMixin, LoginView):
     inertia_component = "Login"
 
-    def get_inertia_props(self, context: dict) -> dict:
-        return {"next": self.request.GET.get("next") or self.request.POST.get("next") or ""}  # type: ignore[attr-defined]
 
-
-@method_decorator(ensure_csrf_cookie, name="dispatch")
-class SignUpView(InertiaAllauthMixin, SignupView):
+class SignUpView(NextPropMixin, SignupView):
     inertia_component = "Signup"
 
-    def get_inertia_props(self, context: dict) -> dict:
-        return {"next": self.request.GET.get("next") or self.request.POST.get("next") or ""}  # type: ignore[attr-defined]
 
-
-@method_decorator(ensure_csrf_cookie, name="dispatch")
 class PasswordResetView(InertiaAllauthMixin, AllAuthPasswordResetView):
     inertia_component = "PasswordReset"
-
-    def get_inertia_props(self, context: dict) -> dict:
-        return {"done": False}
+    inertia_props = {"done": False}
 
 
-@method_decorator(ensure_csrf_cookie, name="dispatch")
 class PasswordResetDoneView(InertiaAllauthMixin, AllAuthPasswordResetDoneView):
     inertia_component = "PasswordReset"
-
-    def get_inertia_props(self, context: dict) -> dict:
-        return {"done": True}
+    inertia_props = {"done": True}
 
 
-@method_decorator(ensure_csrf_cookie, name="dispatch")
 class PasswordResetFromKeyView(InertiaAllauthMixin, AllAuthPasswordResetFromKeyView):
     inertia_component = "PasswordResetConfirm"
 
@@ -120,15 +100,11 @@ class PasswordResetFromKeyView(InertiaAllauthMixin, AllAuthPasswordResetFromKeyV
         return {"token_fail": context.get("token_fail", False), "done": False}
 
 
-@method_decorator(ensure_csrf_cookie, name="dispatch")
 class PasswordResetFromKeyDoneView(InertiaAllauthMixin, AllAuthPasswordResetFromKeyDoneView):
     inertia_component = "PasswordResetConfirm"
-
-    def get_inertia_props(self, context: dict) -> dict:
-        return {"done": True, "token_fail": False}
+    inertia_props = {"done": True, "token_fail": False}
 
 
-@method_decorator(ensure_csrf_cookie, name="dispatch")
 class ConfirmEmailView(InertiaAllauthMixin, AllAuthConfirmEmailView):
     inertia_component = "EmailConfirm"
 
@@ -143,9 +119,12 @@ class ConfirmEmailView(InertiaAllauthMixin, AllAuthConfirmEmailView):
         }
 
 
-# ---------------------------------------------------------------------------
-# Account settings
-# ---------------------------------------------------------------------------
+# --- Account settings ---
+
+
+def _email_addresses(user) -> list[dict]:
+    """Build the email list shape the settings page and its PATCH responses both return."""
+    return list(EmailAddress.objects.filter(user=user).values())
 
 
 def _serialize_simplefin_connection(conn: SimpleFINConnection) -> dict:
@@ -168,7 +147,7 @@ class AccountSettingsView(LoginRequiredMixin, View):
             {
                 "first_name": user.first_name,
                 "last_name": user.last_name,
-                "email_addresses": list(EmailAddress.objects.filter(user=user).values()),
+                "email_addresses": _email_addresses(user),
                 "timezone": user.timezone,
                 "avatar_url": user.avatar_url,
                 "currency": user.currency,
@@ -181,13 +160,12 @@ class AccountSettingsView(LoginRequiredMixin, View):
 
     def patch(self, request):
         data = parse_json_body(request)
-        action = data.get("action", "name")
+        action = data.get("action")
         user = request.user
 
         if action == "resend_verification":
             email_str = data.get("email", "")
-            # Rate-limit first (allauth's confirm_email limit, 1/180s per email) — we bypass
-            # allauth's own confirm-email view, so its rate-limit doesn't apply automatically.
+            # We bypass allauth's confirm-email view, so apply its 1/180s-per-email limit ourselves.
             if not ratelimit.consume(request, action="confirm_email", key=email_str.lower()):
                 return JsonResponse(
                     {"error": "Please wait a moment before requesting another verification email."},
@@ -203,8 +181,13 @@ class AccountSettingsView(LoginRequiredMixin, View):
             ea = EmailAddress.objects.filter(user=user, email=data.get("email", "")).first()
             if not ea:
                 return JsonResponse({"error": "Email not found."}, status=404)
+            # set_as_primary() also rewrites user.email, which is the login identity — so an
+            # unverified address here would move the account to a mailbox nobody has proven
+            # they own, sending future password resets there.
+            if not ea.verified:
+                return JsonResponse({"error": "Verify this email before making it primary."}, status=400)
             ea.set_as_primary()
-            return JsonResponse({"email_addresses": list(EmailAddress.objects.filter(user=user).values())})
+            return JsonResponse({"email_addresses": _email_addresses(user)})
 
         if action == "remove_simplefin_connection":
             deleted, _ = SimpleFINConnection.objects.filter(user=user, pk=data.get("id")).delete()
@@ -213,6 +196,10 @@ class AccountSettingsView(LoginRequiredMixin, View):
             return JsonResponse({"ok": True})
 
         if action == "remove_email":
+            # primary=False alone isn't enough: a user whose only address was never flagged
+            # primary could delete it and end up with no address at all.
+            if EmailAddress.objects.filter(user=user).count() <= 1:
+                return JsonResponse({"error": "You need at least one email address."}, status=400)
             deleted, _ = EmailAddress.objects.filter(user=user, email=data.get("email", ""), primary=False).delete()
             if not deleted:
                 return JsonResponse({"error": "Cannot remove this email."}, status=400)
@@ -299,6 +286,10 @@ class AvatarUploadView(LoginRequiredMixin, View):
             return JsonResponse({"error": "File must be under 5 MB."}, status=400)
         try:
             img = ImageOps.fit(Image.open(file).convert("RGB"), (256, 256), Image.Resampling.LANCZOS)
+        except Image.DecompressionBombError:
+            # Not an OSError, so it needs its own arm — and it fires on honest huge scans, not
+            # just crafted files, which is why it gets a message about size rather than validity.
+            return JsonResponse({"error": "Image dimensions are too large."}, status=400)
         except OSError:
             return JsonResponse({"error": "Invalid image file."}, status=400)
 

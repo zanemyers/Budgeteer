@@ -10,8 +10,8 @@ TIMEZONE_CHOICES = sorted([(tz, tz) for tz in available_timezones()])
 
 
 def avatar_thumbnail_path(instance, _filename):
-    # Django's upload_to callable signature is (instance, filename); we replace
-    # the client filename with a uuid so uploads never collide.
+    # Signature is Django's upload_to contract; the client filename is dropped for a uuid
+    # so uploads never collide.
     return f"avatars/thumbnails/{instance.pk}/{uuid4().hex}.jpg"
 
 

@@ -1,4 +1,6 @@
 import json
+import struct
+import zlib
 from io import BytesIO
 from unittest.mock import patch
 
@@ -65,6 +67,11 @@ class TestAccountSettingsProfile(AccountsTestCase):
         self.assertEqual(self.user.first_name, "Ada")
         self.assertEqual(self.user.last_name, "Lovelace")
 
+    def test_update_name_without_action_is_rejected(self):
+        # The settings page used to omit "action" here and silently get "Unknown action".
+        response = _patch_json(self.client, {"first_name": "Ada", "last_name": "Lovelace"})
+        self.assertEqual(response.status_code, 400)
+
     def test_update_timezone_valid(self):
         response = _patch_json(self.client, {"action": "update_timezone", "timezone": "America/New_York"})
         self.assertEqual(response.status_code, 200)
@@ -90,6 +97,12 @@ class TestAccountSettingsProfile(AccountsTestCase):
     def test_unknown_patch_action(self):
         response = _patch_json(self.client, {"action": "nonsense"})
         self.assertEqual(response.status_code, 400)
+
+    def test_non_object_json_body_is_rejected_not_crashed(self):
+        for body in ("null", "[1, 2]", '"hi"'):
+            with self.subTest(body=body):
+                response = self.client.patch(SETTINGS_URL, data=body, content_type="application/json")
+                self.assertEqual(response.status_code, 400)
 
 
 class TestAccountSettingsEmail(AccountsTestCase):
@@ -121,6 +134,15 @@ class TestAccountSettingsEmail(AccountsTestCase):
         other.refresh_from_db()
         self.assertTrue(other.primary)
 
+    def test_cannot_make_unverified_email_primary(self):
+        EmailAddress.objects.create(user=self.user, email="unverified@example.com", verified=False)
+        response = _patch_json(self.client, {"action": "make_primary", "email": "unverified@example.com"})
+        self.assertEqual(response.status_code, 400)
+        self.primary.refresh_from_db()
+        self.assertTrue(self.primary.primary)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.email, "test.user@example.com")
+
     def test_remove_non_primary_email(self):
         EmailAddress.objects.create(user=self.user, email="removable@example.com", primary=False)
         response = _patch_json(self.client, {"action": "remove_email", "email": "removable@example.com"})
@@ -131,6 +153,12 @@ class TestAccountSettingsEmail(AccountsTestCase):
         response = _patch_json(self.client, {"action": "remove_email", "email": self.user.email})
         self.assertEqual(response.status_code, 400)
         self.assertTrue(EmailAddress.objects.filter(email=self.user.email).exists())
+
+    def test_cannot_remove_only_email_even_when_not_primary(self):
+        EmailAddress.objects.filter(user=self.user).update(primary=False)
+        response = _patch_json(self.client, {"action": "remove_email", "email": self.user.email})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(EmailAddress.objects.filter(user=self.user).count(), 1)
 
     def test_resend_verification(self):
         response = _patch_json(self.client, {"action": "resend_verification", "email": self.user.email})
@@ -273,6 +301,17 @@ class TestAvatarUpload(AccountsTestCase):
         bad = SimpleUploadedFile("bad.jpg", b"not really an image", content_type="image/jpeg")
         response = self.client.post(self.url, {"avatar": bad})
         self.assertEqual(response.status_code, 400)
+
+    def test_oversized_dimensions_rejected(self):
+        # A forged IHDR is small on disk but claims 900M pixels, so Pillow raises
+        # DecompressionBombError from Image.open before any decoding happens.
+        ihdr = struct.pack(">II", 30000, 30000) + bytes([8, 2, 0, 0, 0])
+        chunks = struct.pack(">I", 13) + b"IHDR" + ihdr + struct.pack(">I", zlib.crc32(b"IHDR" + ihdr))
+        chunks += struct.pack(">I", 0) + b"IEND" + struct.pack(">I", zlib.crc32(b"IEND"))
+        bomb = SimpleUploadedFile("bomb.png", b"\x89PNG\r\n\x1a\n" + chunks, content_type="image/png")
+        response = self.client.post(self.url, {"avatar": bomb})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("too large", response.json()["error"])
 
     def test_valid_upload(self):
         response = self.client.post(self.url, {"avatar": self._jpeg()})
