@@ -117,6 +117,9 @@ ignore = ["D100", "D101", "D102", "D103", "D104", "D105", "D106", "D107", "D203"
 
 [tool.ruff.lint.isort]
 section-order = ["future", "standard-library", "django", "third-party", "first-party", "local-folder", ]
+# Keep aliased imports on the same `from x import (...)` statement as their unaliased siblings
+# instead of exploding into one statement per alias.
+combine-as-imports = true
 
 [tool.ty.rules]
 # ty 0.0.x has no Django ORM support yet (https://github.com/astral-sh/ty/issues/1018), so on a

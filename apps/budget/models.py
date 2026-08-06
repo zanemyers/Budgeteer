@@ -4,8 +4,7 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.db import models
-from django.db import transaction as db_transaction
+from django.db import models, transaction as db_transaction
 from django.db.models import Q, Sum
 from django.db.models.constraints import CheckConstraint, UniqueConstraint
 

@@ -7,8 +7,7 @@ from decimal import Decimal, InvalidOperation
 from django.conf import settings as django_settings
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db import IntegrityError
-from django.db import transaction as db_transaction
+from django.db import IntegrityError, transaction as db_transaction
 from django.db.models import ProtectedError, Q
 from django.db.models.functions import Coalesce
 from django.http import Http404, HttpResponse, JsonResponse
