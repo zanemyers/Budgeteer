@@ -382,15 +382,26 @@ if INSTANCE != "prod":
         default="smtp://mailpit:1025",
     )
     DEFAULT_FROM_EMAIL = email.get("DEFAULT_FROM_EMAIL", "webmaster@localhost")
-    EMAIL_HOST = email["EMAIL_HOST"]
-    EMAIL_PORT = email["EMAIL_PORT"]
-    EMAIL_HOST_PASSWORD = email["EMAIL_HOST_PASSWORD"]
-    EMAIL_HOST_USER = email["EMAIL_HOST_USER"]
-    EMAIL_USE_TLS = email["EMAIL_USE_TLS"]
+    # dj_email_url still speaks Django's pre-6.1 EMAIL_* vocabulary, so translate it into a
+    # mailer. OPTIONS go straight to the backend's constructor and Django raises InvalidMailer
+    # for any key it doesn't accept, so the connection details only ride along when EMAIL_URL
+    # actually selects SMTP — it can equally select console, file, or locmem.
+    email_options = {}
+    if email["EMAIL_BACKEND"] == "django.core.mail.backends.smtp.EmailBackend":
+        email_options = {
+            "host": email["EMAIL_HOST"],
+            "port": email["EMAIL_PORT"],
+            "username": email["EMAIL_HOST_USER"],
+            "password": email["EMAIL_HOST_PASSWORD"],
+            "use_tls": email["EMAIL_USE_TLS"],
+            "use_ssl": email["EMAIL_USE_SSL"],
+        }
+    MAILERS = {"default": {"BACKEND": email["EMAIL_BACKEND"], "OPTIONS": email_options}}
 else:
-    # Use Django SES as the email backend for the production instance
+    # Use Django SES as the email backend for the production instance, via the shim in
+    # apps/base/mail.py — django-ses doesn't speak MAILERS yet.
     DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="")
-    EMAIL_BACKEND = "django_ses.SESBackend"
+    MAILERS = {"default": {"BACKEND": "apps.base.mail.SESMailerBackend"}}
 
 
 def log_format() -> str:

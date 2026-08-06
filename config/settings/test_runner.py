@@ -40,7 +40,7 @@ STORAGES = {
     "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
 }
 
-EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
+MAILERS = {"default": {"BACKEND": "django.core.mail.backends.locmem.EmailBackend"}}
 
 # Run queued tasks inline and surface their exceptions instead of needing a live worker.
 CELERY_TASK_ALWAYS_EAGER = True
