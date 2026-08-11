@@ -2,6 +2,8 @@
 
 A personal budgeting app built with Django, Inertia.js, and React. Track transactions, manage recurring expenses, set category budgets, and share budgets with other members.
 
+Built mobile-first, with an installable PWA as the target: the phone is the primary way it's used, and every screen is designed at phone width before it's widened. See `PRODUCT.md` for scope and `DESIGN.md` for the visual system.
+
 ## Tech Stack
 
 **Backend:** Django 6, PostgreSQL, Celery, Redis, Django Allauth, Gunicorn  
@@ -63,3 +65,4 @@ Budgeteer is a personal, self-hosted app — one owner managing their own money 
 - **Budget history** — browse past months across all budgets
 - **Account settings** — name, password, and email management (add, verify, set primary)
 - **Dark mode** — system-aware theme with manual override
+- **Mobile-first UI** — phone-width layouts throughout; web app manifest in place, service worker and TLS still to come before it installs as a PWA

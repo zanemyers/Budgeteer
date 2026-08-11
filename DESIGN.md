@@ -104,6 +104,19 @@ Step ratio between H1 and H2 ≥ 1.25. Avoid flat scales.
 - **Container max-width** for content-heavy pages: ~1200px. Don't wrap everything; settings pages and forms cap at ~600px.
 - **Page background** is `var(--paper)`. The body of every page sits directly on paper unless cards are needed.
 
+## Mobile
+
+The phone is the primary target and the app is headed for PWA installation, so a screen is judged at ~390px before it is judged wide. The test is whether it reads as a clean list you can act on with a thumb, not whether the desktop layout technically fits.
+
+- **Never scroll a table sideways to reach the number.** Below `md`, hide the secondary columns and fold what matters into the primary cell: the amount rides beside the description, the date sits on a quiet line underneath. Anything recoverable by filtering (category, payment method) does not earn a place on a phone.
+- **Drop the column-header row below `md`** (`hidden md:table-header-group`). Two meaningful columns need no labels, and the header is what makes a list read as a spreadsheet.
+- **One tap target per row.** The row itself opens the editor. No inline field editing on a phone — a modal is the right place to change a value with a thumb. Keep one real `<button>` inside the row (usually the description) so there is still a keyboard route.
+- **Selection is a mode, not a permanent column.** Offer it from the overflow menu; while it is on, a tap picks rows out and checkboxes appear. A column of empty boxes down the page is the thing being avoided.
+- **Secondary actions collapse into one overflow menu** (`MoreHorizontal`). Only the page's reason-for-being keeps a button of its own — "+ Add" on Transactions. Filters stay out of that menu: they belong beside the search box, with a count of what is currently narrowing the list.
+- **Labels drop to icons below `sm`** on secondary buttons. Keep `aria-label` and `title` so the name survives for screen readers and desktop hover.
+- **Size touch targets with the `touch:` variant** (`@media (pointer: coarse)`), not a width breakpoint — the question is whether it is a finger, not how wide the window is. Stack it as `max-sm:touch:` when a target should only grow on a phone, or a coarse-pointer tablet will inflate a button that still has its label.
+- **Give rows room.** Two lines of content want more than `p-2`; `max-md:py-3` on the cell that sets row height.
+
 ## Iconography
 
 **Lucide-react** throughout. Retire all glyph-as-icon (`«` `»` `✕` `✔` `↺` `◎` `↳` `▾` `‹` `›`). Specific replacements:

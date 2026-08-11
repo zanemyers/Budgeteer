@@ -134,6 +134,24 @@ Styling uses Tailwind CSS v4 via `@tailwindcss/vite`. `src/css/main.css` starts 
 
 Dark mode is class-based: an inline script in `apps/base/templates/layouts/base.html` reads `localStorage.getItem("theme")` and toggles a `dark` class on `<html>` before CSS loads (prevents FOUC). `ThemeToggle.tsx` cycles auto → light → dark and persists to `localStorage`.
 
+### Mobile-First UI, and the PWA Goal
+
+**The phone is the primary target and the app is headed for PWA install**, so check any UI change at ~390px before you consider it done. `PRODUCT.md` and `DESIGN.md` are authoritative; the operational rules that recur:
+
+- **A table must not scroll sideways on a phone.** Below `md`, mark secondary cells `hidden md:table-cell` and fold what matters into the primary cell — the amount beside the description, the date on a quiet line under it. `md:contents` on a mobile-only wrapper dissolves it from `md` up so the desktop table is untouched. Hide the header row with `hidden md:table-header-group`.
+- **Header cells must hide in lockstep with their body cells**, or the columns silently stop lining up with their data. `TableHead` only sets `whitespace-nowrap` from `md` up, so a header that must not wrap needs its own `whitespace-nowrap`.
+- **Rows open a modal; they don't edit inline.** One tap target per row, plus a real `<button>` inside it (usually the description) so there's a keyboard route. Stop propagation on anything else clickable in the row.
+- **Bulk selection is a mode**, offered from the overflow menu — not a permanent checkbox column. When a table mixes row kinds (the pending tab holds transactions *and* bank rows), gate every checkbox cell on the same flag or the column counts diverge.
+- **Secondary actions live in one `MoreHorizontal` dropdown.** Only the page's primary action keeps a button. Below `sm`, secondary buttons drop their label via `<span className="hidden sm:inline">` and keep `aria-label` + `title`.
+- **Size touch targets with the `touch:` variant** (`@media (pointer: coarse)`, declared in `main.css`), not width breakpoints. Stack as `max-sm:touch:` when a target should only grow on a phone — unscoped, it also fires on a coarse-pointer tablet and clips labels that are still visible there.
+- **Verify a new responsive class actually compiled** before trusting it: `grep` the built CSS under `public/static/dist/js/` after `just build_frontend`. A typo in an arbitrary or stacked variant fails silently.
+
+PWA state: `public/static/manifest.webmanifest` exists and is linked from `base.html` (standalone, portrait-primary, 192/512 maskable icons, theme-color following the active theme). The service worker is `apps/base/templates/sw.js`, rendered by `apps.base.views.service_worker` and served at `/sw.js` — root path, because a worker can't control pages above the path it was served from — and registered from `main.tsx`. It's a view rather than a static file so the precache list can name the build's content-hashed filenames (`built_asset_urls()` in the vite templatetag module); the cache is named after a hash of that list, so a new build replaces the old cache on activate.
+
+What it does and deliberately doesn't: hashed assets under `STATIC_URL + VITE_OUTPUT_DIR` are cache-first (a new build changes the URL, so a hit can't be stale); navigations are network-only, falling back to the precached `/offline/` page; **everything else — Inertia page data, the JSON endpoints the modals post to — stays on the network on purpose**, because quietly serving a stale balance is worse than an error. Don't add offline writes or data caching without deciding what happens to a stale ledger. In `VITE_DEV_MODE` the worker still installs but precaches only the offline page, since dev asset names change on every edit.
+
+The deployment still has **no TLS**, and registration fails on any insecure origin except `localhost` — so a real install from a phone needs a certificate first.
+
 ### Apps Structure
 
 - **`apps/accounts/`** — custom user model, Allauth adapter, auth views, account settings
