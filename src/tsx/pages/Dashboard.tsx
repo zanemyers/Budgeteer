@@ -2,9 +2,11 @@ import { router } from "@inertiajs/react";
 import { ChevronLeft, ChevronRight, Download, RotateCcw } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { MonthLabel } from "@/components/MonthLabel";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import AssignModal from "../components/AssignModal";
@@ -21,6 +23,7 @@ import type {
   Transaction,
 } from "../types";
 import { fmt, useCurrencySymbol } from "../utils/currency";
+import { isGoalComplete } from "../utils/goals";
 import { formatMonth, getDefaultMonth, isAtBackLimit, nextMonth, prevMonth } from "../utils/month";
 
 interface Props {
@@ -95,7 +98,12 @@ function CurrencyEditCell({
   return (
     <button
       type="button"
-      className={`${align === "right" ? "text-right" : "text-left"} cursor-pointer rounded-sm hover:underline focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2`}
+      // Assigning money is the reason this page exists, and every one of these was a 19px-tall
+      // target — the smallest on the page, and 13px wide on a category with nothing assigned yet.
+      // On a coarse pointer it becomes a real 44px target: inline-flex so min-height applies and
+      // the figure still aligns inside the row, and negative margin so the wider hit area does not
+      // push the column out. Rows getting taller on a phone is the intended outcome.
+      className={`${align === "right" ? "text-right touch:justify-end" : "text-left touch:justify-start"} cursor-pointer rounded-sm hover:underline focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2 touch:inline-flex touch:min-h-11 touch:min-w-11 touch:items-center touch:-my-2 touch:px-1`}
       title={title}
       onClick={onStart}
     >
@@ -149,6 +157,9 @@ function SummaryCell({
   // Left-aligned, but given room. At px-4 the figures sat hard against the rule beside them, which
   // read as crowded rather than as a column; the extra padding lets each one breathe without moving
   // the numbers off the shared left edge that makes them scannable down the row.
+  //
+  // Centring was tried twice and abandoned both times: text-center staggers a short label against a
+  // long number, and a centred w-fit block breaks the shared left edge the row is read down.
   return (
     <div className={`relative px-5 py-4 sm:px-6 ${tint}`}>
       {leftRule && <span aria-hidden className={`absolute inset-y-3 left-0 w-px bg-border ${leftRule}`} />}
@@ -179,6 +190,8 @@ export default function Dashboard({
   // this a failed save — which deliberately keeps the cell editable so the typed value isn't
   // lost — re-sent the same value and re-toasted on every subsequent blur.
   const [lastTried, setLastTried] = useState<Record<string, string>>({});
+  // The category whose row editor is open. Below sm a row opens this instead of editing in place.
+  const [rowEditor, setRowEditor] = useState<BudgetOverviewCategory | null>(null);
   const [addTransactionType, setAddTransactionType] = useState<"income" | "expense" | null>(null);
   const [assigning, setAssigning] = useState(false);
   const [cleaning, setCleaning] = useState(false);
@@ -270,6 +283,174 @@ export default function Dashboard({
     router.reload({ only: ["overview", "pending_count"] });
   }
 
+  /**
+   * The row editor for phones.
+   *
+   * Every row carried two targets — a 16px category link beside a 19px amount button — sitting
+   * inside 35px of height. That is the same "four tap targets in a space the size of a thumb"
+   * problem the register was reworked to remove, so below sm the row becomes one target that opens
+   * this, and the figures in the row go read-only. From sm up nothing changes: inline editing is
+   * quick with a mouse, and this modal is simply another way in.
+   *
+   * It writes through the same edit buffers and the same save calls as the inline cells, so there is
+   * one persistence path rather than two that can drift.
+   */
+  function openRowEditor(cat: BudgetOverviewCategory) {
+    setEditingAssigned((prev) => ({ ...prev, [cat.id]: cat.assigned }));
+    if (!cat.is_goal && !cat.rollover) {
+      setEditingBudgeted((prev) => ({ ...prev, [cat.id]: cat.budgeted }));
+    }
+    setRowEditor(cat);
+  }
+
+  /**
+   * Opens the row editor, but only for a click on the empty part of a row.
+   *
+   * The name link, the inline amount cells and their inputs each handle their own click; a
+   * row-level handler that fired regardless would open the editor on top of the cell being typed
+   * into. One guard here beats a stopPropagation on every control inside.
+   */
+  function rowClick(cat: BudgetOverviewCategory) {
+    return (e: React.MouseEvent) => {
+      if ((e.target as HTMLElement).closest("a, button, input")) return;
+      openRowEditor(cat);
+    };
+  }
+
+  function closeRowEditor() {
+    if (rowEditor) {
+      clearEditAssigned(rowEditor.id);
+      clearEditBudgeted(rowEditor.id);
+    }
+    setRowEditor(null);
+  }
+
+  function renderRowEditor() {
+    const cat = rowEditor;
+    if (!cat) return null;
+    const targetEditable = !cat.is_goal && !cat.rollover;
+    const monthly = parseFloat(cat.goal_monthly_needed ?? "0");
+    const busy = (savingAssigned[cat.id] ?? false) || (savingBudgeted[cat.id] ?? false);
+
+    // An arrow rather than a declaration: a hoisted function loses the null narrowing on `cat`.
+    const save = async () => {
+      await saveAssigned(cat);
+      if (targetEditable) await saveBudgeted(cat);
+      setRowEditor(null);
+    };
+
+    return (
+      <Dialog open onOpenChange={(open) => !open && closeRowEditor()}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{cat.name}</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-4 py-2">
+            <label className="flex flex-col gap-1.5" htmlFor="row-editor-assigned">
+              <span className="text-sm font-medium">
+                {cat.is_goal ? "Assigned to this goal this month" : "Assigned this month"}
+              </span>
+              <div className="flex items-center">
+                <span className="inline-flex h-9 items-center rounded-l-md border border-r-0 border-input bg-muted px-2 text-sm text-muted-foreground">
+                  {symbol}
+                </span>
+                <Input
+                  id="row-editor-assigned"
+                  type="number"
+                  className="rounded-l-none"
+                  min="0"
+                  step="0.01"
+                  autoFocus
+                  value={editingAssigned[cat.id] ?? cat.assigned}
+                  onChange={(e) => setEditingAssigned((prev) => ({ ...prev, [cat.id]: e.target.value }))}
+                  disabled={busy}
+                />
+              </div>
+            </label>
+
+            {targetEditable && (
+              <label className="flex flex-col gap-1.5" htmlFor="row-editor-target">
+                <span className="text-sm font-medium">Monthly target</span>
+                <div className="flex items-center">
+                  <span className="inline-flex h-9 items-center rounded-l-md border border-r-0 border-input bg-muted px-2 text-sm text-muted-foreground">
+                    {symbol}
+                  </span>
+                  <Input
+                    id="row-editor-target"
+                    type="number"
+                    className="rounded-l-none"
+                    min="0"
+                    step="0.01"
+                    value={editingBudgeted[cat.id] ?? cat.budgeted}
+                    onChange={(e) => setEditingBudgeted((prev) => ({ ...prev, [cat.id]: e.target.value }))}
+                    disabled={busy}
+                  />
+                </div>
+              </label>
+            )}
+
+            {/* The figures this row cannot change, so the modal still answers "where does this
+                category stand" without sending you back to the table to read it. */}
+            <dl className="flex flex-col gap-1 text-sm">
+              {cat.is_goal ? (
+                <>
+                  {monthly > 0 && (
+                    <div className="flex justify-between gap-4">
+                      <dt className="text-muted-foreground">Asks for each month</dt>
+                      <dd className="tabular-nums">{fmt(String(monthly), symbol)}</dd>
+                    </div>
+                  )}
+                  <div className="flex justify-between gap-4">
+                    <dt className="text-muted-foreground">Saved all time</dt>
+                    <dd className="tabular-nums">{fmt(cat.goal_total_saved, symbol)}</dd>
+                  </div>
+                </>
+              ) : (
+                <div className="flex justify-between gap-4">
+                  <dt className="text-muted-foreground">Spent this month</dt>
+                  <dd className="tabular-nums">{fmt(cat.activity, symbol)}</dd>
+                </div>
+              )}
+              {cat.rollover && !cat.is_goal && (
+                <div className="flex justify-between gap-4">
+                  <dt className="text-muted-foreground">Target (base + carried)</dt>
+                  <dd className="tabular-nums">{fmt(cat.budgeted, symbol)}</dd>
+                </div>
+              )}
+            </dl>
+
+            <a
+              href={`/budgets/${budget_pk}/transactions/?month=${month}&category=${cat.id}${cat.is_goal ? "&all=1" : ""}`}
+              className="text-sm"
+            >
+              View transactions
+            </a>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={closeRowEditor} disabled={busy}>
+              Cancel
+            </Button>
+            <Button onClick={() => void save()} disabled={busy}>
+              {busy ? "Saving…" : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  /**
+   * The assigned figure as plain text, for the phone layout where the row is the control.
+   * Matches CurrencyEditCell's own rendering, including the em dash for nothing assigned yet.
+   */
+  function readOnlyFigure(value: string, className?: string) {
+    return parseFloat(value) > 0 ? (
+      <span className={className}>{fmt(value, symbol)}</span>
+    ) : (
+      <span className="italic text-muted-foreground">—</span>
+    );
+  }
+
   function renderCategoryRow(cat: BudgetOverviewCategory, isChild = false) {
     const budgeted = parseFloat(cat.budgeted);
     const assigned = parseFloat(cat.assigned);
@@ -293,14 +474,26 @@ export default function Dashboard({
     const assignedClass = budgeted > 0 && onTarget ? "text-moss" : "";
 
     return (
-      <TableRow key={cat.id}>
+      /* The row is the tap target below sm. From sm up the inline controls and the name link stop
+         the click, so this only fires on the empty part of a row — where opening the editor is a
+         reasonable reading of the click anyway. */
+      <TableRow key={cat.id} className="max-sm:cursor-pointer" onClick={rowClick(cat)}>
         <TableCell style={isChild ? { paddingLeft: "2.25rem" } : undefined}>
           <a
             href={`/budgets/${budget_pk}/transactions/?month=${month}&category=${cat.id}`}
-            className="no-underline hover:underline"
+            className="hidden sm:inline no-underline hover:underline"
           >
             {cat.name}
           </a>
+          {/* The keyboard route into the row editor, and the reason the row does not need to be a
+              button itself. The transactions link this replaces lives inside the editor. */}
+          <button
+            type="button"
+            className="sm:hidden text-left rounded-sm hover:underline focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2 touch:inline-flex touch:min-h-11 touch:items-center"
+            onClick={() => openRowEditor(cat)}
+          >
+            {cat.name}
+          </button>
           {cat.rollover && !cat.is_goal && (
             <span className="ml-1.5 inline-flex text-moss" title="Leftover rolls over to next month">
               <RotateCcw aria-hidden className="size-3" />
@@ -309,7 +502,16 @@ export default function Dashboard({
           )}
         </TableCell>
         <TableCell className="text-right">
-          <div className="flex flex-wrap items-baseline justify-end gap-x-1">
+          {/* Read-only below sm: the row opens the editor, so a second target in the same row would
+              put the old pair of tiny buttons straight back. */}
+          <div className="sm:hidden text-sm tabular-nums">
+            {readOnlyFigure(cat.assigned, overTarget ? "text-expense" : assignedClass)}
+            {showTarget && <span className="text-muted-foreground"> / {fmt(cat.budgeted, symbol)}</span>}
+            {overTarget && (
+              <span className="block text-xs text-expense">{fmt(String(overBy), symbol)} over</span>
+            )}
+          </div>
+          <div className="hidden sm:flex flex-wrap items-baseline justify-end gap-x-1">
             <CurrencyEditCell
               symbol={symbol}
               value={cat.assigned}
@@ -376,8 +578,90 @@ export default function Dashboard({
     );
   }
 
+  // Goals get their own row shape rather than sharing renderCategoryRow. The target column here is
+  // the monthly contribution the goal asks for, which is computed from the target and the time left
+  // rather than typed, so it is read-only; and the last column is a lifetime balance, not this
+  // month's spend.
+  function renderGoalRow(cat: BudgetOverviewCategory) {
+    const monthly = parseFloat(cat.goal_monthly_needed ?? "0");
+    const assigned = parseFloat(cat.assigned);
+    // Same epsilon and same hide-once-met rule as the expense rows, for the same reasons.
+    const onTarget = monthly > 0 && Math.abs(assigned - monthly) < 0.005;
+    const shortOfMonthly = monthly - assigned > 0.005;
+
+    return (
+      <TableRow key={cat.id} className="max-sm:cursor-pointer" onClick={rowClick(cat)}>
+        <TableCell>
+          {/* All time, like the Goals page: the balance beside it is a lifetime figure. */}
+          <a
+            href={`/budgets/${budget_pk}/transactions/?month=${month}&category=${cat.id}&all=1`}
+            className="hidden sm:inline no-underline hover:underline"
+          >
+            {cat.name}
+          </a>
+          <button
+            type="button"
+            className="sm:hidden text-left rounded-sm hover:underline focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2 touch:inline-flex touch:min-h-11 touch:items-center"
+            onClick={() => openRowEditor(cat)}
+          >
+            {cat.name}
+          </button>
+        </TableCell>
+        <TableCell className="text-right">
+          <div className="sm:hidden text-sm tabular-nums whitespace-nowrap">
+            {readOnlyFigure(cat.assigned, onTarget ? "text-moss" : undefined)}
+            {shortOfMonthly && <span className="text-muted-foreground"> / {fmt(String(monthly), symbol)}</span>}
+          </div>
+          {/* No wrap, unlike the expense rows: the assigned figure and the monthly ask read as one
+              "50 / 100" pair, and this card sits in the narrow column where they would otherwise
+              break across two lines. The table scrolls if a pair ever outgrows the column. */}
+          <div className="hidden sm:flex items-baseline justify-end gap-x-1 whitespace-nowrap">
+            <CurrencyEditCell
+              symbol={symbol}
+              value={cat.assigned}
+              editing={editingAssigned[cat.id]}
+              onStart={() => {
+                setEditingAssigned((prev) => ({ ...prev, [cat.id]: cat.assigned }));
+              }}
+              onChange={(v) => setEditingAssigned((prev) => ({ ...prev, [cat.id]: v }))}
+              onCommit={() => void saveAssigned(cat)}
+              onCancel={() => clearEditAssigned(cat.id)}
+              saving={savingAssigned[cat.id] ?? false}
+              valueClass={onTarget ? "text-moss" : ""}
+              title="Click to set what this goal gets this month"
+            />
+            {shortOfMonthly && (
+              <>
+                <span aria-hidden className="text-muted-foreground">
+                  /
+                </span>
+                <span
+                  className="text-sm tabular-nums text-muted-foreground"
+                  title={
+                    cat.goal_ongoing
+                      ? "What this goal asks for each month"
+                      : `What it takes each month to reach ${fmt(cat.goal_target, symbol)}${
+                          cat.goal_months_remaining ? ` in ${cat.goal_months_remaining}mo` : ""
+                        }`
+                  }
+                >
+                  {fmt(String(monthly), symbol)}
+                </span>
+              </>
+            )}
+          </div>
+        </TableCell>
+        <TableCell className="text-right" title="Balance in this goal, all time">
+          {fmt(cat.goal_total_saved, symbol)}
+        </TableCell>
+      </TableRow>
+    );
+  }
+
   const income = overview.categories.filter((c) => c.category_type === "income");
   const expense = overview.categories.filter((c) => c.category_type === "expense" && !c.is_goal);
+  // Met goals drop off: this card is about what still needs funding this month.
+  const activeGoals = overview.categories.filter((c) => c.is_goal && !isGoalComplete(c));
 
   function renderHierarchical(cats: BudgetOverviewCategory[]) {
     const roots = cats.filter((c) => c.parent_id === null);
@@ -423,33 +707,46 @@ export default function Dashboard({
     <div className="max-w-[1200px]">
       {/* Page header */}
       <header className="mb-8 flex flex-wrap items-center gap-3">
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          disabled={isAtBackLimit(month)}
-          onClick={() => navigateMonth(prevMonth(month))}
-          aria-label="Previous month"
-        >
-          <ChevronLeft />
-        </Button>
-        <h1 className="text-3xl font-semibold tracking-tight">{formatMonth(month)}</h1>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={() => navigateMonth(nextMonth(month))}
-          disabled={isCurrentMonth}
-          aria-label="Next month"
-        >
-          <ChevronRight />
-        </Button>
+        <div className="flex items-center gap-3">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            disabled={isAtBackLimit(month)}
+            onClick={() => navigateMonth(prevMonth(month))}
+            aria-label="Previous month"
+          >
+            <ChevronLeft />
+          </Button>
+          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+            <MonthLabel month={month} />
+          </h1>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => navigateMonth(nextMonth(month))}
+            disabled={isCurrentMonth}
+            aria-label="Next month"
+          >
+            <ChevronRight />
+          </Button>
+        </div>
 
         {/* The month's whole picture: figures, categories, goals and what was paid out of them.
             A plain link, so the browser handles the download. The flat one-row-per-line sheet for
-            importing elsewhere lives on the Transactions page. */}
-        <Button asChild variant="outline" size="sm" className="ml-auto">
-          <a href={`/budgets/${budget_pk}/export/?month=${month}`} download>
+            importing elsewhere lives on the Transactions page.
+            On a phone the label goes and the icon carries it alone: "Export August 2026" set beside
+            the month heading was wide enough to wrap the header onto a second line, and it is a
+            secondary action that had no business being the widest thing up there. The name survives
+            in aria-label and the tooltip, and a coarse pointer still gets a full 44px target. */}
+        <Button asChild variant="outline" size="sm" className="ml-auto max-sm:touch:w-11">
+          <a
+            href={`/budgets/${budget_pk}/export/?month=${month}`}
+            download
+            aria-label={`Export ${formatMonth(month)}`}
+            title={`Export ${formatMonth(month)}`}
+          >
             <Download aria-hidden className="size-4" />
-            Export {formatMonth(month)}
+            <span className="hidden sm:inline">Export {formatMonth(month)}</span>
           </a>
         </Button>
       </header>
@@ -573,65 +870,99 @@ export default function Dashboard({
         <div className="text-muted-foreground text-center py-16">
           <p className="mb-4">No categories yet.</p>
           <Button asChild variant="outline">
-            <a href={`/budgets/${budget_pk}/categories/`}>Add some categories to get started</a>
+            <a href={`/budgets/${budget_pk}/settings/?tab=categories`}>Add some categories to get started</a>
           </Button>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-          {income.length > 0 && (
+          {(income.length > 0 || activeGoals.length > 0) && (
             <div className="md:col-span-4 flex flex-col gap-6">
               {/* Income card — short */}
-              <Card className="p-0 gap-0 overflow-hidden">
-                <div className="flex justify-between items-center px-4 py-2 bg-moss-soft text-ink">
-                  <span className={SECTION_LABEL_CLASS}>Income</span>
-                  <Button
-                    variant="ghost"
-                    size="xs"
-                    className="hover:bg-moss/20 hover:text-ink"
-                    onClick={() => setAddTransactionType("income")}
-                  >
-                    + Add
-                  </Button>
-                </div>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Category</TableHead>
-                      <TableHead className="text-right">Spent</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {(() => {
-                      const roots = income.filter((c) => c.parent_id === null);
-                      const kids = new Map<number, BudgetOverviewCategory[]>();
-                      for (const c of income) {
-                        if (c.parent_id !== null) {
-                          const list = kids.get(c.parent_id) ?? [];
-                          list.push(c);
-                          kids.set(c.parent_id, list);
+              {income.length > 0 && (
+                <Card className="p-0 gap-0 overflow-hidden">
+                  <div className="flex justify-between items-center px-4 py-2 bg-moss-soft text-ink">
+                    <span className={SECTION_LABEL_CLASS}>Income</span>
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      className="hover:bg-moss/20 hover:text-ink"
+                      onClick={() => setAddTransactionType("income")}
+                    >
+                      + Add
+                    </Button>
+                  </div>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Category</TableHead>
+                        <TableHead className="text-right">Spent</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {(() => {
+                        const roots = income.filter((c) => c.parent_id === null);
+                        const kids = new Map<number, BudgetOverviewCategory[]>();
+                        for (const c of income) {
+                          if (c.parent_id !== null) {
+                            const list = kids.get(c.parent_id) ?? [];
+                            list.push(c);
+                            kids.set(c.parent_id, list);
+                          }
                         }
-                      }
-                      const renderRow = (cat: BudgetOverviewCategory, isChild: boolean) => (
-                        <TableRow key={cat.id}>
-                          <TableCell style={isChild ? { paddingLeft: "2.25rem" } : undefined}>
-                            <a
-                              href={`/budgets/${budget_pk}/transactions/?month=${month}&category=${cat.id}`}
-                              className="no-underline hover:underline"
-                            >
-                              {cat.name}
-                            </a>
-                          </TableCell>
-                          <TableCell className="text-right text-income">{fmt(cat.activity, symbol)}</TableCell>
-                        </TableRow>
-                      );
-                      return roots.flatMap((root) => [
-                        renderRow(root, false),
-                        ...(kids.get(root.id) ?? []).map((child) => renderRow(child, true)),
-                      ]);
-                    })()}
-                  </TableBody>
-                </Table>
-              </Card>
+                        const renderRow = (cat: BudgetOverviewCategory, isChild: boolean) => (
+                          <TableRow key={cat.id}>
+                            <TableCell style={isChild ? { paddingLeft: "2.25rem" } : undefined}>
+                              {/* Nothing on an income row is editable, so it keeps its link rather
+                                  than gaining a row editor — it just needs a target a thumb can
+                                  land on. */}
+                              <a
+                                href={`/budgets/${budget_pk}/transactions/?month=${month}&category=${cat.id}`}
+                                className="no-underline hover:underline touch:inline-flex touch:min-h-11 touch:items-center"
+                              >
+                                {cat.name}
+                              </a>
+                            </TableCell>
+                            <TableCell className="text-right text-income">{fmt(cat.activity, symbol)}</TableCell>
+                          </TableRow>
+                        );
+                        return roots.flatMap((root) => [
+                          renderRow(root, false),
+                          ...(kids.get(root.id) ?? []).map((child) => renderRow(child, true)),
+                        ]);
+                      })()}
+                    </TableBody>
+                  </Table>
+                </Card>
+              )}
+
+              {activeGoals.length > 0 && (
+                <Card className="p-0 gap-0 overflow-hidden">
+                  <div className="flex justify-between items-center px-4 py-2 bg-fund-soft text-ink">
+                    <span className={SECTION_LABEL_CLASS}>Goals</span>
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      className="hover:bg-fund/20 hover:text-ink"
+                      onClick={() => router.visit(`/budgets/${budget_pk}/goals/`)}
+                    >
+                      View all
+                    </Button>
+                  </div>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Goal</TableHead>
+                        {/* TableHead only stops wrapping at md, and this card is at its narrowest
+                            below that, where the grid is a single column. Held on one line here so
+                            the auto layout has to widen the column rather than break the label. */}
+                        <TableHead className="text-right whitespace-nowrap">Assigned / mo</TableHead>
+                        <TableHead className="text-right">Saved</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>{activeGoals.map((cat) => renderGoalRow(cat))}</TableBody>
+                  </Table>
+                </Card>
+              )}
             </div>
           )}
 
@@ -703,13 +1034,14 @@ export default function Dashboard({
           paymentMethods={payment_methods}
           currencies={currencies}
           userCurrency={user_currency}
-          budgetPk={budget_pk}
           transaction={null}
           defaultCategoryType={addTransactionType}
           onSave={createTransaction}
           onClose={() => setAddTransactionType(null)}
         />
       )}
+
+      {renderRowEditor()}
     </div>
   );
 }
