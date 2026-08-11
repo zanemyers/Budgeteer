@@ -15,7 +15,7 @@ from apps.accounts.views import (
     SignUpView,
 )
 from apps.banking.views import BankAccountUpdateView, BankingView, banking_sync
-from apps.base.views import http_404, http_500, refresh_exchange_rates
+from apps.base.views import http_404, http_500, offline, refresh_exchange_rates, service_worker
 from apps.budget.views import BudgetHistoryView, OnboardingView, SiteIndexView
 from apps.investments.views import InvestmentsView
 
@@ -28,6 +28,10 @@ urlpatterns: list[URLResolver | URLPattern] = [
 # Project Urls
 urlpatterns += [
     path("", SiteIndexView.as_view(), name="site_index"),
+    # Root path, not /public/static/: a service worker can only control pages at or below its own
+    # path, and this one has to control the whole app.
+    path("sw.js", service_worker, name="service_worker"),
+    path("offline/", offline, name="offline"),
     path("onboarding/", OnboardingView.as_view(), name="onboarding"),
     path("-/", include("django_alive.urls")),
     path("accounts/history/", BudgetHistoryView.as_view(), name="budget_history"),

@@ -3,6 +3,17 @@ import { createElement } from "react";
 import { createRoot } from "react-dom/client";
 import AppLayout from "./layouts/AppLayout";
 
+// Registered after load so it never competes with the first render for bandwidth. It fails on any
+// insecure origin — which is every host but localhost until the deployment has TLS — and the app is
+// fully usable without it, so a failure is logged and otherwise ignored.
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch((error) => {
+      console.warn("Service worker registration failed:", error);
+    });
+  });
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   createInertiaApp({
     resolve: (name) => {

@@ -77,6 +77,23 @@ def _get_file_data(filename: str) -> dict[str, str | list[str | None] | bool]:
     return file_data
 
 
+def built_asset_urls() -> list[str]:
+    """
+    Return a URL for every file the current Vite build emitted.
+
+    The service worker precaches these. Unlike `vite_asset` it wants the whole build rather than one
+    named entry point, including the stylesheets and assets a JS entry pulls in. Sorted so the same
+    build always produces the same list, which is what the worker's cache version is derived from.
+    """
+    base_url = f"{settings.STATIC_URL}{vite_settings.VITE_OUTPUT_DIR}"
+    filenames: set[str] = set()
+    for entry in _get_manifest().values():
+        filenames.add(entry["file"])
+        filenames.update(entry.get("css", []))
+        filenames.update(entry.get("assets", []))
+    return [f"{base_url}{filename}" for filename in sorted(filenames)]
+
+
 def _get_css_asset(filename: str):
     if vite_settings.VITE_DEV_MODE is True:
         base_url = f"http://{vite_settings.VITE_SERVER_HOST}:{vite_settings.VITE_SERVER_PORT}"

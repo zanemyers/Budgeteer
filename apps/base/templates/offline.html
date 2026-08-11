@@ -1,0 +1,113 @@
+{% comment %} The service worker precaches this page and serves it when a navigation can't reach the
+  network, so it has to render with nothing but itself: no Vite bundle, no Google font, no nav
+  include. The tokens below are copied from src/css/main.css for that reason. {% endcomment %}
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="icon" type="image/svg+xml" href="/public/static/favicon2/favicon.svg">
+    <title>Offline {% if SITE_NAME %}- {{ SITE_NAME }}{% endif %}</title>
+    <script>
+      // Same pre-paint theme read as layouts/base.html, so the fallback doesn't flash the wrong theme.
+      (function() {
+        var t = localStorage.getItem("theme") || "auto";
+        var e = t === "auto" ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : t;
+        if (e === "dark") document.documentElement.classList.add("dark");
+      })();
+    </script>
+    <style>
+      :root {
+        --paper: oklch(98% 0.005 100);
+        --ink: oklch(22% 0.015 130);
+        --ink-quiet: oklch(48% 0.012 130);
+        --moss: oklch(48% 0.07 130);
+        --moss-foreground: oklch(98% 0.005 100);
+      }
+      .dark {
+        --paper: oklch(23% 0.008 130);
+        --ink: oklch(94% 0.008 100);
+        --ink-quiet: oklch(68% 0.01 110);
+        --moss: oklch(72% 0.09 130);
+        --moss-foreground: oklch(15% 0.01 130);
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        min-height: 100dvh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1.5rem;
+        background: var(--paper);
+        color: var(--ink);
+        font-family: Inter, system-ui, -apple-system, sans-serif;
+        line-height: 1.5;
+      }
+      main {
+        max-width: 24rem;
+        text-align: center;
+      }
+      h1 {
+        margin: 0 0 0.5rem;
+        font-size: 1.25rem;
+        font-weight: 600;
+      }
+      p {
+        margin: 0 0 1.5rem;
+        color: var(--ink-quiet);
+      }
+      button {
+        min-height: 44px;
+        padding: 0 1.25rem;
+        border: 0;
+        border-radius: 0.5rem;
+        background: var(--moss);
+        color: var(--moss-foreground);
+        font: inherit;
+        font-weight: 500;
+        cursor: pointer;
+      }
+      svg {
+        color: var(--ink-quiet);
+        margin-bottom: 1rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <svg width="32"
+           height="32"
+           viewBox="0 0 24 24"
+           fill="none"
+           stroke="currentColor"
+           stroke-width="2"
+           stroke-linecap="round"
+           stroke-linejoin="round"
+           aria-hidden="true">
+        <path d="m2 2 20 20">
+        </path>
+        <path d="M8.5 16.5a5 5 0 0 1 7 0">
+        </path>
+        <path d="M2 8.82a15 15 0 0 1 4.17-2.65">
+        </path>
+        <path d="M10.66 5c4.01-.36 8.14.9 11.34 3.76">
+        </path>
+        <path d="M16.85 11.25a10 10 0 0 1 2.22 1.68">
+        </path>
+        <path d="M5 13a10 10 0 0 1 5.24-2.76">
+        </path>
+        <line x1="12" x2="12.01" y1="20" y2="20">
+        </line>
+      </svg>
+      <h1>You're offline</h1>
+      <p>Budgeteer needs a connection to load your budget. This page will reload itself once you're back.</p>
+      <button type="button" onclick="location.reload()">Try again</button>
+    </main>
+    <script>
+      window.addEventListener("online", function() {
+        location.reload();
+      });
+    </script>
+  </body>
+</html>
