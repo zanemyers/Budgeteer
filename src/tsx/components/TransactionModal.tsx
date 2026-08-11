@@ -1,8 +1,6 @@
 import { Check, PiggyBank } from "lucide-react";
 import { useEffect, useState } from "react";
-import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -17,7 +15,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { jsonFetch } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { todayLocal } from "@/utils/date";
 import type {
@@ -38,14 +35,12 @@ interface Props {
   paymentMethods: PaymentMethod[];
   currencies: CurrencyOption[];
   userCurrency: string;
-  budgetPk: number;
   onSave: (data: Partial<Transaction>) => Promise<void>;
   transaction?: Transaction | null;
   onClose: () => void;
   defaultCategoryType?: "income" | "expense";
   forceTransactionType?: "transfer";
   onIgnoreLinkedBankTxn?: (bt: LinkedBankTransaction) => Promise<void>;
-  onTransactionUpdate?: (txn: Transaction) => void;
 }
 
 interface LineState {
@@ -109,14 +104,12 @@ export default function TransactionModal({
   paymentMethods,
   currencies,
   userCurrency,
-  budgetPk,
   onSave,
   transaction,
   onClose,
   defaultCategoryType,
   forceTransactionType,
   onIgnoreLinkedBankTxn,
-  onTransactionUpdate,
 }: Props) {
   const symbol = useCurrencySymbol();
   const [form, setForm] = useState<FormState>(() =>
@@ -124,63 +117,6 @@ export default function TransactionModal({
   );
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string[]>>({});
-  const partnerId = transaction?.transfer_partner_id ?? null;
-  const [transferCandidates, setTransferCandidates] = useState<Transaction[] | null>(null);
-  const [transferBusy, setTransferBusy] = useState(false);
-
-  async function loadTransferCandidates() {
-    if (!transaction) return;
-    setTransferBusy(true);
-    try {
-      const data = await jsonFetch<{ candidates: Transaction[] }>(
-        `/budgets/${budgetPk}/transactions/${transaction.id}/transfer-candidates/`,
-        "GET",
-      );
-      setTransferCandidates(data?.candidates ?? []);
-    } catch (err) {
-      toast.error((err as { error?: string })?.error ?? "Couldn't load transfer candidates.");
-    } finally {
-      setTransferBusy(false);
-    }
-  }
-
-  async function linkTransfer(partner: Transaction) {
-    if (!transaction) return;
-    setTransferBusy(true);
-    try {
-      const updated = await jsonFetch<Transaction>(
-        `/budgets/${budgetPk}/transactions/${transaction.id}/transfer-link/`,
-        "PATCH",
-        { partner_id: partner.id },
-      );
-      toast.success(`Linked to "${partner.description}".`);
-      if (updated) onTransactionUpdate?.(updated);
-      setTransferCandidates(null);
-    } catch (err) {
-      toast.error((err as { error?: string })?.error ?? "Couldn't link transfer.");
-    } finally {
-      setTransferBusy(false);
-    }
-  }
-
-  async function unlinkTransfer() {
-    if (!transaction) return;
-    setTransferBusy(true);
-    try {
-      const updated = await jsonFetch<Transaction>(
-        `/budgets/${budgetPk}/transactions/${transaction.id}/transfer-link/`,
-        "PATCH",
-        { partner_id: null },
-      );
-      toast.success("Transfer unlinked.");
-      if (updated) onTransactionUpdate?.(updated);
-    } catch {
-      toast.error("Couldn't unlink.");
-    } finally {
-      setTransferBusy(false);
-    }
-  }
-
   useEffect(() => {
     setForm(buildInitial(transaction, defaultCategoryType, categories, userCurrency));
   }, [transaction, defaultCategoryType, categories, userCurrency]);
@@ -363,102 +299,6 @@ export default function TransactionModal({
                     </div>
                   );
                 })}
-              </div>
-            )}
-
-            {isEdit && (
-              <div className="rounded-md border border-rule bg-muted/30 px-3 py-2 flex flex-col gap-2">
-                <div className="text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-ink-quiet">
-                  Transfer link
-                </div>
-                {partnerId !== null ? (
-                  <div className="flex items-start justify-between gap-3 text-sm">
-                    <div className="min-w-0">
-                      <Badge variant="secondary" className="mr-2">
-                        Linked
-                      </Badge>
-                      Paired with another transaction; both legs are excluded from headline income/expense totals.
-                    </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="text-xs h-auto py-0.5 px-1.5"
-                      disabled={transferBusy}
-                      onClick={() => void unlinkTransfer()}
-                    >
-                      Unlink
-                    </Button>
-                  </div>
-                ) : transferCandidates === null ? (
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-xs text-ink-quiet">
-                      For account-to-account moves (e.g. checking → savings), link the two legs so they don't
-                      double-count.
-                    </p>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={transferBusy}
-                      onClick={() => void loadTransferCandidates()}
-                    >
-                      Find transfer partner
-                    </Button>
-                  </div>
-                ) : transferCandidates.length === 0 ? (
-                  <div className="flex items-center justify-between gap-3 text-sm">
-                    <p className="text-ink-quiet">
-                      No matching transactions found (same amount, opposite direction, within ±3 days, different payment
-                      method).
-                    </p>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="text-xs h-auto py-0.5 px-1.5"
-                      onClick={() => setTransferCandidates(null)}
-                    >
-                      Dismiss
-                    </Button>
-                  </div>
-                ) : (
-                  <div>
-                    <p className="text-xs text-ink-quiet mb-2">Pick the matching counterpart:</p>
-                    <ul className="divide-y border border-rule rounded bg-background">
-                      {transferCandidates.map((c) => (
-                        <li key={c.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
-                          <div className="min-w-0">
-                            <div className="font-medium truncate">{c.description}</div>
-                            <div className="text-xs text-ink-quiet">
-                              {fmtDate(c.paid_date ?? c.due_date)} · {c.payment_method_name ?? "—"} ·{" "}
-                              <span className="tabular-nums">
-                                {fmtSigned(
-                                  Number.parseFloat(c.total_amount) * (c.transaction_type === "expense" ? -1 : 1),
-                                  symbol,
-                                )}
-                              </span>
-                            </div>
-                          </div>
-                          <Button type="button" size="sm" disabled={transferBusy} onClick={() => void linkTransfer(c)}>
-                            Link
-                          </Button>
-                        </li>
-                      ))}
-                    </ul>
-                    <div className="mt-2">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="text-xs h-auto py-0.5 px-1.5"
-                        onClick={() => setTransferCandidates(null)}
-                      >
-                        Cancel
-                      </Button>
-                    </div>
-                  </div>
-                )}
               </div>
             )}
 
