@@ -207,8 +207,11 @@ input[type="number"],
   flex-direction: column;
   width: 240px;
   min-width: 240px;
-  height: 100vh;
-  overflow-y: auto;
+  /* dvh, not vh: with a mobile URL bar on screen 100vh is taller than the viewport, which pushed
+     the user menu in .sidebar-footer — the only route to Budgets, Settings and Sign Out — off the
+     bottom of the drawer. Only .sidebar-nav scrolls; when both scrolled, iOS momentum picked the
+     outer one and the nav appeared stuck. */
+  height: 100dvh;
   color: var(--moss-foreground);
   background-color: var(--moss);
   transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
@@ -223,7 +226,9 @@ input[type="number"],
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1.25rem 1.25rem 1rem;
+  /* Installed standalone there is no browser chrome above this, so the brand row would otherwise
+     sit under the notch. Zero in a normal tab. */
+  padding: calc(1.25rem + env(safe-area-inset-top)) 1.25rem 1rem;
   border-bottom: 1px solid color-mix(in oklch, var(--moss-foreground) 12%, transparent);
 }
 
@@ -244,6 +249,9 @@ input[type="number"],
 .sidebar-nav {
   flex: 1;
   padding: 0.75rem;
+  /* contain, so flicking past the end of the nav does not chain into scrolling the page behind the
+     open drawer — the body lock stops the gesture starting there, not overscroll arriving here. */
+  overscroll-behavior: contain;
   overflow-y: auto;
 }
 
@@ -292,6 +300,8 @@ input[type="number"],
 
 .sidebar-footer {
   padding: 0.75rem;
+  /* Clears the home indicator so the user menu stays tappable when installed. */
+  padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
   border-top: 1px solid color-mix(in oklch, var(--moss-foreground) 12%, transparent);
 }
 
@@ -331,6 +341,36 @@ input[type="number"],
   flex-shrink: 0;
   font-size: 0.7rem;
   opacity: 0.55;
+}
+
+/* The 44px floor the Button component already sets with `touch:min-h-11`. These are plain CSS
+   classes that predate that variant, so they were left at ~34px — the nav links and the user menu
+   were the smallest targets in the drawer. Sized on pointer, not width, so a coarse-pointer tablet
+   gets it too. */
+@media (pointer: coarse) {
+  .sidebar-link,
+  .sidebar-user,
+  .sidebar-brand {
+    min-height: 2.75rem;
+  }
+
+  /* For inline text links — "Forgot password?", the footer links — that sit on a line with other
+     content, so growing them to 2.75rem would push that line around. The hit area is a centered
+     pseudo-element instead, leaving the text exactly where it was: the same approach Checkbox and
+     Switch take. min-width covers the short ones ("Sign in" is only 42px wide). */
+  .touch-target {
+    position: relative;
+  }
+  .touch-target::before {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    height: 2.75rem;
+    width: 100%;
+    min-width: 2.75rem;
+    transform: translate(-50%, -50%);
+    content: "";
+  }
 }
 
 @media (max-width: 1023px) {
