@@ -1,8 +1,7 @@
 import { router } from "@inertiajs/react";
-import { Pencil } from "lucide-react";
 import { Fragment, useState } from "react";
 import { toast } from "sonner";
-import { ConfirmButton } from "@/components/ConfirmButton";
+import { RowActions } from "@/components/RowActions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -98,15 +97,22 @@ export function RecurringPanel({ budgetPk, recurring, categories, paymentMethods
         <Card className="overflow-hidden p-0">
           <div className="overflow-x-auto">
             <Table>
-              <TableHeader>
+              {/* Header hides in lockstep with the body cells below md, or the remaining columns stop
+                  lining up with their data. */}
+              <TableHeader className="hidden md:table-header-group">
                 <TableRow>
-                  <TableHead className="w-[24%]">Name</TableHead>
-                  <TableHead className="w-[15%]">Frequency</TableHead>
-                  <TableHead className="w-[16%]">Payment Method</TableHead>
-                  <TableHead className="w-[11%] text-right">Amount</TableHead>
-                  <TableHead className="w-[12%]">Start</TableHead>
+                  {/* These must sum to 100. They previously totalled 108, which forced the table wider
+                      than its wrapper at every width and left it permanently side-scrolling. */}
+                  <TableHead className="w-[26%]">Name</TableHead>
+                  <TableHead className="w-[14%]">Frequency</TableHead>
+                  {/* Payment Method and Start wait for xl, not lg: lg is also where the 240px sidebar
+                      becomes persistent, so the content area shrinks at the very breakpoint that would
+                      have revealed these. All seven only fit once the viewport clears 1280. */}
+                  <TableHead className="hidden xl:table-cell w-[18%]">Payment Method</TableHead>
+                  <TableHead className="w-[12%] text-right">Amount</TableHead>
+                  <TableHead className="hidden xl:table-cell w-[12%]">Start</TableHead>
                   <TableHead className="w-[12%]">Next due</TableHead>
-                  <TableHead className="w-[18%] text-right">Actions</TableHead>
+                  <TableHead className="w-[6%] text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -125,38 +131,51 @@ export function RecurringPanel({ budgetPk, recurring, categories, paymentMethods
                     {group.items.map((rt) => (
                       <TableRow key={rt.id} className="group">
                         <TableCell>
-                          <span className="font-medium">{rt.name}</span>
+                          <div className="flex items-baseline justify-between gap-2">
+                            <span className="font-medium">{rt.name}</span>
+                            {/* The amount rides along with the name below md, where its own column is
+                                gone; the schedule and next date drop to a quiet line underneath. */}
+                            <span
+                              className={`md:hidden shrink-0 text-sm tabular-nums ${rt.category_type === "income" ? "text-income" : "text-expense"}`}
+                            >
+                              {rt.category_type === "expense" ? "−" : ""}
+                              {fmt(rt.amount, symbol)}
+                            </span>
+                          </div>
+                          <div className="md:hidden mt-0.5 text-xs text-ink-quiet">
+                            {freqLabel(rt)}
+                            {rt.next_due_date ? ` · next ${fmtDate(rt.next_due_date)}` : ""}
+                          </div>
                         </TableCell>
-                        <TableCell className="text-sm">{freqLabel(rt)}</TableCell>
-                        <TableCell className="text-sm">
+                        <TableCell className="hidden md:table-cell text-sm">{freqLabel(rt)}</TableCell>
+                        <TableCell className="hidden xl:table-cell text-sm">
                           {rt.payment_method_name ?? <span className="text-ink-quiet">—</span>}
                         </TableCell>
                         <TableCell
-                          className={`text-right text-sm tabular-nums ${rt.category_type === "income" ? "text-income" : "text-expense"}`}
+                          className={`hidden md:table-cell text-right text-sm tabular-nums ${rt.category_type === "income" ? "text-income" : "text-expense"}`}
                         >
                           {rt.category_type === "expense" ? "−" : ""}
                           {fmt(rt.amount, symbol)}
                         </TableCell>
-                        <TableCell className="text-sm tabular-nums">{fmtDate(rt.start_date)}</TableCell>
+                        <TableCell className="hidden xl:table-cell text-sm tabular-nums">
+                          {fmtDate(rt.start_date)}
+                        </TableCell>
                         {/* Empty means the schedule has stopped — it is past its end date. That
                             reading replaces the Active/inactive status column. */}
-                        <TableCell className="text-sm tabular-nums">
+                        <TableCell className="hidden md:table-cell text-sm tabular-nums">
                           {rt.next_due_date ? fmtDate(rt.next_due_date) : <span className="text-ink-quiet">—</span>}
                         </TableCell>
                         <TableCell className="text-right whitespace-nowrap">
                           <div className="inline-flex gap-1 items-center opacity-60 group-hover:opacity-100 touch:opacity-100 focus-within:opacity-100 transition-opacity">
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              onClick={() => {
+                            <RowActions
+                              name={rt.name}
+                              noun="recurring transaction"
+                              onEdit={() => {
                                 setEditing(rt);
                                 setShowForm(true);
                               }}
-                              aria-label="Edit recurring transaction"
-                            >
-                              <Pencil />
-                            </Button>
-                            <ConfirmButton size="xs" onConfirm={() => handleDelete(rt)} label="Delete" />
+                              onDelete={() => handleDelete(rt)}
+                            />
                           </div>
                         </TableCell>
                       </TableRow>

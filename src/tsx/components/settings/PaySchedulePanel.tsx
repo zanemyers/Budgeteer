@@ -1,8 +1,7 @@
 import { router } from "@inertiajs/react";
-import { Pencil } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { ConfirmButton } from "@/components/ConfirmButton";
+import { RowActions } from "@/components/RowActions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -88,13 +87,18 @@ export function PaySchedulePanel({
         <Card className="overflow-hidden p-0">
           <div className="overflow-x-auto">
             <Table>
-              <TableHeader>
+              {/* Header hides in lockstep with the body cells below md, or the remaining columns stop
+                  lining up with their data. */}
+              <TableHeader className="hidden md:table-header-group">
                 <TableRow>
                   <TableHead className="w-[22%]">Name</TableHead>
                   <TableHead className="w-[16%]">Category</TableHead>
-                  <TableHead className="w-[16%]">Account</TableHead>
+                  {/* Account and Matches wait for xl, not lg: the match summary alone claimed over 300px,
+                      and lg is where the 240px sidebar becomes persistent — so revealing them at lg
+                      overflowed a content area that had just shrunk. */}
+                  <TableHead className="hidden xl:table-cell w-[16%]">Account</TableHead>
                   <TableHead className="w-[14%]">Frequency</TableHead>
-                  <TableHead className="w-[18%]">Matches</TableHead>
+                  <TableHead className="hidden xl:table-cell w-[18%]">Matches</TableHead>
                   {isOwner && <TableHead className="w-[14%] text-right">Actions</TableHead>}
                 </TableRow>
               </TableHeader>
@@ -103,26 +107,37 @@ export function PaySchedulePanel({
                   <TableRow key={schedule.id} className="group">
                     <TableCell>
                       <span className="font-medium">{schedule.name}</span>
+                      {/* Below md the four hidden columns collapse to the two readings that identify a
+                          schedule: what it pays into, and how often. */}
+                      <div className="md:hidden mt-0.5 text-xs text-ink-quiet">
+                        {schedule.category_name ?? "—"}
+                        {` · ${freqLabel(schedule, freqChoices)}`}
+                      </div>
                     </TableCell>
-                    <TableCell className="text-sm text-ink-quiet">{schedule.category_name ?? "—"}</TableCell>
-                    <TableCell className="text-sm text-ink-quiet">{schedule.payment_method_name ?? "—"}</TableCell>
-                    <TableCell className="text-sm">{freqLabel(schedule, freqChoices)}</TableCell>
-                    <TableCell className="text-sm text-ink-quiet">{matchSummary(schedule, symbol)}</TableCell>
+                    <TableCell className="hidden md:table-cell text-sm text-ink-quiet">
+                      {schedule.category_name ?? "—"}
+                    </TableCell>
+                    <TableCell className="hidden xl:table-cell text-sm text-ink-quiet">
+                      {schedule.payment_method_name ?? "—"}
+                    </TableCell>
+                    <TableCell className="hidden md:table-cell text-sm">
+                      {freqLabel(schedule, freqChoices)}
+                    </TableCell>
+                    <TableCell className="hidden xl:table-cell text-sm text-ink-quiet">
+                      {matchSummary(schedule, symbol)}
+                    </TableCell>
                     {isOwner && (
                       <TableCell className="text-right whitespace-nowrap">
                         <div className="inline-flex gap-1 items-center opacity-60 group-hover:opacity-100 touch:opacity-100 focus-within:opacity-100 transition-opacity">
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            onClick={() => {
+                          <RowActions
+                            name={schedule.name}
+                            noun="pay schedule"
+                            onEdit={() => {
                               setEditing(schedule);
                               setShowForm(true);
                             }}
-                            aria-label="Edit pay schedule"
-                          >
-                            <Pencil />
-                          </Button>
-                          <ConfirmButton size="xs" onConfirm={() => handleDelete(schedule)} label="Delete" />
+                            onDelete={() => handleDelete(schedule)}
+                          />
                         </div>
                       </TableCell>
                     )}
