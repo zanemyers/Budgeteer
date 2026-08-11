@@ -1,6 +1,5 @@
-import { Pencil } from "lucide-react";
 import { useState } from "react";
-import { ConfirmButton } from "@/components/ConfirmButton";
+import { RowActions } from "@/components/RowActions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -88,10 +87,12 @@ export function PaymentMethodsPanel({ budgetPk, paymentMethods, typeChoices, onC
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 {deleteError[pm.id] && <small className="text-destructive">{deleteError[pm.id]}</small>}
-                <Button variant="ghost" size="icon-sm" onClick={() => setEditing(pm)} aria-label="Edit payment method">
-                  <Pencil />
-                </Button>
-                <ConfirmButton onConfirm={() => handleDelete(pm)} label="Delete" />
+                <RowActions
+                  name={pm.name}
+                  noun="payment method"
+                  onEdit={() => setEditing(pm)}
+                  onDelete={() => handleDelete(pm)}
+                />
               </div>
             </div>
           ))}

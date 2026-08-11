@@ -1,8 +1,8 @@
-import { CornerDownRight, Pencil } from "lucide-react";
+import { CornerDownRight } from "lucide-react";
 import { useState } from "react";
 import CategoryModal from "@/components/CategoryModal";
-import { ConfirmButton } from "@/components/ConfirmButton";
 import type { GoalCategory } from "@/components/GoalModal";
+import { RowActions } from "@/components/RowActions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { jsonFetch } from "@/lib/api";
@@ -73,12 +73,14 @@ export function CategoriesPanel({ budgetPk, type, categories, onCategoriesChange
             </span>
           )}
         </span>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           {deleteError[cat.id] && <small className="text-destructive">{deleteError[cat.id]}</small>}
-          <Button variant="ghost" size="icon-sm" onClick={() => setEditing(cat)} aria-label="Edit category">
-            <Pencil />
-          </Button>
-          <ConfirmButton size="xs" onConfirm={() => handleDelete(cat)} label="Delete" />
+          <RowActions
+            name={cat.name}
+            noun="category"
+            onEdit={() => setEditing(cat)}
+            onDelete={() => handleDelete(cat)}
+          />
         </div>
       </div>
     );
