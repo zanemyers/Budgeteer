@@ -72,8 +72,10 @@ export default function Investments({ accounts, portfolio }: Props) {
     <div className="max-w-[1200px]">
       <header className="flex justify-between items-end mb-8 flex-wrap gap-4">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Investments</h1>
-          <p className="text-ink-quiet text-sm mt-1">
+          {/* sr-only, not deleted: the sidebar and the mobile breadcrumb already name the page, but
+              the document still needs one heading and a screen reader still needs to hear it. */}
+          <h1 className="sr-only">Investments</h1>
+          <p className="text-ink-quiet text-sm">
             {accounts.length > 0
               ? `${totalHoldings} position${totalHoldings === 1 ? "" : "s"} across ${accounts.length} account${accounts.length === 1 ? "" : "s"}.`
               : "No investment accounts yet."}
@@ -128,10 +130,10 @@ export default function Investments({ accounts, portfolio }: Props) {
                   <button
                     type="button"
                     onClick={() => toggle(acct.id)}
-                    className="w-full flex justify-between items-center px-6 py-4 hover:bg-muted/40 text-left"
+                    className="w-full flex flex-col md:flex-row md:justify-between md:items-center gap-2 md:gap-4 px-4 md:px-6 py-4 hover:bg-muted/40 text-left"
                     aria-expanded={isOpen}
                   >
-                    <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex items-center gap-3 min-w-0 w-full md:w-auto">
                       {isOpen ? (
                         <ChevronDown className="size-4 shrink-0" />
                       ) : (
@@ -147,15 +149,18 @@ export default function Investments({ accounts, portfolio }: Props) {
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-baseline gap-6 shrink-0">
-                      <div className="text-right">
-                        <div className="text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-ink-quiet">
+                    {/* Below md these figures drop to their own row under the name, indented to clear the
+                        chevron. Sharing one line left the account name about 40px — enough to render
+                        "Joi…" and nothing more. The column labels only earn their space on desktop. */}
+                    <div className="flex items-baseline justify-between md:justify-end gap-6 shrink-0 w-full md:w-auto pl-7 md:pl-0">
+                      <div className="md:text-right">
+                        <div className="hidden md:block text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-ink-quiet">
                           Market value
                         </div>
                         <div className="font-semibold tabular-nums">{fmt(acct.market_value, symbol)}</div>
                       </div>
                       <div className="text-right">
-                        <div className="text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-ink-quiet">
+                        <div className="hidden md:block text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-ink-quiet">
                           Gain
                         </div>
                         <div className={`font-semibold tabular-nums ${gainClass(acct.unrealized_gain)}`}>
