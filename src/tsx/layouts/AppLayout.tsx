@@ -1,6 +1,6 @@
 import { router, usePage } from "@inertiajs/react";
 import { ChevronDown, Menu } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FlashToaster } from "@/components/FlashToaster";
 import { Button } from "@/components/ui/button";
 import {
@@ -66,6 +66,28 @@ function NavLink({
   );
 }
 
+/**
+ * Label for the mobile breadcrumb. Derived from the path rather than passed in per page, so a page
+ * cannot forget to set one — and it stays in step with the sidebar, which decides "where am I" from
+ * the same path. Budget-scoped routes are matched first: `/budgets/` alone is the budget list, but
+ * `/budgets/1/goals` must not fall through to it.
+ */
+function pageNameFor(path: string, budgetPk?: number): string | null {
+  if (budgetPk) {
+    const base = `/budgets/${budgetPk}`;
+    if (path === base || path === `${base}/`) return "Dashboard";
+    if (path.startsWith(`${base}/transactions`)) return "Transactions";
+    if (path.startsWith(`${base}/goals`)) return "Goals";
+    if (path.startsWith(`${base}/settings`)) return "Settings";
+  }
+  if (path.startsWith("/banking")) return "Banking";
+  if (path.startsWith("/investments")) return "Investments";
+  if (path.startsWith("/accounts/settings")) return "Account";
+  if (path.startsWith("/accounts/history")) return "History";
+  if (path === "/budgets" || path === "/budgets/") return "My Budgets";
+  return null;
+}
+
 async function logout() {
   try {
     await fetch("/accounts/logout/", {
@@ -112,15 +134,56 @@ function UserMenu({ user, budgetPk }: { user: AuthUser; budgetPk?: number }) {
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { props, url } = usePage<PageProps>();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const sidebarRef = useRef<HTMLDivElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
   const user = props.auth?.user;
 
+  // Close the drawer on any Inertia visit. AppLayout is the persistent layout, so this state
+  // survives navigation — without this, tapping a nav link loaded the next page *behind* a
+  // still-open drawer and the user had to dismiss it by hand.
+  useEffect(() => router.on("start", () => setSidebarOpen(false)), []);
+
+  // Below lg the drawer is a modal, so it needs the three things a modal owes the user: the page
+  // behind it must not scroll away under the overlay, Tab must not walk into content that is
+  // covered, and focus must come back to the button that opened it.
   useEffect(() => {
     if (!sidebarOpen) return;
-    const onEsc = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setSidebarOpen(false);
+    const drawer = sidebarRef.current;
+    const opener = menuButtonRef.current;
+    const previousOverflow = document.body.style.overflow;
+
+    document.body.style.overflow = "hidden";
+    drawer?.focus();
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        // The user menu portals out to the body, so let it take Escape first — dismissing a
+        // dropdown should not also tear down the drawer underneath it.
+        if (document.querySelector('[data-slot="dropdown-menu-content"][data-state="open"]')) return;
+        setSidebarOpen(false);
+        return;
+      }
+      if (e.key !== "Tab" || !drawer) return;
+      const focusable = drawer.querySelectorAll<HTMLElement>("a[href], button:not([disabled])");
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey && (active === first || active === drawer)) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
     };
-    document.addEventListener("keydown", onEsc);
-    return () => document.removeEventListener("keydown", onEsc);
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+      opener?.focus();
+    };
   }, [sidebarOpen]);
 
   const sidebarBudget = props.current_budget ?? null;
@@ -130,9 +193,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const path = url.includes("://") ? new URL(url).pathname : url.split("?")[0];
   const isAt = (prefix: string) => path.startsWith(prefix);
   const txnHref = `/budgets/${sidebarBudgetPk}/transactions/?month=${month ?? ""}`;
+  const pageName = pageNameFor(path, sidebarBudgetPk);
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-dvh">
       <FlashToaster />
       <a
         href="#main"
@@ -152,7 +216,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* Sidebar */}
       <div
-        className="sidebar fixed lg:static inset-y-0 left-0 z-50 lg:z-auto"
+        id="app-sidebar"
+        ref={sidebarRef}
+        tabIndex={-1}
+        // Only a dialog while it is acting as one: from lg up this is a static column, and
+        // announcing a permanently-visible sidebar as a modal would be a lie. Spread as one unit
+        // because the three attributes are only ever valid together.
+        {...(sidebarOpen ? ({ role: "dialog", "aria-modal": true, "aria-label": "Navigation" } as const) : {})}
+        className="sidebar fixed lg:static inset-y-0 left-0 z-50 lg:z-auto outline-none"
         data-sidebar-open={sidebarOpen || undefined}
       >
         {/* Brand */}
@@ -181,22 +252,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <nav aria-label="Main" className="sidebar-nav">
           {user ? (
             <>
-              {sidebarBudgetPk ? (
+              {sidebarBudgetPk && (
                 <div className="sidebar-group">
-                  <span className="sidebar-group-label">Budgets</span>
-                  <a
-                    href="/budgets/"
-                    data-tour="budget"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      router.visit("/budgets/");
-                    }}
-                    className="flex items-center justify-between gap-2 px-3 py-1.5 mb-1 rounded-md text-sm font-medium text-ink hover:bg-muted/60 focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
-                    title={`${sidebarBudget?.name ?? "Budget"} — switch budget`}
-                  >
-                    <span className="truncate">{sidebarBudget?.name || "Current Budget"}</span>
-                    <ChevronDown aria-hidden className="size-3.5 text-ink-quiet shrink-0" />
-                  </a>
+                  {/* Name is context only — switching budgets lives in the user menu. */}
+                  <span className="sidebar-group-label truncate">{sidebarBudget?.name || "Current Budget"}</span>
                   <NavLink
                     href={`/budgets/${sidebarBudgetPk}/`}
                     active={path === `/budgets/${sidebarBudgetPk}/` || path === `/budgets/${sidebarBudgetPk}`}
@@ -224,13 +283,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     dataTour="settings"
                   >
                     Settings
-                  </NavLink>
-                </div>
-              ) : (
-                <div className="sidebar-group">
-                  <span className="sidebar-group-label">Budgets</span>
-                  <NavLink href="/budgets/" active>
-                    My Budgets
                   </NavLink>
                 </div>
               )}
@@ -264,22 +316,40 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </div>
 
       {/* Main content */}
-      <div className="flex flex-col grow min-w-0 min-h-screen">
-        {/* Mobile top bar */}
-        <header className="shrink-0 flex lg:hidden items-center border-b px-4 py-2 gap-2">
-          <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(true)} aria-label="Open navigation">
+      <div className="flex flex-col grow min-w-0 min-h-dvh">
+        {/* Mobile top bar — sticky, because it holds the only route to navigation on a phone and
+            scrolling a 500-row register would otherwise strand the user with no way back. */}
+        <header className="sticky top-0 z-30 shrink-0 flex lg:hidden items-center border-b bg-background px-4 pb-2 pt-[calc(0.5rem+env(safe-area-inset-top))] gap-2">
+          <Button
+            ref={menuButtonRef}
+            variant="ghost"
+            size="icon"
+            onClick={() => setSidebarOpen(true)}
+            aria-label="Open navigation"
+            aria-expanded={sidebarOpen}
+            aria-controls="app-sidebar"
+          >
             <Menu />
           </Button>
           <a className="font-semibold no-underline text-foreground" href="/">
             Budgeteer
           </a>
+          {/* Wayfinding lives in the shell, not in the content: the pages no longer repeat their own
+              name, and below lg the sidebar is a closed drawer, so this is the only thing on screen
+              saying where you are. Deliberately quieter than the brand — it is a label, not a title. */}
+          {pageName && (
+            <span className="flex min-w-0 items-center gap-2 text-sm text-ink-quiet">
+              <span aria-hidden="true">›</span>
+              <span className="truncate">{pageName}</span>
+            </span>
+          )}
         </header>
 
         <main id="main" className="grow flex flex-col p-4 lg:p-6">
           {children}
         </main>
 
-        <footer className="shrink-0 border-t px-4 py-2">
+        <footer className="shrink-0 border-t px-4 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]">
           <p className="text-sm text-muted-foreground">© Budgeteer {new Date().getFullYear()}</p>
         </footer>
       </div>

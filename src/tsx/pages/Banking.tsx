@@ -248,8 +248,8 @@ export default function Banking({ connections: initialConnections, payment_metho
     <div className="max-w-[1200px]">
       <header className="flex justify-between items-end mb-8 flex-wrap gap-4">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Banking</h1>
-          <p className="text-ink-quiet text-sm mt-1">
+          <h1 className="sr-only">Banking</h1>
+          <p className="text-ink-quiet text-sm">
             {totalAccounts > 0 ? (
               <>
                 {totalAccounts} account{totalAccounts === 1 ? "" : "s"} across {connections.length} connection

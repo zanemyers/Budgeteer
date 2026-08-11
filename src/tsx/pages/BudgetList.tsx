@@ -133,8 +133,10 @@ export default function BudgetList({ budgets: initial }: Props) {
 
   return (
     <div className="max-w-2xl">
-      <header className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-semibold tracking-tight">My Budgets</h1>
+      {/* justify-end, not justify-between: sr-only is out of flow, so with the heading hidden the
+          button would otherwise slide to the left edge. */}
+      <header className="flex justify-end items-center mb-8">
+        <h1 className="sr-only">My Budgets</h1>
         {newName === null && <Button onClick={() => setNewName("")}>New Budget</Button>}
       </header>
 

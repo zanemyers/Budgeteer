@@ -716,8 +716,8 @@ export default function AccountSettings({
     <div className="max-w-3xl">
       <header className="mb-8 flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Account Settings</h1>
-          <p className="text-sm text-muted-foreground mt-1">Profile, password, currency, and bank connections.</p>
+          <h1 className="sr-only">Account Settings</h1>
+          <p className="text-sm text-muted-foreground">Profile, password, currency, and bank connections.</p>
         </div>
         <PageTourButton stage="account" />
       </header>
