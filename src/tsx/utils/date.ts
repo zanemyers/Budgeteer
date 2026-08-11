@@ -16,10 +16,19 @@ export function todayLocal(): string {
  *
  * Note the `T00:00:00` suffix forces the date to be interpreted in local time
  * so a date string of "2026-06-17" renders as June 17 regardless of timezone.
+ *
+ * Takes the first 10 characters because several callers hand this a full datetime
+ * from a `DateTimeField().isoformat()` (`balance_as_of`, `created_at`). Appending the
+ * suffix to one of those built "…T08:10:00+00:00T00:00:00", which rendered as
+ * "Invalid Date". Slicing is a no-op for the date-only strings.
  */
 export function fmtDate(iso: string | null | undefined): string {
   if (!iso) return "—";
-  return new Date(`${iso}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  return new Date(`${iso.slice(0, 10)}T00:00:00`).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 /**
