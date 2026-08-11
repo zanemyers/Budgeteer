@@ -34,6 +34,32 @@ interface Props {
 const VALID_TABS = ["budget", "categories", "pay-schedule", "recurring", "payment-methods"] as const;
 type Tab = (typeof VALID_TABS)[number];
 
+const TAB_LABELS: Record<Tab, string> = {
+  budget: "Budget",
+  categories: "Categories",
+  "pay-schedule": "Pay Schedule",
+  recurring: "Recurring Transactions",
+  "payment-methods": "Payment Methods",
+};
+
+/**
+ * Below `md` the five tabs are swapped for a native select — the folder strip clips at phone width,
+ * and `scrollbar-none` leaves no hint that the last two tabs are off-screen. Mounting only one of the
+ * two controls (rather than hiding one with CSS) keeps the product tour from highlighting a hidden tab.
+ */
+function useIsCompact(): boolean {
+  const [compact, setCompact] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const onChange = () => setCompact(mq.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+  return compact;
+}
+
 /**
  * Where the pre-consolidation tab names now live, so an old bookmark still lands on the content
  * it was pointing at rather than silently falling back to the Budget tab.
@@ -69,6 +95,7 @@ export default function BudgetSettings({
   pay_schedule_freq_choices,
 }: Props) {
   usePageTour("settings", budget_pk);
+  const isCompact = useIsCompact();
   const [tab, setTab] = useState<Tab>(readTabFromUrl());
   const [budget, setBudget] = useState(initialBudget);
   const [categories, setCategories] = useState(initialCategories);
@@ -95,8 +122,8 @@ export default function BudgetSettings({
     <div className="max-w-4xl flex flex-col flex-1 min-h-0">
       <header className="mb-8 flex justify-between items-start gap-4 flex-wrap">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Budget Settings</h1>
-          <p className="text-sm text-muted-foreground mt-1">{budget.name || "This budget"}</p>
+          <h1 className="sr-only">Budget Settings</h1>
+          <p className="text-sm text-muted-foreground">{budget.name || "This budget"}</p>
         </div>
         <div className="flex items-center gap-2 mt-1">
           <PageTourButton stage="settings" />
@@ -114,23 +141,33 @@ export default function BudgetSettings({
       </header>
 
       <Tabs value={tab} onValueChange={changeTab} className="gap-6 flex-1">
-        <TabsList variant="folder" className="w-full justify-start" data-tour="settings-tabs">
-          <TabsTrigger value="budget" data-tour="tab-budget">
-            Budget
-          </TabsTrigger>
-          <TabsTrigger value="categories" data-tour="tab-categories">
-            Categories
-          </TabsTrigger>
-          <TabsTrigger value="pay-schedule" data-tour="tab-pay-schedule">
-            Pay Schedule
-          </TabsTrigger>
-          <TabsTrigger value="recurring" data-tour="tab-recurring">
-            Recurring Transactions
-          </TabsTrigger>
-          <TabsTrigger value="payment-methods" data-tour="tab-payment-methods">
-            Payment Methods
-          </TabsTrigger>
-        </TabsList>
+        {isCompact ? (
+          <div data-tour="settings-tabs">
+            <label htmlFor="settings-tab-select" className="sr-only">
+              Settings section
+            </label>
+            <select
+              id="settings-tab-select"
+              value={tab}
+              onChange={(e) => changeTab(e.target.value)}
+              className="form-control h-11 w-full font-medium"
+            >
+              {VALID_TABS.map((value) => (
+                <option key={value} value={value}>
+                  {TAB_LABELS[value]}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <TabsList variant="folder" className="w-full justify-start" data-tour="settings-tabs">
+            {VALID_TABS.map((value) => (
+              <TabsTrigger key={value} value={value} data-tour={`tab-${value}`}>
+                {TAB_LABELS[value]}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        )}
 
         <TabsContent value="budget" className="mt-2">
           <BudgetPanel budget={budget} onChange={setBudget}>

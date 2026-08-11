@@ -10,6 +10,8 @@ import { getCsrfToken } from "./api";
  * stage in order, auto-navigating between pages and resuming after each Inertia load.
  *
  * Steps target `data-tour` anchors; any step whose anchor is absent on the current page is skipped.
+ * A step may instead resolve its anchor at runtime with a function, which is how the settings tab
+ * steps cope with the tab strip becoming a single select below md.
  */
 
 export type TourStage = "dashboard" | "transactions" | "goals" | "settings" | "account";
@@ -23,9 +25,25 @@ const STAGE_ORDER: TourStage[] = ["dashboard", "transactions", "goals", "setting
  */
 export const SELECT_TAB_EVENT = "budgeteer:select-settings-tab";
 
-/** A settings step anchored to a tab; the highlight handler below switches to it. */
+/**
+ * A settings step anchored to a tab; the highlight handler switches to it.
+ *
+ * Below md the five tabs collapse into one native select, so the per-tab anchors do not exist there.
+ * The step falls back to the select, because `runStage` drops any step whose anchor is missing — which
+ * otherwise left the settings tour one step long on a phone. Each step dispatches its own tab rather
+ * than letting the global hook read it back off the element: the fallback element is shared by all
+ * five and so cannot say which tab it stands for.
+ */
 function tabStep(tab: string, title: string, description: string): DriveStep {
-  return { element: `[data-tour="tab-${tab}"]`, popover: { title, description } };
+  return {
+    element: () =>
+      (document.querySelector(`[data-tour="tab-${tab}"]`) ??
+        document.querySelector('[data-tour="settings-tabs"]')) as Element,
+    popover: { title, description },
+    onHighlightStarted: () => {
+      window.dispatchEvent(new CustomEvent(SELECT_TAB_EVENT, { detail: tab }));
+    },
+  };
 }
 
 const TOURS: Record<TourStage, DriveStep[]> = {
@@ -37,8 +55,8 @@ const TOURS: Record<TourStage, DriveStep[]> = {
       },
     },
     {
-      element: '[data-tour="budget"]',
-      popover: { title: "Your budget", description: "Switch between budgets or create a new one here." },
+      element: '[data-tour="account"]',
+      popover: { title: "Your budgets", description: "Switch between budgets or create a new one from this menu." },
     },
     {
       element: '[data-tour="dashboard"]',
@@ -59,8 +77,8 @@ const TOURS: Record<TourStage, DriveStep[]> = {
     {
       element: '[data-tour="txn-tabs"]',
       popover: {
-        title: "Pending, logged, transfers, ignored",
-        description: "Switch between what is scheduled, what has cleared, transfers, and items you have set aside.",
+        title: "Pending, logged, ignored",
+        description: "Switch between what is scheduled, what has cleared, and items you have set aside.",
       },
     },
     {
@@ -200,7 +218,13 @@ export function endActiveTour() {
 
 /** Run one stage's tour. In full mode, advances to the next stage on completion. */
 function runStage(stage: TourStage, opts: { full: boolean }) {
-  const steps = TOURS[stage].filter((s) => !s.element || document.querySelector(s.element as string));
+  const steps = TOURS[stage].filter((s) => {
+    if (!s.element) return true;
+    // Steps may resolve their anchor at runtime (see tabStep), so call it rather than treating the
+    // function itself as a selector — querySelector would throw on it.
+    if (typeof s.element === "function") return Boolean(s.element());
+    return Boolean(document.querySelector(s.element as string));
+  });
   if (steps.length === 0) {
     if (opts.full) advance(stage);
     return;
