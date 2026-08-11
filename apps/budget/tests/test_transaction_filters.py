@@ -163,3 +163,62 @@ class TransactionSearchTests(TransactionFilterTests):
         july = self._named("Groceries", 2026, 7, 3)
 
         self.assertEqual(self._ids("?month=2026-07&q=%20%20"), [july.pk])
+
+
+class TransactionAllTimeTests(TransactionFilterTests):
+    """
+    `all=1` drops the month window the way a search does.
+
+    A month is the wrong unit for a goal: its balance is computed over its whole life, so clicking
+    one has to list that whole history. Scoped to a month, the list would not add up to the figure
+    that was clicked.
+    """
+
+    def _dated(self, year, month, day, category=None):
+        txn = Transaction.objects.create(
+            budget=self.budget,
+            created_by=self.user,
+            description=f"txn-{year}-{month:02d}-{day:02d}",
+            due_date=datetime.date(year, month, day),
+            paid_date=datetime.date(year, month, day),
+            transaction_type="expense",
+            payment_method=self.pm_a,
+        )
+        TransactionLine.objects.create(
+            transaction=txn,
+            category=category or self.cat,
+            amount="10.00",
+            amount_usd="10.00",
+        )
+        return txn
+
+    def test_all_returns_transactions_outside_the_requested_month(self):
+        february = self._dated(2026, 2, 11)
+        july = self._dated(2026, 7, 3)
+
+        self.assertCountEqual(self._ids("?month=2026-07&all=1"), [february.pk, july.pk])
+        self.assertTrue(self.props()["all_time"], "the page has to know, so it can say so")
+
+    def test_all_combines_with_a_category_filter(self):
+        goal = Category.objects.create(budget=self.budget, name="Insurance", category_type=Category.TYPE_EXPENSE)
+        old_spend = self._dated(2025, 12, 2, category=goal)
+        recent_spend = self._dated(2026, 7, 9, category=goal)
+        other_category = self._dated(2026, 3, 4)
+
+        ids = self._ids(f"?month=2026-07&all=1&category={goal.pk}")
+        self.assertCountEqual(ids, [old_spend.pk, recent_spend.pk])
+        self.assertNotIn(other_category.pk, ids)
+
+    def test_a_date_range_still_narrows_all_time(self):
+        february = self._dated(2026, 2, 11)
+        june = self._dated(2026, 6, 11)
+
+        ids = self._ids("?month=2026-07&all=1&date_from=2026-05-01")
+        self.assertIn(june.pk, ids)
+        self.assertNotIn(february.pk, ids)
+
+    def test_without_all_the_month_still_holds(self):
+        self._dated(2026, 2, 11)
+        july = self._dated(2026, 7, 3)
+
+        self.assertEqual(self._ids("?month=2026-07"), [july.pk])

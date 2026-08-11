@@ -984,6 +984,7 @@ def filter_transactions(budget, params):
     """
     month_str = params.get("month") or _default_month()
     search = (params.get("q") or "").strip()
+    all_time = bool(params.get("all"))
     try:
         month_start = datetime.date.fromisoformat(month_str + "-01")
     except (ValueError, TypeError):
@@ -996,6 +997,10 @@ def filter_transactions(budget, params):
     # it exists to answer, and confining it to the month on screen would mean paging month by month,
     # which is the thing being replaced. An explicit date range still narrows it, because that is
     # the user asking for a window.
+    #
+    # `all` escapes it the same way, for the cases where a month is the wrong unit at all: a goal's
+    # balance is computed over its whole life, so its transaction list has to be too, or the list
+    # never adds up to the figure that led you to it.
     if search:
         qs = qs.filter(
             Q(description__icontains=search)
@@ -1005,7 +1010,7 @@ def filter_transactions(budget, params):
             | Q(bank_transaction__description__icontains=search)
             | Q(bank_transaction__payee__icontains=search)
         ).distinct()
-    else:
+    elif not all_time:
         qs = qs.filter(effective_date__range=(month_start, month_end))
 
     if params.get("category"):
@@ -1254,6 +1259,7 @@ class TransactionListView(BudgetMemberMixin, View):
         date_from = request.GET.get("date_from")
         date_to = request.GET.get("date_to")
         search = (request.GET.get("q") or "").strip()
+        all_time = bool(request.GET.get("all"))
         budget = self.budget
 
         def _bank_txns_with_status(status):
@@ -1298,6 +1304,7 @@ class TransactionListView(BudgetMemberMixin, View):
                 "date_from": date_from or "",
                 "date_to": date_to or "",
                 "search": search,
+                "all_time": all_time,
                 "transactions": _transactions,
                 "bank_transactions": _bank_txns,
                 "ignored_bank_transactions": _ignored_bank_txns,
