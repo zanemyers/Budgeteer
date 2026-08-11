@@ -12,7 +12,9 @@ export function PasswordInput({ className = "", ...props }: React.ComponentProps
         type="button"
         onClick={() => setShow((s) => !s)}
         aria-label={show ? "Hide password" : "Show password"}
-        className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-quiet hover:text-foreground"
+        // Not .touch-target: that sets position:relative, which would undo the absolute placement.
+        // The icon is 15px, so a centered 44px pseudo-element carries the tap target instead.
+        className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-quiet hover:text-foreground touch:before:absolute touch:before:top-1/2 touch:before:left-1/2 touch:before:size-11 touch:before:-translate-x-1/2 touch:before:-translate-y-1/2 touch:before:content-['']"
       >
         {show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
       </button>

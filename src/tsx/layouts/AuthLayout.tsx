@@ -3,10 +3,10 @@ import ThemeToggle from "../components/ThemeToggle";
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-dvh flex flex-col">
       <FlashToaster />
-      <div className="flex justify-between items-center px-4 pt-4 pb-2">
-        <a href="/" className="font-semibold no-underline text-foreground text-lg">
+      <div className="flex justify-between items-center px-4 pt-[calc(1rem+env(safe-area-inset-top))] pb-2">
+        <a href="/" className="touch-target font-semibold no-underline text-foreground text-lg">
           Budgeteer
         </a>
         <ThemeToggle />

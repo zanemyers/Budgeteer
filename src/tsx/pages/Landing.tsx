@@ -133,7 +133,16 @@ export default function Landing({ github_url }: Props) {
               </span>
               <span className="text-lg font-semibold tracking-[-0.01em]">Budgeteer</span>
             </a>
-            <Button asChild variant="ghost" size="icon-sm" aria-label="View on GitHub" className="text-ink-quiet">
+            {/* Hidden below sm: the hero repeats it as a full "View on GitHub" button, and the six
+                items together overflowed a 390px header by ~37px — which clipped the signup CTA, the
+                one thing this page exists to offer. */}
+            <Button
+              asChild
+              variant="ghost"
+              size="icon-sm"
+              aria-label="View on GitHub"
+              className="hidden text-ink-quiet sm:inline-flex"
+            >
               <a href={github_url} target="_blank" rel="noreferrer">
                 <GitBranch />
               </a>
@@ -145,7 +154,11 @@ export default function Landing({ github_url }: Props) {
               <a href="/accounts/login/">Sign in</a>
             </Button>
             <Button asChild size="sm">
-              <a href="/accounts/signup/">Create account</a>
+              {/* "Sign up" on a phone, the fuller "Create account" once there is room for it. */}
+              <a href="/accounts/signup/">
+                <span className="sm:hidden">Sign up</span>
+                <span className="hidden sm:inline">Create account</span>
+              </a>
             </Button>
           </div>
         </nav>
@@ -260,17 +273,17 @@ export default function Landing({ github_url }: Props) {
             <span className="text-sm">Budgeteer</span>
           </div>
           <div className="flex items-center gap-6 text-sm text-ink-quiet">
-            <a href="/accounts/login/" className="hover:text-foreground">
+            <a href="/accounts/login/" className="touch-target hover:text-foreground">
               Sign in
             </a>
-            <a href="/accounts/signup/" className="hover:text-foreground">
+            <a href="/accounts/signup/" className="touch-target hover:text-foreground">
               Create account
             </a>
             <a
               href={github_url}
               target="_blank"
               rel="noreferrer"
-              className="flex items-center gap-1.5 hover:text-foreground"
+              className="touch-target flex items-center gap-1.5 hover:text-foreground"
             >
               <GitBranch className="size-4" />
               GitHub

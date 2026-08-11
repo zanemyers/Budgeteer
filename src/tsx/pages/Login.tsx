@@ -94,7 +94,10 @@ export default function Login({ errors: initialErrors, next }: Props) {
           <div className="flex flex-col gap-2">
             <div className="flex justify-between items-center">
               <Label htmlFor="password">Password</Label>
-              <a href="/accounts/password/reset/" className="text-sm text-muted-foreground hover:underline">
+              <a
+                href="/accounts/password/reset/"
+                className="touch-target text-sm text-muted-foreground hover:underline"
+              >
                 Forgot password?
               </a>
             </div>
@@ -112,7 +115,7 @@ export default function Login({ errors: initialErrors, next }: Props) {
 
         <p className="mt-6 text-sm text-muted-foreground text-center">
           New to Budgeteer?{" "}
-          <a href="/accounts/signup/" className="text-moss hover:underline">
+          <a href="/accounts/signup/" className="touch-target text-moss hover:underline">
             Create an account
           </a>
         </p>

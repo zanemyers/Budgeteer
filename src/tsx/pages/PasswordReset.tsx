@@ -97,7 +97,7 @@ export default function PasswordReset({ done: initialDone, errors: initialErrors
         <div className="text-center mt-4">
           <a
             href="/accounts/login/"
-            className="text-sm text-muted-foreground hover:underline"
+            className="touch-target text-sm text-muted-foreground hover:underline"
             onClick={(e) => {
               e.preventDefault();
               router.visit("/accounts/login/");

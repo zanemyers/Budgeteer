@@ -112,7 +112,7 @@ export default function Signup({ errors: initialErrors, next }: Props) {
 
         <p className="mt-6 text-sm text-muted-foreground text-center">
           Already have an account?{" "}
-          <a href="/accounts/login/" className="text-moss hover:underline">
+          <a href="/accounts/login/" className="touch-target text-moss hover:underline">
             Sign in
           </a>
         </p>
