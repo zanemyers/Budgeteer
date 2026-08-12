@@ -121,7 +121,6 @@ dependencies = [
     { name = "django-ses" },
     { name = "django-storages" },
     { name = "django-unfold" },
-    { name = "django-vite" },
     { name = "epicenv", extra = ["django"] },
     { name = "gunicorn" },
     { name = "hiredis" },
@@ -169,7 +168,6 @@ requires-dist = [
     { name = "django-ses", specifier = "~=4.3" },
     { name = "django-storages", specifier = "~=1.8" },
     { name = "django-unfold", specifier = "~=0.50" },
-    { name = "django-vite", specifier = "~=3.1" },
     { name = "epicenv", extras = ["django"], specifier = "~=1.6" },
     { name = "gunicorn", specifier = "~=26.0" },
     { name = "hiredis", specifier = "~=3.0" },
@@ -782,18 +780,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/93/9e/4f6721d2354dfe937192582eba74020ebe25a6e0242381afa2389dde6c55/django_unfold-0.103.0.tar.gz", hash = "sha256:8ab0f1204148f28fca961d159823afc91e7ecbd7df5f4c32f8442a4e453b2273", size = 1125894, upload-time = "2026-08-06T07:27:48.366Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d4/93/b1657a7da69d7dc20b4bf6776eee5ffaaffe22415ad39a1276e0d3ba7e98/django_unfold-0.103.0-py3-none-any.whl", hash = "sha256:161cd07cf644a0c64ba6bbd7ff2202a9c2b5a20734df6dd749d667f50bd8a8ba", size = 1253971, upload-time = "2026-08-06T07:27:46.774Z" },
-]
-
-[[package]]
-name = "django-vite"
-version = "3.1.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "django" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/23/fe/4be07f538bbf9bf8bf73b045552ec2a1b4fba67e3176abb30490b643368e/django_vite-3.1.0.tar.gz", hash = "sha256:8b4ffe4a9fa81ff568bfb195e74dde8694aaf13fd4b656ae60bf59cce08b85e8", size = 25434, upload-time = "2025-02-23T15:32:07.914Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/30/59/7df4b1077fa41b43b4e542696d75138dbb86a65f44248c607b3e0f1014ce/django_vite-3.1.0-py3-none-any.whl", hash = "sha256:4e46572bd6b1ce70784be129205dc2ffcbc7a3c19fea50bebfb72b327bbde5fc", size = 23579, upload-time = "2025-02-23T15:32:06.603Z" },
 ]
 
 [[package]]

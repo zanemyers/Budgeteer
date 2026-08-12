@@ -83,7 +83,6 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django.contrib.humanize",
-    "django_vite",
     "apps.base",
     "apps.accounts",
     "apps.budget",
@@ -282,14 +281,6 @@ CELERY_BROKER_URL = REDIS_URL
 CELERY_BROKER_TRANSPORT_OPTIONS = {"global_keyprefix": REDIS_PREFIX}
 
 INERTIA_LAYOUT = "app.html"
-
-DJANGO_VITE = {
-    "default": {
-        "dev_mode": DEBUG,
-        "dev_server_host": "localhost",
-        "dev_server_port": 3000,
-    }
-}
 
 SESSION_ENGINE = "django.contrib.sessions.backends.cache"
 
