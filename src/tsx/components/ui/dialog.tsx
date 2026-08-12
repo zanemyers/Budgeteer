@@ -197,14 +197,13 @@ function DialogFooter({
       data-slot="dialog-footer"
       className={cn(
         "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end",
-        // Pinned to the bottom of the sheet's scrollport, so the primary action stays reachable
-        // without scrolling past every field. It sticks against DialogContent (the nearest scrolling
-        // ancestor) even though most callers nest it inside a <form>. The negative margins let the
-        // opaque background span DialogContent's own padding — without them the fields scroll
-        // through a gutter beside the buttons.
-        "sticky bottom-0 -mx-4 -mb-[calc(1rem+env(safe-area-inset-bottom))] mt-1 border-t bg-background px-4 pt-3",
-        "pb-[calc(1rem+env(safe-area-inset-bottom))]",
-        "sm:static sm:mx-0 sm:mt-0 sm:mb-0 sm:border-0 sm:px-0 sm:pt-0 sm:pb-0",
+        // Sits at the end of the content rather than sticking to the bottom of the scrollport. It
+        // used to be `sticky bottom-0`, which meant that when the keyboard opened and the sheet
+        // shrank, the buttons rode up with it and hovered above the keys — the sheet was resizing
+        // under them and they read as chasing the keyboard rather than belonging to the form.
+        // The sheet's height follows its content now, so for most dialogs they are on screen
+        // without scrolling anyway; a long form scrolls to them like any other form.
+        "mt-2 border-t pt-3 sm:mt-0 sm:border-0 sm:pt-0",
         className,
       )}
       {...props}

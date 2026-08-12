@@ -255,7 +255,10 @@ export default function TransactionModal({
         if (!open) onClose();
       }}
     >
-      <DialogContent className="sm:max-w-2xl">
+      {/* Radix focuses the first tabbable element on open, which is the description. That is right
+          when adding — you are going to type it — and wrong when editing, where you opened the row
+          to change one specific thing and the keyboard covering half the form is in the way. */}
+      <DialogContent className="sm:max-w-2xl" onOpenAutoFocus={isEdit ? (e) => e.preventDefault() : undefined}>
         <form onSubmit={(e) => void handleSubmit(e)}>
           <DialogHeader>
             <DialogTitle>{title}</DialogTitle>

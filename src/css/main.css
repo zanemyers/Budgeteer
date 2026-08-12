@@ -408,6 +408,31 @@ input[type="number"],
     font-size: 16px;
   }
 
+  /* iOS Safari sizes a native date/time input from its shadow content rather than from its box, so
+     the `w-full min-w-0` on Input does not make it shrink and it overflows a narrow column — worse
+     since the rule above put it at 16px, because that intrinsic width scales with the font. Turning
+     off the native appearance is what actually lets the box constrain it; the picker still opens on
+     tap. The inner value block is left-aligned too, since iOS centres it inside the widened box.
+
+     Not reproducible in desktop Chrome at any width, which is why it is scoped to coarse pointers
+     rather than applied globally. */
+  input[type="date"],
+  input[type="month"],
+  input[type="time"],
+  input[type="datetime-local"] {
+    -webkit-appearance: none;
+    appearance: none;
+    min-width: 0;
+  }
+
+  input[type="date"]::-webkit-date-and-time-value,
+  input[type="month"]::-webkit-date-and-time-value,
+  input[type="time"]::-webkit-date-and-time-value,
+  input[type="datetime-local"]::-webkit-date-and-time-value {
+    margin: 0;
+    text-align: left;
+  }
+
   .sidebar-link,
   .sidebar-user,
   .sidebar-brand {
