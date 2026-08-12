@@ -137,7 +137,7 @@ Icon-only buttons must carry `aria-label`.
 
 - **Page transitions:** instant. Inertia SPA — feels snappy, no fade-on-nav.
 - **Inline-edit focus:** 120ms `cubic-bezier(0.22, 1, 0.36, 1)` (ease-out-quart).
-- **Modal:** 200ms fade, same curve. From `sm` up the centred card also scales from 95%; the full-screen phone sheet fades only — scaling something that fills the viewport reads as a glitch rather than an entrance.
+- **Modal:** 200ms, same curve. The phone's bottom sheet slides up from the edge it is anchored to; from `sm` up the centred card scales from 95% in place. Each matches its own geometry — sliding a centred card in from an edge it has no relationship to, or scaling something pinned to the bottom, both read as a glitch rather than an entrance.
 - **Hover:** 120ms color/background transitions only. Never animate layout properties.
 - **Reduced motion:** `@media (prefers-reduced-motion: reduce)` collapses durations to zero.
 
