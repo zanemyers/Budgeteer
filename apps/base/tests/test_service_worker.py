@@ -30,13 +30,20 @@ class TestServiceWorkerView(BaseServiceWorkerTest):
         self.assertEqual(response.headers["Cache-Control"], "no-cache")
 
     def test_precaches_the_offline_page_and_the_whole_build(self):
+        # "The whole build" is load-bearing now that the pages are split into per-page chunks and the
+        # font is emitted by Vite: every shared chunk and both woff2 subsets have to be in here, or a
+        # navigation offline would find its page chunk missing. built_asset_urls walks the entire
+        # manifest for exactly this reason.
         response = self.client.get("/sw.js")
         self.assertEqual(
             self.precache_list(response.content.decode()),
             [
                 "/offline/",
+                "/public/static/dist/js/inter-latin-hashgoeshere.woff2",
                 "/public/static/dist/js/main-hashgoeshere.css",
                 "/public/static/dist/js/main-hashgoeshere.js",
+                "/public/static/dist/js/shared-hashgoeshere.js",
+                "/public/static/dist/js/vendor-hashgoeshere.js",
             ],
         )
 
@@ -85,4 +92,24 @@ class TestOfflinePage(BaseServiceWorkerTest):
         body = self.client.get("/offline/").content.decode()
         self.assertNotIn('<link rel="stylesheet"', body)
         self.assertNotIn("fonts.googleapis.com", body)
-        self.assertNotIn("/dist/js/", body)
+        self.assertNotIn("<script src", body)
+        self.assertNotIn(".js", body.split("<style>")[0])
+
+    def test_the_only_referenced_asset_is_the_precached_font(self):
+        """
+        Inter is the single exception to the rule above, and only because the worker precaches it.
+
+        Self-hosting the font made it available offline, so the page declares its own @font-face
+        instead of settling for system-ui. Anything else reaching outside this document would still be
+        a bug — the page renders precisely when the network is unreachable.
+        """
+        with override_settings(VITE_DEV_MODE=False, VITE_MANIFEST_FILE=VITE_MANIFEST_FILE):
+            _get_manifest.cache_clear()
+            body = self.client.get("/offline/").content.decode()
+        self.assertIn("@font-face", body)
+        self.assertIn("inter-latin-hashgoeshere.woff2", body)
+
+    def test_no_font_face_in_dev_mode(self):
+        # The hashed filename doesn't exist until a build, so there is nothing to point at.
+        body = self.client.get("/offline/").content.decode()
+        self.assertNotIn("@font-face", body)

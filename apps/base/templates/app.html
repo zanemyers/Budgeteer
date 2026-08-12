@@ -33,11 +33,11 @@
           content="#1c1e1a">
     <meta name="mobile-web-app-capable" content="yes">
     <title>{{ SITE_NAME }}</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    {# Variable Inter: main.css uses font-weight 450, which only a variable axis can serve. #}
-    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..700&display=swap"
-          rel="stylesheet">
+    {% comment %} Inter is self-hosted and declared in main.css. The preload is what stops the first paint
+       flashing system-ui: the font is otherwise only discovered once the stylesheet has been
+    fetched and parsed, one round trip too late to be ready. {% endcomment %}
+    {% vite_font_preload %}
+    {% vite_modulepreload 'tsx/main.tsx' %}
     <script>
       (function() {
         var t = localStorage.getItem("theme") || "auto";

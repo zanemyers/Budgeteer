@@ -141,6 +141,88 @@ def safe_json(value: str) -> str:
 
 
 @register.simple_tag
+def vite_modulepreload(filename: str) -> str:
+    """
+    Emit a modulepreload for every chunk the named entry statically imports.
+
+    Vite normally writes these itself, but only into HTML it generates; here Django owns the page, so
+    without them the browser can't discover the entry's dependencies until it has downloaded and
+    parsed the entry — one serial round trip before the real work starts. That cost appeared when the
+    pages were split into per-page chunks: the entry went from one self-contained file to a small
+    stub plus a dozen shared chunks.
+
+    Static imports only. The per-page chunks are dynamic imports and deliberately left out — the
+    point of splitting them is not to fetch fifteen pages to render one.
+    """
+    if vite_settings.VITE_DEV_MODE is True:
+        return ""
+    manifest = _get_manifest()
+    base_url = f"{settings.STATIC_URL}{vite_settings.VITE_OUTPUT_DIR}"
+    seen: set[str] = set()
+    ordered: list[str] = []
+
+    def walk(key: str) -> None:
+        if key in seen:
+            return
+        seen.add(key)
+        entry = manifest.get(key)
+        if entry is None:
+            return
+        for imported in entry.get("imports", []):
+            walk(imported)
+        # Appended after its own imports so a dependency is preloaded before the chunk needing it.
+        if key != filename:
+            ordered.append(entry["file"])
+
+    walk(filename)
+    tags = "".join(f'<link rel="modulepreload" href="{base_url}{chunk}">' for chunk in ordered)
+    return mark_safe(tags)  # noqa: S308
+
+
+@register.simple_tag
+def vite_font_preload() -> str:
+    """
+    Preload the Latin subset of the self-hosted Inter, which every page renders.
+
+    Without this the font is only discovered after the stylesheet has been fetched and parsed, so it
+    arrives a round trip after first paint and the page visibly reflows out of system-ui. Only the
+    Latin subset is worth preloading: `latin-ext` exists for the currency symbols in U+20A0-20C0 and
+    most budgets never render one, so preloading it would be 134 KB wasted on the common case.
+
+    Nothing is emitted in dev mode, where the font is served unhashed straight off the Vite server.
+    """
+    url = vite_font_url()
+    if not url:
+        return ""
+    # crossorigin is required even same-origin: fonts are always fetched in CORS mode, and a preload
+    # whose mode doesn't match the real request is discarded and fetched a second time.
+    return mark_safe(  # noqa: S308
+        f'<link rel="preload" as="font" type="font/woff2" href="{url}" crossorigin>'
+    )
+
+
+@register.simple_tag
+def vite_font_url() -> str:
+    """
+    Return the hashed URL of Inter's Latin subset, or "" in dev mode.
+
+    Separate from `vite_font_preload` because the offline page needs the bare URL: it renders with no
+    stylesheet of its own (the service worker serves it when no network is reachable), so it declares
+    its own @font-face rather than linking main.css. The subset is precached alongside every other
+    build asset, so it is genuinely available offline.
+    """
+    if vite_settings.VITE_DEV_MODE is True:
+        return ""
+    entry = _get_manifest().get("fonts/inter-latin.woff2")
+    if entry is None:
+        raise Exception(
+            f"The self-hosted Inter subset was not found in the manifest file "
+            f"{vite_settings.VITE_MANIFEST_FILE}. main.css should reference ../fonts/inter-latin.woff2."
+        )
+    return f"{settings.STATIC_URL}{vite_settings.VITE_OUTPUT_DIR}{entry['file']}"
+
+
+@register.simple_tag
 def vite_react_refresh() -> str:
     if vite_settings.VITE_DEV_MODE is False:
         return mark_safe("")

@@ -1,15 +1,23 @@
 {% comment %} The service worker precaches this page and serves it when a navigation can't reach the
-  network, so it has to render with nothing but itself: no Vite bundle, no Google font, no nav
-  include. The tokens below are copied from src/css/main.css for that reason. {% endcomment %}
+  network, so it has to render with nothing but itself: no Vite bundle, no nav include, no external
+  stylesheet. The tokens below are copied from src/css/main.css for that reason.
+
+  Inter is the one exception, and only because it is now self-hosted: the worker precaches every
+  build asset, so the hashed woff2 is in the cache offline too. Declared here rather than linked,
+since linking main.css would defeat the whole point. {% endcomment %}
+{% load vite %}
+
 <!DOCTYPE html>
 <html lang="en" class="h-full">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="icon" type="image/svg+xml" href="/public/static/favicon2/favicon.svg">
+    <link rel="icon"
+          type="image/svg+xml"
+          href="/public/static/favicon2/favicon.svg">
     <title>Offline {% if SITE_NAME %}- {{ SITE_NAME }}{% endif %}</title>
     <script>
-      // Same pre-paint theme read as layouts/base.html, so the fallback doesn't flash the wrong theme.
+      // Same pre-paint theme read as app.html, so the fallback doesn't flash the wrong theme.
       (function() {
         var t = localStorage.getItem("theme") || "auto";
         var e = t === "auto" ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : t;
@@ -17,6 +25,20 @@
       })();
     </script>
     <style>
+      {% vite_font_url as font_url %}
+      {% if font_url %}
+      @font-face {
+        font-family: "Inter";
+        font-style: normal;
+        font-weight: 100 900;
+        /* `swap`, not `block`: if the worker's cache has the font this resolves instantly either
+             way, and if it doesn't — no worker installed yet, and no network to fetch from — `block`
+             would hide the text for three seconds before giving up, on the one page whose whole job
+             is explaining what went wrong. */
+        font-display: swap;
+        src: url("{{ font_url }}") format("woff2");
+      }
+      {% endif %}
       :root {
         --paper: oklch(98% 0.005 100);
         --ink: oklch(22% 0.015 130);
@@ -24,6 +46,7 @@
         --moss: oklch(48% 0.07 130);
         --moss-foreground: oklch(98% 0.005 100);
       }
+
       .dark {
         --paper: oklch(23% 0.008 130);
         --ink: oklch(94% 0.008 100);
@@ -31,6 +54,7 @@
         --moss: oklch(72% 0.09 130);
         --moss-foreground: oklch(15% 0.01 130);
       }
+
       body {
         margin: 0;
         min-height: 100vh;
@@ -44,19 +68,23 @@
         font-family: Inter, system-ui, -apple-system, sans-serif;
         line-height: 1.5;
       }
+
       main {
         max-width: 24rem;
         text-align: center;
       }
+
       h1 {
         margin: 0 0 0.5rem;
         font-size: 1.25rem;
         font-weight: 600;
       }
+
       p {
         margin: 0 0 1.5rem;
         color: var(--ink-quiet);
       }
+
       button {
         min-height: 44px;
         padding: 0 1.25rem;
@@ -68,6 +96,7 @@
         font-weight: 500;
         cursor: pointer;
       }
+
       svg {
         color: var(--ink-quiet);
         margin-bottom: 1rem;
@@ -85,18 +114,12 @@
            stroke-linecap="round"
            stroke-linejoin="round"
            aria-hidden="true">
-        <path d="m2 2 20 20">
-        </path>
-        <path d="M8.5 16.5a5 5 0 0 1 7 0">
-        </path>
-        <path d="M2 8.82a15 15 0 0 1 4.17-2.65">
-        </path>
-        <path d="M10.66 5c4.01-.36 8.14.9 11.34 3.76">
-        </path>
-        <path d="M16.85 11.25a10 10 0 0 1 2.22 1.68">
-        </path>
-        <path d="M5 13a10 10 0 0 1 5.24-2.76">
-        </path>
+        <path d="m2 2 20 20"></path>
+        <path d="M8.5 16.5a5 5 0 0 1 7 0"></path>
+        <path d="M2 8.82a15 15 0 0 1 4.17-2.65"></path>
+        <path d="M10.66 5c4.01-.36 8.14.9 11.34 3.76"></path>
+        <path d="M16.85 11.25a10 10 0 0 1 2.22 1.68"></path>
+        <path d="M5 13a10 10 0 0 1 5.24-2.76"></path>
         <line x1="12" x2="12.01" y1="20" y2="20">
         </line>
       </svg>

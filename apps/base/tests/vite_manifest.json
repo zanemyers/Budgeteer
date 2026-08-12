@@ -4,7 +4,23 @@
       "main-hashgoeshere.css"
     ],
     "file": "main-hashgoeshere.js",
+    "imports": [
+      "_shared-hashgoeshere.js"
+    ],
     "isEntry": true,
     "src": "js/main.js"
+  },
+  "_shared-hashgoeshere.js": {
+    "file": "shared-hashgoeshere.js",
+    "imports": [
+      "_vendor-hashgoeshere.js"
+    ]
+  },
+  "_vendor-hashgoeshere.js": {
+    "file": "vendor-hashgoeshere.js"
+  },
+  "fonts/inter-latin.woff2": {
+    "file": "inter-latin-hashgoeshere.woff2",
+    "src": "fonts/inter-latin.woff2"
   }
 }
