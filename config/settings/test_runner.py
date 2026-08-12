@@ -21,6 +21,11 @@ SECURE_HSTS_SECONDS = 0
 SESSION_COOKIE_SECURE = False
 CSRF_COOKIE_SECURE = False
 
+# The Vite dev-asset host is env-driven so it can be pointed at this machine's LAN IP to open the
+# app from a phone. The templatetag tests assert the default, so pin it here rather than let one
+# developer's .env decide whether the suite passes.
+VITE_SERVER_HOST = "localhost"
+
 PASSWORD_HASHERS = ("django.contrib.auth.hashers.MD5PasswordHasher",)
 
 AUTHENTICATION_BACKENDS = ["django.contrib.auth.backends.ModelBackend"]

@@ -465,3 +465,7 @@ MAINTENANCE_MODE_STATE_BACKEND = "maintenance_mode.backends.CacheBackend"
 MAINTENANCE_MODE_STATE_BACKEND_FALLBACK_VALUE = True
 
 VITE_DEV_MODE = env.bool("VITE_DEV_MODE", default=DEBUG)
+# The host the browser fetches dev assets from, so it has to be resolvable by the *client*, not the
+# server. "localhost" is right when you browse from this machine; set it to the LAN IP to open the
+# app from a phone, or the phone resolves localhost to itself and every asset 404s.
+VITE_SERVER_HOST = env("VITE_SERVER_HOST", default="localhost")

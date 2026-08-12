@@ -1,8 +1,8 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import react from "@vitejs/plugin-react";
+import { defaultAllowedOrigins, defineConfig } from "vite";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -19,6 +19,13 @@ export default defineConfig({
     host: "0.0.0.0",
     port: 3000,
     open: false,
+    cors: {
+      // Vite only sends Access-Control-Allow-Origin to localhost origins by default. Django serves the
+      // page from this machine's LAN IP when you browse from a phone, so that origin has to be allowed
+      // too — otherwise the browser blocks every dev module and the app renders as a blank page with no
+      // hint in the Django log. Dev-server-only; the built assets are served by Django, same-origin.
+      origin: [defaultAllowedOrigins, /^https?:\/\/192\.168\.\d{1,3}\.\d{1,3}(?::\d+)?$/],
+    },
     watch: {
       usePolling: true,
     },
