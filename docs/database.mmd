@@ -38,6 +38,10 @@ erDiagram
     Currency ||--o{ Transaction : "by code"
     Currency ||--o{ BankAccount : "by code"
     Currency ||--o{ User : "by code"
+    Budget ||--o{ PaySchedule : ""
+    Category ||--o{ PaySchedule : ""
+    PaymentMethod ||--o{ PaySchedule : ""
+    PaySchedule ||--o{ Transaction : "instances"
 
     User {
         bigint id PK
@@ -91,6 +95,24 @@ erDiagram
         bigint category_id FK
         date month "first day of month"
         decimal assigned
+    }
+
+    PaySchedule {
+        bigint id PK
+        bigint budget_id FK
+        string name
+        bigint category_id FK
+        bigint payment_method_id FK
+        string frequency
+        string anchor_1
+        string anchor_2
+        date anchor_date
+        int allocation_offset_months
+        decimal expected_amount
+        string match_text
+        date generated_through
+        datetime created_at
+        datetime updated_at
     }
 
     PaymentMethod {
