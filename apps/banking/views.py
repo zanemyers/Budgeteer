@@ -27,6 +27,12 @@ def _serialize_bank_account(acct: BankAccount, *, include_transactions: bool = T
         "payment_method_id": acct.payment_method_id,
         "is_hidden": acct.is_hidden,
         "pending_count": 0,
+        # What the account is *for*, so the page can say so. An account SimpleFIN returns holdings
+        # for is the Investments page's source — the link is the holdings themselves, there is
+        # nothing to map — but the page used to label it "Not in any budget" exactly like an account
+        # doing nothing at all. len() over .count() so a prefetched cache is reused; .count() would
+        # re-query per account, same reason the transactions below avoid an explicit order_by.
+        "holdings_count": len(acct.holdings.all()),
     }
     if include_transactions:
         # Rely on BankTransaction.Meta.ordering (-posted_at) so a prefetched cache
@@ -50,7 +56,7 @@ class BankingView(LoginRequiredMixin, View):
 
         connections = []
         connections_qs = SimpleFINConnection.objects.filter(user=user).prefetch_related(
-            "bank_accounts__bank_transactions"
+            "bank_accounts__bank_transactions", "bank_accounts__holdings"
         )
         for conn in connections_qs:
             accounts = []

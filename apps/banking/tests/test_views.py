@@ -9,6 +9,7 @@ from inertia.test import InertiaTestCase
 from apps.accounts.models import User
 from apps.banking.models import BankAccount, BankTransaction, SimpleFINConnection
 from apps.budget.models import Budget, BudgetMembership, PaymentMethod
+from apps.investments.models import Holding
 
 
 def _post_json(client, url, payload):
@@ -53,6 +54,42 @@ class TestBankingView(BankingViewTestCase):
         self.assertEqual(accounts[0]["name"], "Checking")
         self.assertEqual(accounts[0]["pending_count"], 1)
         self.assertEqual(len(accounts[0]["transactions"]), 1)
+
+    def test_reports_holdings_count_so_the_page_can_name_an_investment_account(self):
+        """
+        An account SimpleFIN returns holdings for is the Investments page's source.
+
+        The page used to label every account without a payment method "— Not in any budget —",
+        which read the same for an account doing real work as for one doing nothing. There is
+        nothing to map — the holdings *are* the link — so the count is what lets the card say so.
+        """
+        user = self.make_user()
+        conn = SimpleFINConnection.objects.create(user=user, access_url="https://x/access")
+        brokerage = BankAccount.objects.create(connection=conn, simplefin_id="b1", name="Roth IRA")
+        BankAccount.objects.create(connection=conn, simplefin_id="b2", name="Checking")
+        for i in range(3):
+            Holding.objects.create(bank_account=brokerage, simplefin_id=f"h{i}", symbol=f"SYM{i}")
+
+        self.client.force_login(user)
+        self.client.get(reverse("banking"))
+
+        by_name = {a["name"]: a for a in self.props()["connections"][0]["accounts"]}
+        self.assertEqual(by_name["Roth IRA"]["holdings_count"], 3)
+        self.assertEqual(by_name["Checking"]["holdings_count"], 0)
+
+    def test_hidden_accounts_are_still_sent_so_they_can_be_unhidden(self):
+        # Hiding is a display choice, and the page keeps a "Hidden (N)" section to undo it. Filtering
+        # them out server-side would strand an account with no way back.
+        user = self.make_user()
+        conn = SimpleFINConnection.objects.create(user=user, access_url="https://x/access")
+        BankAccount.objects.create(connection=conn, simplefin_id="h1", name="Ignored", is_hidden=True)
+
+        self.client.force_login(user)
+        self.client.get(reverse("banking"))
+
+        accounts = self.props()["connections"][0]["accounts"]
+        self.assertEqual([a["name"] for a in accounts], ["Ignored"])
+        self.assertTrue(accounts[0]["is_hidden"])
 
     def test_excludes_other_users_connections(self):
         user = self.make_user()
