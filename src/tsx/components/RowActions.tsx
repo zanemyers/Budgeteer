@@ -52,16 +52,18 @@ export function RowActions({ name, noun, onEdit, onDelete }: Props) {
             <MoreHorizontal />
           </Button>
         </DropdownMenuTrigger>
-        {/* Sized to the longest noun in use ("recurring transaction") so the items never wrap. */}
-        <DropdownMenuContent align="end" className="w-60">
-          <DropdownMenuItem className="whitespace-nowrap" onClick={onEdit}>
+        {/* Bare verbs: the menu hangs off the row it acts on, so repeating the noun on every item
+            ("Edit recurring transaction") only widened the menu enough to overhang the screen edge.
+            The noun still appears in the confirm dialog, where it is the only context available. */}
+        <DropdownMenuContent align="end" className="w-40">
+          <DropdownMenuItem onClick={onEdit}>
             <Pencil />
-            Edit {noun}
+            Edit
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem className="whitespace-nowrap" variant="destructive" onClick={() => setConfirming(true)}>
+          <DropdownMenuItem variant="destructive" onClick={() => setConfirming(true)}>
             <Trash2 />
-            Delete {noun}
+            Delete
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -77,7 +79,7 @@ export function RowActions({ name, noun, onEdit, onDelete }: Props) {
               Cancel
             </Button>
             <Button variant="destructive" onClick={() => void run()} disabled={busy}>
-              {busy ? "Deleting…" : `Delete ${noun}`}
+              {busy ? "Deleting…" : "Delete"}
             </Button>
           </DialogFooter>
         </DialogContent>
