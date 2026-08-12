@@ -38,6 +38,9 @@ export function SwipeToDelete({ onDelete, revealed, onRevealedChange, children }
   const horizontal = useRef<boolean | null>(null);
   const swiped = useRef(false);
 
+  // Has the row moved at all? Drives both the action layer and the sliding layer's background.
+  const slid = dx !== 0;
+
   function offset(next: number) {
     dxRef.current = next;
     setDx(next);
@@ -92,30 +95,33 @@ export function SwipeToDelete({ onDelete, revealed, onRevealedChange, children }
 
   return (
     <div className="relative overflow-hidden">
-      {/* Sits behind the sliding content, so it is uncovered rather than flown in. Inset from the
-          row's edges on all four sides so it reads as a control resting in the row, not as the row
-          itself turning red at the seam. */}
-      <div className="absolute inset-y-0 right-0 flex w-[88px] items-stretch justify-end py-1.5 pr-2">
-        <button
-          type="button"
-          // tabIndex -1 and aria-hidden: this is a touch shortcut for something the row's own menu
-          // already offers, and a keyboard user would otherwise tab through a hidden control on
-          // every row of a long register.
-          tabIndex={-1}
-          aria-hidden
-          className="flex w-full cursor-pointer flex-col items-center justify-center gap-0.5 rounded-lg bg-destructive text-[0.6875rem] font-medium text-destructive-foreground active:brightness-95"
-          onClick={(e) => {
-            // The row underneath opens the editor on click, and this button is a sibling of the
-            // sliding layer rather than inside it — so without this the tap opened the transaction
-            // and then the confirm on top of it.
-            e.stopPropagation();
-            onDelete();
-          }}
-        >
-          <Trash2 aria-hidden className="size-4" />
-          Delete
-        </button>
-      </div>
+      {/* Only while the row has actually moved. It sits *behind* the sliding layer, and that layer
+          is only opaque once it moves — it has to stay transparent at rest or it would mask the
+          row's own hover and selected tints — so a button rendered at rest showed straight through
+          the row, permanently, on top of the amount. The two conditions have to agree. */}
+      {slid && (
+        <div className="absolute inset-y-0 right-0 flex w-[88px] items-stretch justify-end py-1.5 pr-2">
+          <button
+            type="button"
+            // tabIndex -1 and aria-hidden: this is a touch shortcut for something the row's own menu
+            // already offers, and a keyboard user would otherwise tab through a hidden control on
+            // every row of a long register.
+            tabIndex={-1}
+            aria-hidden
+            className="flex w-full cursor-pointer flex-col items-center justify-center gap-0.5 rounded-lg bg-destructive text-[0.6875rem] font-medium text-destructive-foreground active:brightness-95"
+            onClick={(e) => {
+              // The row underneath opens the editor on click, and this button is a sibling of the
+              // sliding layer rather than inside it — so without this the tap opened the transaction
+              // and then the confirm on top of it.
+              e.stopPropagation();
+              onDelete();
+            }}
+          >
+            <Trash2 aria-hidden className="size-4" />
+            Delete
+          </button>
+        </div>
+      )}
 
       <div
         style={{
@@ -124,7 +130,7 @@ export function SwipeToDelete({ onDelete, revealed, onRevealedChange, children }
         }}
         // pan-y, not none: the page must still scroll vertically through the row. The browser hands
         // us horizontal movement and keeps the vertical for itself.
-        className={`relative touch-pan-y ${dx === 0 ? "" : "bg-card"}`}
+        className={`relative touch-pan-y ${slid ? "bg-card" : ""}`}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}

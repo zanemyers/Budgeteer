@@ -32,6 +32,8 @@
 
 * **Swipe a transaction row left to delete it.** Deleting one transaction on a phone cost five taps — overflow menu, selection mode, tick the row, Delete, confirm. A leftward swipe now uncovers a Delete button, which opens a confirm. The gesture only ever *reveals*; deleting still takes a deliberate tap and then a confirmation, so a stray swipe while scrolling cannot destroy anything. Touch only: a mouse drag across a row is not a gesture anyone means, and the desktop layout has room for real controls. It reuses the existing `transactions/bulk/` endpoint with a single id, so the server's own rules still apply and a row it declines — a bank-linked one, which the next sync would bring straight back — is reported rather than silently claimed as deleted.
 
+  The action layer only exists while the row is actually slid. It sits *behind* the sliding layer, and that layer can only be opaque once it moves — at rest it has to stay transparent or it masks the row's own hover and selected tints — so a button rendered at rest showed straight through the row, permanently, sitting on top of the amount.
+
   Two things this needed that are easy to get wrong. `touch-action: pan-y` on the sliding layer, so the browser keeps vertical panning and hands over only horizontal movement — the page still scrolls through the row. And direction is decided *once*, on the first 8px of movement, rather than per event: re-deciding on every event lets a diagonal scroll flicker between the two and steal the page's scrolling.
 
 ### Fixed
