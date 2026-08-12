@@ -191,6 +191,54 @@ export default function TransactionModal({
     }
   }
 
+  // Almost every transaction has exactly one line. That case gets category and amount as plain
+  // top-level fields; the repeating "Line Items" editor only appears once you actually split.
+  const isSingleLine = form.lines.length === 1;
+
+  /**
+   * The category picker for one line. Extracted because the single-line layout promotes it to a
+   * top-level field while the split layout repeats it per row, and the option grouping is long
+   * enough that two copies would drift.
+   */
+  function categoryField(idx: number, id?: string) {
+    const regular = visibleCategories.filter((c) => !(c as CategoryWithGoal).is_goal);
+    const goals = visibleCategories.filter((c) => (c as CategoryWithGoal).is_goal);
+    const groupLabel = form.categoryType === "income" ? "Income" : "Expense";
+    return (
+      <Select value={form.lines[idx].category} onValueChange={(v) => updateLine(idx, "category", v)}>
+        {/* A visible <Label htmlFor> names it in the single-line layout; the split rows have no
+            per-row label, so they fall back to aria-label. */}
+        <SelectTrigger id={id} className="w-full" aria-label={id ? undefined : `Line ${idx + 1} category`}>
+          <SelectValue placeholder="-- Select --" />
+        </SelectTrigger>
+        <SelectContent>
+          {regular.length > 0 && (
+            <SelectGroup>
+              <SelectLabel>{groupLabel}</SelectLabel>
+              {regular.map((c) => (
+                <SelectItem key={c.id} value={String(c.id)}>
+                  {c.name}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          )}
+          {regular.length > 0 && goals.length > 0 && <SelectSeparator />}
+          {goals.length > 0 && (
+            <SelectGroup>
+              <SelectLabel>Goals</SelectLabel>
+              {goals.map((c) => (
+                <SelectItem key={c.id} value={String(c.id)}>
+                  <PiggyBank aria-hidden />
+                  {c.name}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          )}
+        </SelectContent>
+      </Select>
+    );
+  }
+
   const title = isEdit
     ? "Edit Transaction"
     : forceTransactionType === "transfer"
@@ -314,6 +362,29 @@ export default function TransactionModal({
               {errors.description && <p className="text-destructive text-sm">{errors.description.join(" ")}</p>}
             </div>
 
+            {/* One row, phone included — at 390px these are ~170px each, and keeping them on a line
+                matches the split editor below rather than stacking the two most-used fields. */}
+            {isSingleLine && (
+              <div className="grid grid-cols-2 gap-2 sm:gap-4">
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="txn-category">Category</Label>
+                  {categoryField(0, "txn-category")}
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="txn-amount">Amount</Label>
+                  <Input
+                    id="txn-amount"
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    value={form.lines[0].amount}
+                    onChange={(e) => updateLine(0, "amount", e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {isRecurring && (
                 <div className="flex flex-col gap-2">
@@ -338,23 +409,88 @@ export default function TransactionModal({
                   onChange={(e) => update("paid_date", e.target.value)}
                 />
               </div>
-              {form.categoryType === "income" && (
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="txn-budget-month">Funds budget month</Label>
-                  <Input
-                    id="txn-budget-month"
-                    type="month"
-                    value={form.budget_month}
-                    onChange={(e) => update("budget_month", e.target.value)}
-                  />
-                  <p className="text-xs text-muted-foreground">Leave blank to use your pay schedule's default.</p>
-                </div>
-              )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="txn-pm">Payment Method</Label>
+            {errors.lines && (
+              <Alert variant="destructive">
+                <AlertDescription>{(errors.lines as unknown as string[]).join(" ")}</AlertDescription>
+              </Alert>
+            )}
+
+            {!isSingleLine && (
+              <>
+                <hr className="border-border" />
+                <h6 className="font-semibold">Line Items</h6>
+                {form.lines.map((line, idx) => (
+                  // One row per line at every width. Stacking these full-width below md turned a
+                  // three-way split into nine stacked fields; at 390px the row is tight but legible.
+                  // biome-ignore lint/suspicious/noArrayIndexKey: rows are fully controlled and addressed by index
+                  <div key={idx} className="grid grid-cols-12 gap-2 items-end">
+                    <div className="col-span-5 flex flex-col gap-1.5">
+                      <Label className="text-xs sm:text-sm">Category</Label>
+                      {categoryField(idx)}
+                    </div>
+                    <div className="col-span-3 flex flex-col gap-1.5">
+                      <Label className="text-xs sm:text-sm">Amount</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        aria-label={`Line ${idx + 1} amount`}
+                        value={line.amount}
+                        onChange={(e) => updateLine(idx, "amount", e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="col-span-3 flex flex-col gap-1.5">
+                      <Label className="text-xs sm:text-sm">Note</Label>
+                      <Input
+                        aria-label={`Line ${idx + 1} note`}
+                        value={line.description}
+                        onChange={(e) => updateLine(idx, "description", e.target.value)}
+                      />
+                    </div>
+                    <div className="col-span-1">
+                      <Button
+                        type="button"
+                        variant="destructive-subtle"
+                        size="icon-sm"
+                        aria-label={`Remove line ${idx + 1}`}
+                        onClick={() => removeLine(idx)}
+                      >
+                        &times;
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
+
+            <Button type="button" variant="outline" size="sm" className="self-start" onClick={addLine}>
+              {isSingleLine ? "Split across categories" : "+ Add Line"}
+            </Button>
+
+            {/* Note, payment method and currency share one row rather than costing three rows of
+                scroll each. Narrow, but all three are either a picker or a short string, and the
+                currency trigger is reduced to its code so it fits. The note only belongs here in
+                the single-line case — a split carries its own note per line. */}
+            <div className={cn("grid gap-2 items-end", isSingleLine ? "grid-cols-3" : "grid-cols-2")}>
+              {isSingleLine && (
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="txn-note" className="text-xs sm:text-sm">
+                    Note
+                  </Label>
+                  <Input
+                    id="txn-note"
+                    value={form.lines[0].description}
+                    onChange={(e) => updateLine(0, "description", e.target.value)}
+                  />
+                </div>
+              )}
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="txn-pm" className="text-xs sm:text-sm">
+                  Payment
+                </Label>
                 <Select
                   value={form.payment_method || "none"}
                   onValueChange={(v) => update("payment_method", v === "none" ? "" : v)}
@@ -375,11 +511,15 @@ export default function TransactionModal({
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="txn-currency">Currency</Label>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="txn-currency" className="text-xs sm:text-sm">
+                  Currency
+                </Label>
                 <Select value={form.currency} onValueChange={(v) => update("currency", v)}>
+                  {/* Children on SelectValue override what the trigger shows, so the list keeps
+                      "USD — US Dollar" while the closed trigger is just "USD". */}
                   <SelectTrigger id="txn-currency" className="w-full">
-                    <SelectValue />
+                    <SelectValue>{form.currency}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {currencies.map((c) => (
@@ -389,97 +529,27 @@ export default function TransactionModal({
                     ))}
                   </SelectContent>
                 </Select>
-                {isForeignCurrency && (
-                  <p className="text-muted-foreground text-sm">
-                    Amounts will be converted from {form.currency} to {userCurrency}
-                  </p>
-                )}
               </div>
             </div>
 
-            <hr className="border-border" />
-            <h6 className="font-semibold">Line Items</h6>
-            {errors.lines && (
-              <Alert variant="destructive">
-                <AlertDescription>{(errors.lines as unknown as string[]).join(" ")}</AlertDescription>
-              </Alert>
+            {isForeignCurrency && (
+              <p className="text-muted-foreground text-sm">
+                Amounts will be converted from {form.currency} to {userCurrency}
+              </p>
             )}
-            {form.lines.map((line, idx) => (
-              // biome-ignore lint/suspicious/noArrayIndexKey: rows are fully controlled and addressed by index
-              <div key={idx} className="grid grid-cols-12 gap-2 items-end">
-                <div className="col-span-12 md:col-span-5 flex flex-col gap-1.5">
-                  <Label className="text-sm">Category</Label>
-                  <Select value={line.category} onValueChange={(v) => updateLine(idx, "category", v)}>
-                    <SelectTrigger className="w-full" aria-label={`Line ${idx + 1} category`}>
-                      <SelectValue placeholder="-- Select --" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {(() => {
-                        const regular = visibleCategories.filter((c) => !(c as CategoryWithGoal).is_goal);
-                        const goals = visibleCategories.filter((c) => (c as CategoryWithGoal).is_goal);
-                        const groupLabel = form.categoryType === "income" ? "Income" : "Expense";
-                        return (
-                          <>
-                            {regular.length > 0 && (
-                              <SelectGroup>
-                                <SelectLabel>{groupLabel}</SelectLabel>
-                                {regular.map((c) => (
-                                  <SelectItem key={c.id} value={String(c.id)}>
-                                    {c.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectGroup>
-                            )}
-                            {regular.length > 0 && goals.length > 0 && <SelectSeparator />}
-                            {goals.length > 0 && (
-                              <SelectGroup>
-                                <SelectLabel>Goals</SelectLabel>
-                                {goals.map((c) => (
-                                  <SelectItem key={c.id} value={String(c.id)}>
-                                    <PiggyBank aria-hidden />
-                                    {c.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectGroup>
-                            )}
-                          </>
-                        );
-                      })()}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="col-span-12 md:col-span-3 flex flex-col gap-1.5">
-                  <Label className="text-sm">Amount</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0.01"
-                    aria-label={`Line ${idx + 1} amount`}
-                    value={line.amount}
-                    onChange={(e) => updateLine(idx, "amount", e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="col-span-12 md:col-span-3 flex flex-col gap-1.5">
-                  <Label className="text-sm">Note</Label>
-                  <Input
-                    aria-label={`Line ${idx + 1} note`}
-                    value={line.description}
-                    onChange={(e) => updateLine(idx, "description", e.target.value)}
-                  />
-                </div>
-                <div className="col-span-12 md:col-span-1">
-                  {form.lines.length > 1 && (
-                    <Button type="button" variant="destructive-subtle" size="sm" onClick={() => removeLine(idx)}>
-                      &times;
-                    </Button>
-                  )}
-                </div>
+
+            {form.categoryType === "income" && (
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="txn-budget-month">Funds budget month</Label>
+                <Input
+                  id="txn-budget-month"
+                  type="month"
+                  value={form.budget_month}
+                  onChange={(e) => update("budget_month", e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">Leave blank to use your pay schedule's default.</p>
               </div>
-            ))}
-            <Button type="button" variant="outline" size="sm" className="self-start" onClick={addLine}>
-              + Add Line
-            </Button>
+            )}
           </div>
 
           <DialogFooter>

@@ -47,11 +47,19 @@ function DialogContent({
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          // max-h + overflow-y-auto are load-bearing: the content is centred with
-          // translate-y(-50%), so anything taller than the viewport overflows off the top
-          // *and* bottom with no scroll container, putting the footer buttons out of reach.
-          // dvh rather than vh so a mobile browser's collapsing URL bar is accounted for.
-          "fixed top-[50%] left-[50%] z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 overflow-y-auto rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:max-w-lg",
+          // Below sm the dialog takes the whole screen rather than centring in it. A centred box is
+          // positioned against the *layout* viewport, which the software keyboard does not shrink —
+          // it just draws over the lower half, hiding whichever field you tapped. Owning the full
+          // screen means the keyboard merely covers the bottom of a scroll container, and the
+          // browser scrolls the focused input into view by itself. See DialogFooter for the pinned
+          // Save/Cancel row that keeps the primary action reachable without scrolling to the end.
+          "fixed inset-0 z-50 grid h-dvh w-full gap-4 overflow-y-auto bg-background px-4 pb-4 pt-[calc(1rem+env(safe-area-inset-top))] outline-none",
+          // From sm up, back to the centred card. max-h + overflow-y-auto are load-bearing there:
+          // the content is centred with translate-y(-50%), so anything taller than the viewport
+          // overflows off the top *and* bottom with no scroll container, putting the footer buttons
+          // out of reach. dvh rather than vh accounts for a collapsing mobile URL bar.
+          "sm:inset-auto sm:top-[50%] sm:left-[50%] sm:h-auto sm:max-h-[calc(100dvh-2rem)] sm:max-w-lg sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-lg sm:border sm:p-6 sm:shadow-lg",
+          "duration-200 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0 sm:data-[state=closed]:zoom-out-95 sm:data-[state=open]:zoom-in-95",
           className,
         )}
         {...props}
@@ -92,7 +100,17 @@ function DialogFooter({
   return (
     <div
       data-slot="dialog-footer"
-      className={cn("flex flex-col-reverse gap-2 sm:flex-row sm:justify-end", className)}
+      className={cn(
+        "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end",
+        // Pinned to the bottom of the dialog's scrollport on mobile, so the primary action is
+        // reachable without scrolling past every field first. It sticks against DialogContent
+        // (the nearest scrolling ancestor) even though most callers nest it inside a <form>.
+        // The negative margins let the opaque background span DialogContent's own padding —
+        // without them the fields scroll through a 1rem gutter beside the buttons.
+        "sticky bottom-0 -mx-4 -mb-4 border-t bg-background px-4 pt-3 pb-[calc(1rem+env(safe-area-inset-bottom))]",
+        "sm:static sm:mx-0 sm:mb-0 sm:border-0 sm:px-0 sm:pt-0 sm:pb-0",
+        className,
+      )}
       {...props}
     >
       {children}
