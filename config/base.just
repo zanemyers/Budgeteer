@@ -136,6 +136,11 @@ db_restore dump_file="":
 # Lint everything
 lint: lint_frontend lint_html lint_py lint_migrations lint_types
 
+# Run the frontend tests (vitest)
+@test_frontend:
+    just _start_msg "Running frontend tests using vitest"
+    {{ node_cmd_prefix }} bun run test
+
 # Lint HTML
 @lint_html:
     just _start_msg "Checking HTML using djLint"
@@ -163,7 +168,7 @@ lint: lint_frontend lint_html lint_py lint_migrations lint_types
     {{ python_cmd_prefix }} ty check .
 
 # Run pre-commit checks
-pre_commit: format lint test
+pre_commit: format lint test_frontend test
 
 # Start docker compose
 @start:

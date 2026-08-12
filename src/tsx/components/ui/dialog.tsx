@@ -31,7 +31,7 @@ function DialogClose({ ...props }: React.ComponentProps<typeof DialogPrimitive.C
  *
  * `innerHeight` is the layout viewport, `visualViewport.height` the part still visible, and
  * `offsetTop` how far the visual viewport has been panned down inside it; what's left is the
- * keyboard. Only mounted while a dialog is open, so nothing listens the rest of the time.
+ * keyboard.
  */
 function useKeyboardInset() {
   useEffect(() => {
@@ -90,6 +90,19 @@ function useSheetDrag(onDismiss: () => void) {
   return { offset, handlers: { onPointerDown, onPointerMove, onPointerUp, onPointerCancel: onPointerUp } };
 }
 
+/**
+ * Runs the hook above, and only while the dialog is actually open.
+ *
+ * It cannot live in DialogContent: that component renders the portal *inside itself*, so it stays
+ * mounted whenever a caller has it in the tree — `<Dialog open={false}><DialogContent>` and all —
+ * and the listeners would be attached for the entire life of the page. Rendered within
+ * DialogPrimitive.Content, which is what Radix actually unmounts on close.
+ */
+function KeyboardInset() {
+  useKeyboardInset();
+  return null;
+}
+
 function DialogOverlay({ className, ...props }: React.ComponentProps<typeof DialogPrimitive.Overlay>) {
   return (
     <DialogPrimitive.Overlay
@@ -114,7 +127,6 @@ function DialogContent({
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean;
 }) {
-  useKeyboardInset();
   const closeRef = useRef<HTMLButtonElement>(null);
   const { offset, handlers } = useSheetDrag(() => closeRef.current?.click());
 
@@ -150,6 +162,7 @@ function DialogContent({
         )}
         {...props}
       >
+        <KeyboardInset />
         {/* Reads as a sheet, and drags to dismiss so it isn't only decoration. Hidden from assistive
             tech: closing is already covered by the ✕ and by Escape. */}
         <div

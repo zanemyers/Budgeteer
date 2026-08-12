@@ -222,7 +222,24 @@ Settings live in `config/settings/`: `_base.py` (all shared config, environment-
 
 ## Testing
 
-- pytest + pytest-django; settings module: `config.settings.test_runner`
+**Frontend: vitest + testing-library**, config in `vitest.config.mjs`, run by `just test_frontend`
+(and by `just pre_commit`). Tests live beside the code as `*.test.tsx`.
+
+- It's a **separate config from `vite.config.mjs`**, which sets `root: "src"` so the build's entry
+  paths resolve — inheriting that would make every test path relative to `src/` and put the Tailwind
+  plugin in the way of a run that never renders CSS.
+- The `test` script sets **`NODE_ENV=test` explicitly**. The node container runs with
+  `NODE_ENV=production`, which resolves React to its production build — and that build has no
+  `act`, so every test throws `React.act is not a function`. vitest defaults to `test` but respects
+  an inherited value.
+- jsdom has **no `PointerEvent`**, and the gesture code reads `pointerType` to tell a finger from a
+  mouse. `src/tsx/test/setup.ts` exports `firePointer`, which builds a MouseEvent and attaches the
+  pointer fields — without it a test exercises the wrong branch and passes for the wrong reason.
+- **Fire a click that follows a gesture in its own `act()`.** The browser delivers it in a later
+  task, by which point React has re-rendered; collapsing them into one commit tests a state that
+  cannot occur, which is how a correct handler can look broken.
+
+**Backend: pytest + pytest-django**; settings module: `config.settings.test_runner`
 - `model-bakery` and `django-test-plus` are installed (dev deps) but not yet adopted in the suite
 - Coverage config: `[tool.coverage.*]` sections in `pyproject.toml`
 
