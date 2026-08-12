@@ -1146,7 +1146,10 @@ export default function Transactions({
                               <TableCell className="max-sm:py-3">
                                 {/* Same shape as the transaction rows: the posted date always sits on
                                     the line beneath the payee, and below sm the amount joins it. */}
-                                <div className="flex items-start justify-between gap-2">
+                                {/* items-center, not items-start: the amount belongs to the row, not
+                                    to the payee line, and pinning it to the top left it hanging
+                                    above the date line. */}
+                                <div className="flex items-center justify-between gap-2">
                                   <div className="flex flex-col gap-0.5">
                                     <div className="flex items-center gap-2 flex-wrap">
                                       <button
@@ -1256,7 +1259,10 @@ export default function Transactions({
                                 </TableCell>
                               )}
                               <TableCell className="max-sm:py-3">
-                                <div className="flex items-start justify-between gap-2">
+                                {/* items-center, not items-start: the amount belongs to the row, not
+                                    to the payee line, and pinning it to the top left it hanging
+                                    above the date line. */}
+                                <div className="flex items-center justify-between gap-2">
                                   <div className="flex flex-col gap-0.5">
                                     <div className="flex items-center gap-2 flex-wrap">
                                       <span className="font-medium">{bt.payee || bt.description || "—"}</span>
@@ -1282,22 +1288,6 @@ export default function Transactions({
                                     {fmtSigned(amt, symbol)}
                                   </span>
                                 </div>
-                                {/* The one action this row has, spelled out. In its own column it was
-                                    a bare undo arrow floating vertically centred against a two-line
-                                    cell, saying neither what it did nor where the row would go. The
-                                    column itself is sm-and-up now. */}
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="sm:hidden -ml-3 mt-1 text-muted-foreground"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    void restoreBankTxn(bt);
-                                  }}
-                                >
-                                  <Undo2 aria-hidden />
-                                  Restore
-                                </Button>
                               </TableCell>
                               <TableCell className="hidden sm:table-cell max-w-[220px]">
                                 {renderIgnoreReason(bt)}
