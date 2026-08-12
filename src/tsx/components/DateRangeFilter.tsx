@@ -102,7 +102,7 @@ export function DateRangeFilter({ month, from, to, onChange, className }: Props)
   // biome-ignore lint/correctness/useExhaustiveDependencies: re-bound on open/anchor/hover; commit reads current values
   useEffect(() => {
     if (!open) return;
-    function onDown(e: MouseEvent) {
+    function onDown(e: PointerEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     }
     function onUp() {
@@ -115,12 +115,14 @@ export function DateRangeFilter({ month, from, to, onChange, className }: Props)
         setOpen(false);
       }
     }
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("mouseup", onUp);
+    document.addEventListener("pointerdown", onDown);
+    document.addEventListener("pointerup", onUp);
+    document.addEventListener("pointercancel", onUp);
     document.addEventListener("keydown", onEsc);
     return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("mouseup", onUp);
+      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener("pointerup", onUp);
+      document.removeEventListener("pointercancel", onUp);
       document.removeEventListener("keydown", onEsc);
     };
   }, [open, anchor, hover]);
@@ -180,15 +182,26 @@ export function DateRangeFilter({ month, from, to, onChange, className }: Props)
                   aria-label={`${short} ${d}`}
                   // Selection was conveyed by background colour alone.
                   aria-pressed={inRange(d)}
-                  onMouseDown={(e) => {
+                  // Pointer events, not mouse. A finger drag fires no mouseenter — the browser
+                  // only synthesises mouse events once the touch has *ended* — so dragging a range
+                  // did nothing on a phone and the picker could only ever select a single day.
+                  onPointerDown={(e) => {
                     e.preventDefault();
                     setAnchor(d);
                     setHover(d);
                   }}
-                  onMouseEnter={() => dragging && setHover(d)}
+                  // Touch gives the first element implicit pointer capture, so pointermove keeps
+                  // firing on the day the drag *started* on and never on the one under the finger.
+                  // Hit-testing the point is what makes the range follow.
+                  onPointerMove={(e) => {
+                    if (anchor === null) return;
+                    const over = document.elementFromPoint(e.clientX, e.clientY);
+                    const day = over?.closest("[data-day]")?.getAttribute("data-day");
+                    if (day) setHover(Number(day));
+                  }}
                   onClick={(e) => onDayClick(e, d)}
                   onKeyDown={(e) => onDayKeyDown(e, d)}
-                  className={`h-8 rounded-sm text-sm tabular-nums transition-colors focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-1 ${
+                  className={`h-8 touch-none rounded-sm text-sm tabular-nums transition-colors focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-1 ${
                     isEnd(d) ? "bg-moss text-moss-foreground" : inRange(d) ? "bg-moss-soft text-ink" : "hover:bg-muted"
                   }`}
                 >
