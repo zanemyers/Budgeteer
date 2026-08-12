@@ -331,7 +331,24 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           >
             <Menu />
           </Button>
-          <a className="font-semibold no-underline text-foreground" href="/">
+          {/* The same two-image swap as the sidebar brand, but with the light/dark mapping reversed.
+              The sidebar sits on moss in both themes, so it wants the white pig in light mode; this
+              header is bg-background — white in light mode — so it needs the black one there. */}
+          <a className="flex items-center gap-2 font-semibold no-underline text-foreground" href="/">
+            <img
+              src="/public/static/concept_images/piggy/black/filled.png"
+              alt=""
+              width="24"
+              height="24"
+              className="block dark:hidden"
+            />
+            <img
+              src="/public/static/concept_images/piggy/white/filled.png"
+              alt=""
+              width="24"
+              height="24"
+              className="hidden dark:block"
+            />
             Budgeteer
           </a>
           {/* Wayfinding lives in the shell, not in the content: the pages no longer repeat their own
