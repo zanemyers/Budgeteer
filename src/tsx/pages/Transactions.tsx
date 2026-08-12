@@ -1071,8 +1071,10 @@ export default function Transactions({
               onValueChange={(v) => {
                 setActiveTab(v);
                 // Per tab: a selection that survived the switch would let someone act on rows they
-                // can no longer see.
+                // can no longer see — and, now that the bulk actions differ by tab, act on them
+                // with the wrong tab's actions. The bank set was missed here originally.
                 setSelected(new Set());
+                setSelectedBank(new Set());
               }}
               className="gap-4"
             >
@@ -1372,11 +1374,20 @@ export default function Transactions({
         <SelectionBar
           count={selectedBank.size}
           noun="bank rows selected"
-          actions={[
-            { label: "Ignore", run: () => setBankAction("ignore") },
-            { label: "Restore to pending", run: () => setBankAction("restore") },
-            { label: "Delete", run: () => setBankAction("delete"), destructive: true },
-          ]}
+          // The two tabs offer mirror-image actions, and each other's are meaningless: a row on the
+          // Ignored tab is already ignored, and one awaiting review is already pending. Offering
+          // both left the useful one second on the tab where it was the only thing you'd want.
+          actions={
+            activeTab === "ignored"
+              ? [
+                  { label: "Restore", run: () => setBankAction("restore") },
+                  { label: "Delete", run: () => setBankAction("delete"), destructive: true },
+                ]
+              : [
+                  { label: "Ignore", run: () => setBankAction("ignore") },
+                  { label: "Delete", run: () => setBankAction("delete"), destructive: true },
+                ]
+          }
           onClear={() => setSelectedBank(new Set())}
           onDone={leaveSelectMode}
         />
@@ -1389,7 +1400,7 @@ export default function Transactions({
               <DialogTitle>
                 {bankAction === "delete" && `Delete ${selectedBank.size} bank rows?`}
                 {bankAction === "ignore" && `Ignore ${selectedBank.size} bank rows?`}
-                {bankAction === "restore" && `Restore ${selectedBank.size} to pending?`}
+                {bankAction === "restore" && `Restore ${selectedBank.size} bank rows?`}
               </DialogTitle>
             </DialogHeader>
             <div className="flex flex-col gap-3 py-2">
@@ -1410,6 +1421,7 @@ export default function Transactions({
                   </tbody>
                 </table>
               </div>
+              {bankAction === "restore" && <p className="text-xs text-ink-quiet">They go back to Awaiting review.</p>}
               {bankAction === "delete" && (
                 <p className="text-xs text-alarm">
                   This cannot be undone. A row that came from a bank sync is left alone, since the next sync would bring
