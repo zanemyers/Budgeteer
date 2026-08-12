@@ -56,7 +56,10 @@ function gainClass(val: string | number | null): string {
 
 export default function Investments({ accounts, portfolio }: Props) {
   const symbol = useCurrencySymbol();
-  const [expanded, setExpanded] = useState<Set<number>>(() => new Set(accounts.map((a) => a.id)));
+  // Collapsed by default. The header already carries market value, unrealized gain and a position
+  // count, so opening one is a deliberate "show me the holdings"; expanding every account on load
+  // just put a long table between the reader and the next account.
+  const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
 
   const toggle = (id: number) =>
     setExpanded((prev) => {
