@@ -124,6 +124,93 @@ class TestTokenContrast(BaseTest):
         for theme, label in ((self.light, "light"), (self.dark, "dark")):
             self._check(theme, label, "moss-foreground", ("moss",), TEXT_AA)
 
+    def test_every_saturated_surface_has_a_readable_paired_foreground(self):
+        """
+        Each saturated background a label can sit on needs its own -foreground token.
+
+        --moss, --alarm and --fund all invert to roughly 72% lightness in dark mode, so a literal
+        white label on any of them lands near 2.4:1. The paired token is the fix, and pinning the
+        pairs here is what stops a palette edit from quietly breaking one of them.
+        """
+        pairs = (("moss-foreground", "moss"), ("destructive-foreground", "destructive"), ("fund-foreground", "fund"))
+        for theme, label in ((self.light, "light"), (self.dark, "dark")):
+            for foreground, background in pairs:
+                # --destructive and the *-foreground tokens are aliases (`var(--alarm)`,
+                # `var(--moss-foreground)`) rather than literal oklch(), so resolve them first.
+                self._check(
+                    theme,
+                    label,
+                    self.ALIASES.get(foreground, foreground),
+                    (self.ALIASES.get(background, background),),
+                    TEXT_AA,
+                )
+
+    # The alias layer in main.css: `--destructive: var(--alarm)` and friends. _parse_tokens only sees
+    # literal oklch() declarations, so aliases are mapped to the token they point at.
+    ALIASES = {
+        "destructive": "alarm",
+        "destructive-foreground": "moss-foreground",
+        "fund-foreground": "moss-foreground",
+        "primary": "moss",
+        "primary-foreground": "moss-foreground",
+    }
+
+    def test_text_white_is_not_used_on_a_saturated_brand_background(self):
+        """
+        A literal `text-white` only works on a background that is dark in *both* themes.
+
+        This is the bug the token checks above cannot see: the palette was fine and the JSX simply
+        didn't use it. `bg-moss text-white` measured 2.41:1 on the date-range picker's selected day,
+        `bg-destructive text-white` 2.84:1 on the transaction modal's Expense segment, and an
+        off-palette `bg-amber-500 text-white` 2.15:1 in *both* themes.
+
+        shadcn's own destructive Button and Badge are the legitimate exception, and show the other
+        way to satisfy this: they pair `text-white` with `dark:bg-destructive/60`, which composites
+        against the dark --paper to 5.69:1.
+        """
+        saturated = ("bg-moss", "bg-primary", "bg-fund", "bg-destructive")
+        # Any class list naming a saturated background and `text-white` must also dial that
+        # background back for dark mode.
+        literal = re.compile(r'"([^"\n]*text-white[^"\n]*)"')
+        offenders = []
+        for path in sorted((Path(settings.BASE_DIR) / "src" / "tsx").rglob("*.tsx")):
+            for classes in literal.findall(path.read_text(encoding="utf-8")):
+                if not any(token in classes for token in saturated):
+                    continue
+                if "dark:bg-" in classes:
+                    continue
+                offenders.append(f"{path.relative_to(settings.BASE_DIR)}: {classes}")
+        self.assertEqual(
+            offenders,
+            [],
+            "text-white on a saturated brand background without a dark: override — "
+            "use the paired -foreground token instead:\n  " + "\n  ".join(offenders),
+        )
+
+    def test_no_numbered_tailwind_palette_colors_in_the_jsx(self):
+        """
+        The palette is the tokens in main.css; Tailwind's stock scales are not part of it.
+
+        A numbered stock color is a fixed sRGB value, so it cannot follow the theme: the one
+        occurrence this replaced, `bg-amber-500 text-white`, was 2.15:1 in *both* light and dark and
+        sat beside --fund, the warm-earth token that already meant "goal deposit". The check above
+        can't catch that case, since the offending background isn't a brand token at all.
+        """
+        scales = (
+            "slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|"
+            "sky|blue|indigo|violet|purple|fuchsia|pink|rose"
+        )
+        numbered = re.compile(rf"\b(?:bg|text|border|ring|from|via|to|fill|stroke|shadow)-(?:{scales})-\d{{2,3}}\b")
+        offenders = []
+        for path in sorted((Path(settings.BASE_DIR) / "src" / "tsx").rglob("*.tsx")):
+            for match in numbered.findall(path.read_text(encoding="utf-8")):
+                offenders.append(f"{path.relative_to(settings.BASE_DIR)}: {match}")
+        self.assertEqual(
+            offenders,
+            [],
+            "Tailwind's stock palette can't follow the theme; use a token from main.css:\n  " + "\n  ".join(offenders),
+        )
+
     def test_rule_is_deliberately_below_ui_aa(self):
         """
         --rule is decorative and exempt.

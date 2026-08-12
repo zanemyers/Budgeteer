@@ -278,11 +278,15 @@ export default function TransactionModal({
                 <legend className="sr-only">Is this money going out or coming in?</legend>
                 {(["expense", "income"] as const).map((t) => {
                   const active = form.categoryType === t;
+                  // Each of these backgrounds is a saturated token that inverts between themes, so the
+                  // label has to ride its paired -foreground rather than a literal white: --moss,
+                  // --alarm and --fund all land near 72% lightness in dark mode, where white text
+                  // measures 2.4:1, 2.8:1 and 2.3:1.
                   const activeClass =
                     t === "expense"
-                      ? "bg-destructive text-white"
+                      ? "bg-destructive text-destructive-foreground"
                       : allLinesSF
-                        ? "bg-amber-500 text-white"
+                        ? "bg-fund text-fund-foreground"
                         : "bg-primary text-primary-foreground";
                   return (
                     <button

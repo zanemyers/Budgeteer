@@ -186,7 +186,7 @@ export function DateRangeFilter({ month, from, to, onChange }: Props) {
                   onClick={(e) => onDayClick(e, d)}
                   onKeyDown={(e) => onDayKeyDown(e, d)}
                   className={`h-8 rounded-sm text-sm tabular-nums transition-colors focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-1 ${
-                    isEnd(d) ? "bg-moss text-white" : inRange(d) ? "bg-moss-soft text-ink" : "hover:bg-muted"
+                    isEnd(d) ? "bg-moss text-moss-foreground" : inRange(d) ? "bg-moss-soft text-ink" : "hover:bg-muted"
                   }`}
                 >
                   {d}

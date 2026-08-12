@@ -44,6 +44,10 @@
      Hue and chroma unchanged so the warm-earth intent survives. */
   --fund: oklch(53% 0.08 70);
   --fund-soft: oklch(90% 0.06 70);
+  /* Ink for text sitting on --fund itself, aliased the same way --destructive-foreground is.
+     --fund is a fill in most places (goal progress bars) but the transaction modal's Deposit
+     segment puts a label on it, and --fund inverts to 75% in dark mode where white is 2.26:1. */
+  --fund-foreground: var(--moss-foreground);
   /* 4.05:1 on --surface-strong at 55%, under the 4.5 AA minimum; 5.01:1 at 50%. */
   --ongoing: oklch(50% 0.07 250);
   --alarm: oklch(45% 0.13 25);
@@ -161,6 +165,7 @@
   --color-expense-soft: var(--expense-soft);
   --color-fund: var(--fund);
   --color-fund-soft: var(--fund-soft);
+  --color-fund-foreground: var(--fund-foreground);
   --color-ongoing: var(--ongoing);
   --color-alarm: var(--alarm);
 
