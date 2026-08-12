@@ -427,44 +427,50 @@ export default function TransactionModal({
                 <hr className="border-border" />
                 <h6 className="font-semibold">Line Items</h6>
                 {form.lines.map((line, idx) => (
-                  // One row per line at every width. Stacking these full-width below md turned a
-                  // three-way split into nine stacked fields; at 390px the row is tight but legible.
+                  // Category, amount and the remove button on one line; the note gets the row under
+                  // it. This was a 12-column grid with the remove button in `col-span-1` — about
+                  // 27px at 390px for a button that will not go under 32px, so it pushed the whole
+                  // grid wider than the dialog and the modal scrolled sideways. Flex instead: the
+                  // button takes its natural width, the amount a fixed one, and the category picker
+                  // absorbs whatever is left. The note earns a full row because it is free text and
+                  // was the field with the least room.
                   // biome-ignore lint/suspicious/noArrayIndexKey: rows are fully controlled and addressed by index
-                  <div key={idx} className="grid grid-cols-12 gap-2 items-end">
-                    <div className="col-span-5 flex flex-col gap-1.5">
-                      <Label className="text-xs sm:text-sm">Category</Label>
-                      {categoryField(idx)}
+                  <div key={idx} className="flex flex-col gap-2">
+                    <div className="flex items-end gap-2">
+                      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                        <Label className="text-xs sm:text-sm">Category</Label>
+                        {categoryField(idx)}
+                      </div>
+                      <div className="flex w-24 shrink-0 flex-col gap-1.5">
+                        <Label className="text-xs sm:text-sm">Amount</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0.01"
+                          aria-label={`Line ${idx + 1} amount`}
+                          value={line.amount}
+                          onChange={(e) => updateLine(idx, "amount", e.target.value)}
+                          required
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        variant="destructive-subtle"
+                        size="icon-sm"
+                        className="shrink-0"
+                        aria-label={`Remove line ${idx + 1}`}
+                        onClick={() => removeLine(idx)}
+                      >
+                        &times;
+                      </Button>
                     </div>
-                    <div className="col-span-3 flex flex-col gap-1.5">
-                      <Label className="text-xs sm:text-sm">Amount</Label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0.01"
-                        aria-label={`Line ${idx + 1} amount`}
-                        value={line.amount}
-                        onChange={(e) => updateLine(idx, "amount", e.target.value)}
-                        required
-                      />
-                    </div>
-                    <div className="col-span-3 flex flex-col gap-1.5">
+                    <div className="flex flex-col gap-1.5">
                       <Label className="text-xs sm:text-sm">Note</Label>
                       <Input
                         aria-label={`Line ${idx + 1} note`}
                         value={line.description}
                         onChange={(e) => updateLine(idx, "description", e.target.value)}
                       />
-                    </div>
-                    <div className="col-span-1">
-                      <Button
-                        type="button"
-                        variant="destructive-subtle"
-                        size="icon-sm"
-                        aria-label={`Remove line ${idx + 1}`}
-                        onClick={() => removeLine(idx)}
-                      >
-                        &times;
-                      </Button>
                     </div>
                   </div>
                 ))}
@@ -475,23 +481,12 @@ export default function TransactionModal({
               {isSingleLine ? "Split across categories" : "+ Add Line"}
             </Button>
 
-            {/* Note, payment method and currency share one row rather than costing three rows of
-                scroll each. Narrow, but all three are either a picker or a short string, and the
-                currency trigger is reduced to its code so it fits. The note only belongs here in
-                the single-line case — a split carries its own note per line. */}
-            <div className={cn("grid gap-2 items-end", isSingleLine ? "grid-cols-3" : "grid-cols-2")}>
-              {isSingleLine && (
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="txn-note" className="text-xs sm:text-sm">
-                    Note
-                  </Label>
-                  <Input
-                    id="txn-note"
-                    value={form.lines[0].description}
-                    onChange={(e) => updateLine(0, "description", e.target.value)}
-                  />
-                </div>
-              )}
+            {/* Payment method and currency share a row — both are pickers holding a short value, and
+                the currency trigger is reduced to its code so it fits. The note is not: it is free
+                text that can run long, so it takes the row underneath rather than a third of this
+                one. In a split the note belongs to each line instead, beneath that line's category
+                and amount. */}
+            <div className="grid grid-cols-2 gap-2 items-end">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="txn-pm" className="text-xs sm:text-sm">
                   Payment
@@ -536,6 +531,21 @@ export default function TransactionModal({
                 </Select>
               </div>
             </div>
+
+            {/* A whole row of its own, under the two pickers. In a split each line carries its own
+                note, so this one would be describing nothing. */}
+            {isSingleLine && (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="txn-note" className="text-xs sm:text-sm">
+                  Note
+                </Label>
+                <Input
+                  id="txn-note"
+                  value={form.lines[0].description}
+                  onChange={(e) => updateLine(0, "description", e.target.value)}
+                />
+              </div>
+            )}
 
             {isForeignCurrency && (
               <p className="text-muted-foreground text-sm">
