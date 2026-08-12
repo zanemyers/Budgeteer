@@ -1226,10 +1226,11 @@ export default function Transactions({
                             </TableHead>
                           )}
                           <TableHead>Description</TableHead>
-                          <TableHead className="hidden sm:table-cell">Category</TableHead>
+                          {/* No Category column. Every row on this tab said "Ignored", which the
+                              tab already says. */}
                           <TableHead className="hidden sm:table-cell">Reason</TableHead>
                           <TableHead className="hidden sm:table-cell text-right">Amount</TableHead>
-                          <TableHead className="text-right">Actions</TableHead>
+                          <TableHead className="hidden sm:table-cell text-right">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -1281,12 +1282,23 @@ export default function Transactions({
                                     {fmtSigned(amt, symbol)}
                                   </span>
                                 </div>
-                                {/* Below sm the reason joins the primary cell rather than holding a
-                                    column of its own, on its own line so it gets the full width to
-                                    be typed into. */}
-                                <div className="sm:hidden mt-1">{renderIgnoreReason(bt)}</div>
+                                {/* The one action this row has, spelled out. In its own column it was
+                                    a bare undo arrow floating vertically centred against a two-line
+                                    cell, saying neither what it did nor where the row would go. The
+                                    column itself is sm-and-up now. */}
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="sm:hidden -ml-3 mt-1 text-muted-foreground"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    void restoreBankTxn(bt);
+                                  }}
+                                >
+                                  <Undo2 aria-hidden />
+                                  Restore
+                                </Button>
                               </TableCell>
-                              <TableCell className="hidden sm:table-cell text-sm italic">Ignored</TableCell>
                               <TableCell className="hidden sm:table-cell max-w-[220px]">
                                 {renderIgnoreReason(bt)}
                               </TableCell>
@@ -1295,7 +1307,10 @@ export default function Transactions({
                               >
                                 {fmtSigned(amt, symbol)}
                               </TableCell>
-                              <TableCell className="text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                              <TableCell
+                                className="hidden sm:table-cell text-right whitespace-nowrap"
+                                onClick={(e) => e.stopPropagation()}
+                              >
                                 <div className="inline-flex items-center gap-1 opacity-60 group-hover:opacity-100 touch:opacity-100 focus-within:opacity-100 transition-opacity">
                                   <Button
                                     variant="ghost"
