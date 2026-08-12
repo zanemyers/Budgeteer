@@ -33,6 +33,48 @@ def _to_datetime(unix_ts) -> datetime | None:
         return None
 
 
+def _adopt_reissued_account(conn: SimpleFINConnection, sfin_id: str, acct: dict, incoming_ids: set[str]) -> None:
+    """
+    Re-point an existing account at a new SimpleFIN id instead of letting a second row be created.
+
+    Re-linking a bank the bridge is struggling with can hand back a *new* id for an account you
+    already had. Accounts are upserted on `(connection, simplefin_id)`, so the sync can't recognise
+    it and makes a second row: the old one freezes at its last sync, keeps its transactions and its
+    payment-method mapping, and every account list shows the same account twice.
+
+    Adoption needs two things to line up, and the second is what makes it safe:
+
+    1. Exactly one existing account on this connection has the same name and institution. The name
+       carries the discriminator ("Interest Checking (1898)"), and more than one match is ambiguous
+       enough to leave alone.
+    2. That account's id is absent from the payload we are currently processing — it has *vanished*
+       from the feed. An account the bridge still reports is a different, live account that merely
+       shares a name, and must not be adopted.
+
+    A genuinely new account matches nothing and falls through to being created, which is right.
+    `merge_duplicate_bank_accounts` cleans up pairs that predate this.
+    """
+    name = (acct.get("name") or "")[:255]
+    if not name:
+        # With no name there is nothing to match on, and every unnamed account would look alike.
+        return
+    if BankAccount.objects.filter(connection=conn, simplefin_id=sfin_id).exists():
+        return
+
+    org_name = ((acct.get("org") or {}).get("name") or "")[:255]
+    candidates = list(
+        BankAccount.objects.filter(connection=conn, name=name, org_name=org_name).exclude(
+            simplefin_id__in=incoming_ids
+        )[:2]
+    )
+    if len(candidates) != 1:
+        return
+
+    # update() rather than save() so this is a single statement and cannot race with the
+    # update_or_create that immediately follows it.
+    BankAccount.objects.filter(pk=candidates[0].pk).update(simplefin_id=sfin_id)
+
+
 def sync_connection(conn: SimpleFINConnection, days: int = 31) -> dict:
     """
     Pull accounts + transactions for a connection and upsert into the DB.
@@ -61,10 +103,17 @@ def sync_connection(conn: SimpleFINConnection, days: int = 31) -> dict:
 
     errors.extend(data.get("errors") or [])
 
+    # Every id this payload reports, so an account that has *disappeared* from the feed can be told
+    # apart from one that is merely absent from the row we happen to be looking at.
+    incoming_ids = {a.get("id") for a in data.get("accounts", []) if a.get("id")}
+
     for acct in data.get("accounts", []):
         sfin_id = acct.get("id")
         if not sfin_id:
             continue
+        # Claims an existing row whose id was retired, so the upsert below updates it in place
+        # rather than creating a duplicate beside it.
+        _adopt_reissued_account(conn, sfin_id, acct, incoming_ids)
         org = acct.get("org") or {}
         balance = _to_decimal(acct.get("balance"))
         available = _to_decimal(acct.get("available-balance"), None)

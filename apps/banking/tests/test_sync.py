@@ -15,6 +15,7 @@ from apps.accounts.models import User
 from apps.banking.management.commands.sync_simplefin import _to_datetime, _to_decimal, sync_connection
 from apps.banking.models import BalanceSnapshot, BankAccount, BankTransaction, SimpleFINConnection
 from apps.banking.simplefin import SimpleFINError
+from apps.budget.models import Budget, PaymentMethod
 from apps.investments.models import Holding
 
 FETCH_PATH = "apps.banking.management.commands.sync_simplefin.fetch_accounts"
@@ -406,3 +407,110 @@ class TestSyncStatusGrading(TestCase):
         self.assertEqual(self.conn.last_sync_error, "")
         self.assertEqual(self.conn.sync_status, "ok")
         self.assertIsNotNone(self.conn.last_success_at)
+
+
+class TestReissuedAccountIds(TestCase):
+    """
+    Re-linking a bank can hand back a new SimpleFIN id for an account you already had.
+
+    Accounts upsert on `(connection, simplefin_id)`, so without adoption the sync cannot recognise
+    the account and creates a second row beside it — the old one frozen at its last sync, still
+    holding its transactions and its payment-method mapping.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(username="u", email="u@example.com", password="password")  # noqa: S106
+        self.conn = SimpleFINConnection.objects.create(user=self.user, access_url="https://x/access")
+
+    def _existing(self, sfin_id, name="Checking", org="Big Bank"):
+        return BankAccount.objects.create(connection=self.conn, simplefin_id=sfin_id, name=name, org_name=org)
+
+    @patch(FETCH_PATH)
+    def test_a_reissued_id_updates_the_account_in_place(self, mock_fetch):
+        old = self._existing("acct-OLD")
+        BankTransaction.objects.create(
+            bank_account=old, simplefin_id="t-old", posted_at=timezone.now(), amount="-5.00", description="History"
+        )
+        # Same account, same name, new id — and the old id is gone from the feed.
+        mock_fetch.return_value = _payload()
+
+        sync_connection(self.conn)
+
+        self.assertEqual(BankAccount.objects.filter(connection=self.conn).count(), 1)
+        old.refresh_from_db()
+        self.assertEqual(old.simplefin_id, "acct-1")
+        # The history rode along, which is the entire point of adopting rather than recreating.
+        self.assertEqual(old.bank_transactions.filter(simplefin_id="t-old").count(), 1)
+
+    @patch(FETCH_PATH)
+    def test_the_payment_method_mapping_survives(self, mock_fetch):
+        # BankTransaction.for_budget reaches a budget *through* the payment method, so a new row
+        # would take every one of this account's transactions out of the register.
+        budget = Budget.objects.create(name="Household")
+        pm = PaymentMethod.objects.create(budget=budget, name="Commerce", last_four="1898")
+        old = self._existing("acct-OLD")
+        old.payment_method = pm
+        old.save(update_fields=["payment_method"])
+        mock_fetch.return_value = _payload()
+
+        sync_connection(self.conn)
+
+        old.refresh_from_db()
+        self.assertEqual(old.simplefin_id, "acct-1")
+        self.assertEqual(old.payment_method_id, pm.pk)
+
+    @patch(FETCH_PATH)
+    def test_an_account_still_in_the_feed_is_never_adopted(self, mock_fetch):
+        """
+        The safety condition: only a *vanished* id may be adopted.
+
+        Two live accounts can share a name — a second "Checking" at the same bank is a real thing —
+        and folding them together would merge two people's money.
+        """
+        still_live = self._existing("acct-1")
+        payload = _payload()
+        payload["accounts"].append({**payload["accounts"][0], "id": "acct-2", "transactions": []})
+        mock_fetch.return_value = payload
+
+        sync_connection(self.conn)
+
+        still_live.refresh_from_db()
+        self.assertEqual(still_live.simplefin_id, "acct-1")
+        self.assertEqual(BankAccount.objects.filter(connection=self.conn).count(), 2)
+
+    @patch(FETCH_PATH)
+    def test_two_stale_candidates_are_left_alone(self, mock_fetch):
+        # Ambiguous: nothing says which of the two the new id belongs to, so a third row is the
+        # honest outcome and merge_duplicate_bank_accounts can sort it out with a human looking.
+        self._existing("acct-OLD-1")
+        self._existing("acct-OLD-2")
+        mock_fetch.return_value = _payload()
+
+        sync_connection(self.conn)
+
+        self.assertEqual(BankAccount.objects.filter(connection=self.conn).count(), 3)
+
+    @patch(FETCH_PATH)
+    def test_a_different_account_is_not_adopted(self, mock_fetch):
+        savings = self._existing("acct-OLD", name="Savings")
+        mock_fetch.return_value = _payload()
+
+        sync_connection(self.conn)
+
+        savings.refresh_from_db()
+        self.assertEqual(savings.simplefin_id, "acct-OLD")
+        self.assertEqual(BankAccount.objects.filter(connection=self.conn).count(), 2)
+
+    @patch(FETCH_PATH)
+    def test_another_connection_is_never_adopted_from(self, mock_fetch):
+        other = SimpleFINConnection.objects.create(user=self.user, access_url="https://y/access")
+        theirs = BankAccount.objects.create(
+            connection=other, simplefin_id="acct-OLD", name="Checking", org_name="Big Bank"
+        )
+        mock_fetch.return_value = _payload()
+
+        sync_connection(self.conn)
+
+        theirs.refresh_from_db()
+        self.assertEqual(theirs.simplefin_id, "acct-OLD")
+        self.assertEqual(BankAccount.objects.filter(connection=self.conn).count(), 1)
