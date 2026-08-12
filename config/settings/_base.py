@@ -469,3 +469,13 @@ VITE_DEV_MODE = env.bool("VITE_DEV_MODE", default=DEBUG)
 # server. "localhost" is right when you browse from this machine; set it to the LAN IP to open the
 # app from a phone, or the phone resolves localhost to itself and every asset 404s.
 VITE_SERVER_HOST = env("VITE_SERVER_HOST", default="localhost")
+# Read the build manifest from Vite's own output directory, not from STATIC_ROOT.
+#
+# collectstatic will never place it in STATIC_ROOT: staticfiles ignores `.*` by default, and Vite
+# emits the manifest to `.vite/manifest.json`. So the STATIC_ROOT default only ever resolved while
+# VITE_DEV_MODE was on — with it off, the first vite_asset call raised FileNotFoundError and took
+# every page down with it. Latent until now because this only runs with DEBUG=True.
+#
+# Vite's outDir is in the repo (and so in any built image), which makes this correct in both modes,
+# and keeps the manifest out of the publicly served tree even when static files go to S3.
+VITE_MANIFEST_FILE = PUBLIC_ROOT.joinpath("static", "dist", "js", ".vite", "manifest.json")
