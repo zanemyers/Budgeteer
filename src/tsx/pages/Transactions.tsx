@@ -779,6 +779,13 @@ export default function Transactions({
   const rest = useMemo(() => transactions.filter((t) => Boolean(t.paid_date)), [transactions]);
   const sortedRest = useMemo(() => sortTransactions(rest, sortOrder), [rest, sortOrder]);
 
+  // The tab actually on screen. `activeTab` stays null until something is clicked, and the default
+  // is Logged whenever nothing is awaiting review — so a bare `activeTab === "logged"` check misses
+  // the common case of landing on Logged without touching anything. The selection bars are rendered
+  // outside <Tabs> and decide which bulk actions apply, so they need this rather than the raw state.
+  const defaultTab = pending.length + bankTxns.length > 0 ? "pending" : "logged";
+  const effectiveTab = activeTab ?? defaultTab;
+
   return (
     <div className="max-w-[1200px]">
       {/* Page header */}
@@ -1064,10 +1071,9 @@ export default function Transactions({
         (() => {
           const pendingCount = pending.length + bankTxns.length;
           const ignoredCount = ignoredBankTxns.length;
-          const defaultTab = pendingCount > 0 ? "pending" : "logged";
           return (
             <Tabs
-              value={activeTab ?? defaultTab}
+              value={effectiveTab}
               onValueChange={(v) => {
                 setActiveTab(v);
                 // Per tab: a selection that survived the switch would let someone act on rows they
@@ -1378,7 +1384,7 @@ export default function Transactions({
           // Ignored tab is already ignored, and one awaiting review is already pending. Offering
           // both left the useful one second on the tab where it was the only thing you'd want.
           actions={
-            activeTab === "ignored"
+            effectiveTab === "ignored"
               ? [
                   { label: "Restore", run: () => setBankAction("restore") },
                   { label: "Delete", run: () => setBankAction("delete"), destructive: true },
@@ -1449,11 +1455,15 @@ export default function Transactions({
         <SelectionBar
           count={selected.size}
           noun="selected"
+          // Same mirror as the bank rows: a logged transaction has been paid, so "Mark paid" is
+          // meaningless there, and one awaiting review has not been, so "Mark pending" is
+          // meaningless on that tab. Only the one that can change anything is offered.
           actions={[
             { label: "Recategorise", run: () => setBulkAction("category") },
             { label: "Set method", run: () => setBulkAction("payment_method") },
-            { label: "Mark paid", run: () => setBulkAction("mark_paid") },
-            { label: "Mark pending", run: () => setBulkAction("mark_unpaid") },
+            effectiveTab === "logged"
+              ? { label: "Mark pending", run: () => setBulkAction("mark_unpaid") }
+              : { label: "Mark paid", run: () => setBulkAction("mark_paid") },
             { label: "Delete", run: () => setBulkAction("delete"), destructive: true },
           ]}
           onClear={() => setSelected(new Set())}
