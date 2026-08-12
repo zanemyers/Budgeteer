@@ -160,12 +160,7 @@ export default function Goals({
             {dueMeta && <div className="text-ink-quiet text-[0.7rem]">{dueMeta}</div>}
           </div>
           <div className="shrink-0 opacity-60 group-hover:opacity-100 touch:opacity-100 focus-within:opacity-100 transition-opacity">
-            <RowActions
-              name={cat.name}
-              noun="goal"
-              onEdit={() => setEditing(cat)}
-              onDelete={() => handleDelete(cat)}
-            />
+            <RowActions name={cat.name} noun="goal" onEdit={() => setEditing(cat)} onDelete={() => handleDelete(cat)} />
           </div>
         </div>
       </div>

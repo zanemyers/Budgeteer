@@ -120,9 +120,7 @@ export function PaySchedulePanel({
                     <TableCell className="hidden xl:table-cell text-sm text-ink-quiet">
                       {schedule.payment_method_name ?? "—"}
                     </TableCell>
-                    <TableCell className="hidden md:table-cell text-sm">
-                      {freqLabel(schedule, freqChoices)}
-                    </TableCell>
+                    <TableCell className="hidden md:table-cell text-sm">{freqLabel(schedule, freqChoices)}</TableCell>
                     <TableCell className="hidden xl:table-cell text-sm text-ink-quiet">
                       {matchSummary(schedule, symbol)}
                     </TableCell>
