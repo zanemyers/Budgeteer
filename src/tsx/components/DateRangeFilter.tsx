@@ -159,7 +159,11 @@ export function DateRangeFilter({ month, from, to, onChange, className }: Props)
         <div
           role="dialog"
           aria-label={`Pick days in ${short}`}
-          className="absolute z-50 mt-1 w-64 rounded-md border border-rule bg-popover p-3 shadow-md select-none"
+          // w-64 gives 29px cells across seven columns — half a finger. On a coarse pointer the
+          // popover widens so the cells can reach 44px tall and ~39 wide, and anchors to the right
+          // edge, because at 390px the extra width would otherwise run off the screen: the trigger
+          // sits about 108px in, and 108 + 320 is past the viewport.
+          className="absolute z-50 mt-1 w-64 rounded-md border border-rule bg-popover p-3 shadow-md select-none touch:right-0 touch:w-[20rem]"
         >
           <p className="text-sm font-medium mb-2 text-center">{short}</p>
           <div className="grid grid-cols-7 gap-0.5 mb-1">
@@ -201,7 +205,7 @@ export function DateRangeFilter({ month, from, to, onChange, className }: Props)
                   }}
                   onClick={(e) => onDayClick(e, d)}
                   onKeyDown={(e) => onDayKeyDown(e, d)}
-                  className={`h-8 touch-none rounded-sm text-sm tabular-nums transition-colors focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-1 ${
+                  className={`h-8 touch:h-11 touch-none rounded-sm text-sm tabular-nums transition-colors focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-1 ${
                     isEnd(d) ? "bg-moss text-moss-foreground" : inRange(d) ? "bg-moss-soft text-ink" : "hover:bg-muted"
                   }`}
                 >

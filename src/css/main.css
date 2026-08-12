@@ -433,14 +433,35 @@ input[type="number"],
     text-align: left;
   }
 
+  /* The 44px floor PRODUCT.md commits to, in actual pixels.
+
+     Everything expressed it as `11` on Tailwind's spacing scale — touch:min-h-11, touch:size-11,
+     the 2.75rem below — which is 2.75rem, which is 44px only at a 16px root. This app sets :root to
+     0.9375rem, so every touch target in it was silently 41.25px: under Apple's 44 and well under
+     Android's 48. Same trap as the fields that zoomed on iOS, from the same cause.
+
+     Overriding the utilities by name, once, rather than rewriting twenty call sites — and in px, so
+     it cannot drift with the reading size again. Unlayered, so it beats Tailwind's own utilities
+     layer. Rems remain right for type and spacing; a finger is not a font. */
+  .touch\:h-11 {
+    height: 44px;
+  }
+  .touch\:min-h-11,
   .sidebar-link,
   .sidebar-user,
   .sidebar-brand {
-    min-height: 2.75rem;
+    min-height: 44px;
+  }
+  .touch\:min-w-11 {
+    min-width: 44px;
+  }
+  .touch\:size-11 {
+    height: 44px;
+    width: 44px;
   }
 
   /* For inline text links — "Forgot password?", the footer links — that sit on a line with other
-     content, so growing them to 2.75rem would push that line around. The hit area is a centered
+     content, so growing them to 44px would push that line around. The hit area is a centered
      pseudo-element instead, leaving the text exactly where it was: the same approach Checkbox and
      Switch take. min-width covers the short ones ("Sign in" is only 42px wide). */
   .touch-target {
@@ -450,9 +471,9 @@ input[type="number"],
     position: absolute;
     top: 50%;
     left: 50%;
-    height: 2.75rem;
+    height: 44px;
     width: 100%;
-    min-width: 2.75rem;
+    min-width: 44px;
     transform: translate(-50%, -50%);
     content: "";
   }

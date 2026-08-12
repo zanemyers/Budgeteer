@@ -691,7 +691,9 @@ export default function Transactions({
                       /* Stops at the row so expanding a split does not also open the editor. */
                       <button
                         type="button"
-                        className="text-xs text-muted-foreground hover:text-ink rounded-sm focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
+                        // 39x15 without the touch floor — a raw button, so it does not inherit the one
+                        // every Button size carries.
+                        className="text-xs text-muted-foreground hover:text-ink rounded-sm focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2 touch:inline-flex touch:min-h-11 touch:min-w-11 touch:items-center touch:justify-center"
                         onClick={(e) => {
                           e.stopPropagation();
                           setExpandedId(isExpanded ? null : txn.id);

@@ -128,7 +128,7 @@ src/tsx/
   main.tsx              # Inertia app bootstrap, assigns AppLayout as default
   layouts/              # AppLayout, AuthLayout
   pages/                # One file per Inertia component (name must match Django view arg)
-  components/           # Shared components: ThemeToggle, TransactionModal, LoadingSpinner
+  components/           # Shared components: ThemeToggle, TransactionModal, SwipeToDelete
 src/css/
   main.css              # Tailwind v4 entry + hand-rolled utility classes
 ```
