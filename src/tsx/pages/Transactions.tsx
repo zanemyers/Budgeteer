@@ -195,6 +195,22 @@ function sortTransactions(txns: Transaction[], order: SortEntry[]): Transaction[
   });
 }
 
+/**
+ * One labelled row inside the mobile filter panel.
+ *
+ * `md:contents` dissolves the wrapper from md up, so the control it holds becomes a direct child of
+ * the filter row again and the desktop layout is untouched — the same trick the tables use to fold
+ * cells on a phone without disturbing the wide layout.
+ */
+function FilterField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-3 md:contents">
+      <span className="w-16 shrink-0 text-xs text-ink-quiet md:hidden">{label}</span>
+      {children}
+    </div>
+  );
+}
+
 export default function Transactions({
   budget_pk,
   month,
@@ -888,91 +904,130 @@ export default function Transactions({
               </button>
             )}
           </div>
+          {/* Icon-only, so the search field keeps the width the word "Filters" was taking. The
+              count it used to spell out becomes a badge on the corner — the one thing the label
+              was carrying that the icon can't, since a narrowed list otherwise looks like an
+              empty one. aria-label says it in full either way. */}
           <Button
             variant="outline"
-            size="sm"
-            className="shrink-0 md:hidden"
+            size="icon"
+            className="relative shrink-0 md:hidden"
             aria-expanded={filtersOpen}
+            aria-label={activeFilterCount > 0 ? `Filters (${activeFilterCount} active)` : "Filters"}
+            title={activeFilterCount > 0 ? `Filters (${activeFilterCount} active)` : "Filters"}
             onClick={() => setFiltersOpen((open) => !open)}
           >
             <SlidersHorizontal aria-hidden className="size-4" />
-            Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
+            {activeFilterCount > 0 && (
+              <span
+                aria-hidden
+                className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-moss text-[0.625rem] font-semibold text-moss-foreground tabular-nums"
+              >
+                {activeFilterCount}
+              </span>
+            )}
           </Button>
         </div>
+        {/* Below md this is a framed panel of labelled rows, so an open filter set reads as one
+            surface rather than three loose controls dropped into the page — and so a set filter
+            still says which dimension it is once the trigger reads "Groceries" instead of "All
+            categories". From md up the frame, the labels and the rows all dissolve (md:contents)
+            back into the single wrapping row the desktop layout has always used. */}
         <div
-          className={`${filtersOpen ? "flex" : "hidden"} flex-col gap-3 md:flex md:flex-row md:flex-wrap md:items-center`}
+          className={`${filtersOpen ? "flex" : "hidden"} flex-col gap-3 rounded-lg border border-rule bg-surface p-3 md:flex md:flex-row md:flex-wrap md:items-center md:rounded-none md:border-0 md:bg-transparent md:p-0`}
         >
+          <div className="flex items-center justify-between md:hidden">
+            <span className="text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-ink-quiet">Filters</span>
+            {hasFilters && (
+              <button
+                type="button"
+                className="cursor-pointer text-xs text-moss hover:underline"
+                onClick={() => navigate({ month })}
+              >
+                Clear all
+              </button>
+            )}
+          </div>
           <span className="hidden text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-ink-quiet mr-1 md:inline">
             Filter
           </span>
-          <Select
-            value={category_filter || "all"}
-            onValueChange={(v) => navigate(withFilters({ category: v === "all" ? null : v }))}
-          >
-            <SelectTrigger size="sm" className="w-full md:w-auto md:min-w-[180px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All categories</SelectItem>
-              <SelectGroup>
-                <SelectLabel>Expense</SelectLabel>
-                {categories
-                  .filter((c) => c.category_type === "expense" && !c.is_goal)
-                  .map((c) => (
-                    <SelectItem key={c.id} value={String(c.id)}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
-              </SelectGroup>
-              <SelectGroup>
-                <SelectLabel>Income</SelectLabel>
-                {categories
-                  .filter((c) => c.category_type === "income" && !c.is_goal)
-                  .map((c) => (
-                    <SelectItem key={c.id} value={String(c.id)}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
-              </SelectGroup>
-              {categories.some((c) => c.is_goal) && (
+          <FilterField label="Category">
+            <Select
+              value={category_filter || "all"}
+              onValueChange={(v) => navigate(withFilters({ category: v === "all" ? null : v }))}
+            >
+              <SelectTrigger size="sm" className="flex-1 min-w-0 md:flex-none md:w-auto md:min-w-[180px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All categories</SelectItem>
                 <SelectGroup>
-                  <SelectLabel>Goals</SelectLabel>
+                  <SelectLabel>Expense</SelectLabel>
                   {categories
-                    .filter((c) => c.is_goal)
+                    .filter((c) => c.category_type === "expense" && !c.is_goal)
                     .map((c) => (
                       <SelectItem key={c.id} value={String(c.id)}>
-                        <PiggyBank aria-hidden />
                         {c.name}
                       </SelectItem>
                     ))}
                 </SelectGroup>
-              )}
-            </SelectContent>
-          </Select>
-          <Select
-            value={method_filter || "all"}
-            onValueChange={(v) => navigate(withFilters({ method: v === "all" ? null : v }))}
-          >
-            <SelectTrigger size="sm" className="w-full md:w-auto md:min-w-[160px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All methods</SelectItem>
-              {payment_methods.map((pm) => (
-                <SelectItem key={pm.id} value={String(pm.id)}>
-                  {pm.last_four ? `${pm.name} ···· ${pm.last_four}` : pm.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <DateRangeFilter
-            month={month}
-            from={date_from}
-            to={date_to}
-            onChange={(f, t) => navigate(withFilters({ date_from: f || null, date_to: t || null }))}
-          />
+                <SelectGroup>
+                  <SelectLabel>Income</SelectLabel>
+                  {categories
+                    .filter((c) => c.category_type === "income" && !c.is_goal)
+                    .map((c) => (
+                      <SelectItem key={c.id} value={String(c.id)}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                </SelectGroup>
+                {categories.some((c) => c.is_goal) && (
+                  <SelectGroup>
+                    <SelectLabel>Goals</SelectLabel>
+                    {categories
+                      .filter((c) => c.is_goal)
+                      .map((c) => (
+                        <SelectItem key={c.id} value={String(c.id)}>
+                          <PiggyBank aria-hidden />
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                  </SelectGroup>
+                )}
+              </SelectContent>
+            </Select>
+          </FilterField>
+          <FilterField label="Method">
+            <Select
+              value={method_filter || "all"}
+              onValueChange={(v) => navigate(withFilters({ method: v === "all" ? null : v }))}
+            >
+              <SelectTrigger size="sm" className="flex-1 min-w-0 md:flex-none md:w-auto md:min-w-[160px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All methods</SelectItem>
+                {payment_methods.map((pm) => (
+                  <SelectItem key={pm.id} value={String(pm.id)}>
+                    {pm.last_four ? `${pm.name} ···· ${pm.last_four}` : pm.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FilterField>
+          <FilterField label="Days">
+            <DateRangeFilter
+              month={month}
+              from={date_from}
+              to={date_to}
+              className="flex-1 min-w-0 md:flex-none"
+              onChange={(f, t) => navigate(withFilters({ date_from: f || null, date_to: t || null }))}
+            />
+          </FilterField>
+          {/* The panel header owns this below md, where a full-width ghost button under three
+              controls read as a fourth filter. */}
           {hasFilters && (
-            <Button variant="ghost" size="sm" onClick={() => navigate({ month })}>
+            <Button variant="ghost" size="sm" className="hidden md:inline-flex" onClick={() => navigate({ month })}>
               Clear
             </Button>
           )}

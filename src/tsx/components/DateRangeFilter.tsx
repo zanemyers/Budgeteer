@@ -7,6 +7,8 @@ interface Props {
   from: string; // full ISO date ("YYYY-MM-DD") or ""
   to: string;
   onChange: (from: string, to: string) => void;
+  /** Applied to the wrapper, so a caller can make the trigger fill a labelled filter row. */
+  className?: string;
 }
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -24,7 +26,7 @@ function parts(month: string) {
 
 const dayOf = (iso: string) => (iso ? Number(iso.slice(8, 10)) : null);
 
-export function DateRangeFilter({ month, from, to, onChange }: Props) {
+export function DateRangeFilter({ month, from, to, onChange, className }: Props) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const { lastDay, firstWeekday, short } = parts(month);
@@ -137,14 +139,15 @@ export function DateRangeFilter({ month, from, to, onChange }: Props) {
   ];
 
   return (
-    <div className="relative" ref={ref}>
+    <div className={`relative ${className ?? ""}`} ref={ref}>
       <Button
         type="button"
         variant="outline"
         size="sm"
         aria-haspopup="dialog"
         aria-expanded={open}
-        className={active ? "border-moss text-foreground" : ""}
+        // Fills its labelled row on a phone; natural width once the row dissolves at md.
+        className={`w-full justify-between md:w-auto md:justify-center ${active ? "border-moss text-foreground" : ""}`}
         onClick={() => setOpen((o) => !o)}
       >
         {appliedLabel}
