@@ -21,6 +21,7 @@ import { Fragment, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { DateRangeFilter } from "@/components/DateRangeFilter";
 import { MonthLabel } from "@/components/MonthLabel";
+import { SwipeToDelete } from "@/components/SwipeToDelete";
 import { TransactionImportModal } from "@/components/TransactionImportModal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -238,6 +239,10 @@ export default function Transactions({
   const [bankTxnToConfirm, setBankTxnToConfirm] = useState<BankTransaction | null>(null);
   const [editReason, setEditReason] = useState<Record<number, string>>({});
   const [sortOrder, setSortOrder] = useState<SortEntry[]>([{ key: "paid_date", dir: "desc" }]);
+  // One row at a time, so a register does not end up with a trail of half-open rows behind you.
+  const [swipeOpenId, setSwipeOpenId] = useState<number | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Transaction | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
   const [addType, setAddType] = useState<"income" | "expense" | null>(null);
   const [editTxn, setEditTxn] = useState<Transaction | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
@@ -392,6 +397,28 @@ export default function Transactions({
    * Always behind the confirm dialog, never straight off the action bar: the whole point is that a
    * change affecting twenty rows is deliberate, and the dialog is where the twenty are listed.
    */
+  async function deleteOne() {
+    if (!deleteTarget) return;
+    setDeleteBusy(true);
+    try {
+      const res = (await jsonFetch(`/budgets/${budget_pk}/transactions/bulk/`, "POST", {
+        action: "delete",
+        ids: [deleteTarget.id],
+      })) as { changed: number; skipped: { id: number; reason: string }[] } | null;
+      const skipped = res?.skipped ?? [];
+      // The endpoint declines some rows rather than failing — a bank-linked one would come straight
+      // back on the next sync — and saying "deleted" over the top of that would be a lie.
+      if (skipped.length > 0) toast.error(`Left alone: ${skipped[0].reason}.`);
+      else toast.success("Transaction deleted.");
+      setDeleteTarget(null);
+      navigate(withFilters({}));
+    } catch (err) {
+      toast.error(errorMessage(err, "That transaction could not be deleted."));
+    } finally {
+      setDeleteBusy(false);
+    }
+  }
+
   async function runBulk() {
     if (!bulkAction || selected.size === 0) return;
     setBulkBusy(true);
@@ -615,81 +642,97 @@ export default function Transactions({
               />
             </TableCell>
           )}
-          <TableCell className="max-sm:py-3">
-            {/* `sm:contents` dissolves this wrapper from sm up, so the wider cell keeps the exact
+          {/* No padding below sm: SwipeToDelete owns the cell so its Delete button can reach the
+              row's edges, and the padding moves inside the sliding layer. Below sm this cell is the
+              only visible one — the rest are display:none — so sliding it slides the row. */}
+          <TableCell className="max-sm:p-0 max-sm:py-3 sm:py-2">
+            <SwipeToDelete
+              revealed={swipeOpenId === txn.id}
+              onRevealedChange={(open) => setSwipeOpenId(open ? txn.id : null)}
+              onDelete={() => {
+                setSwipeOpenId(null);
+                setDeleteTarget(txn);
+              }}
+            >
+              <div className="max-sm:px-2 max-sm:py-3 sm:contents">
+                {/* `sm:contents` dissolves this wrapper from sm up, so the wider cell keeps the exact
                 layout it had; below sm it is the flex row that pairs the description with the amount
                 whose own column is hidden. */}
-            <div className="flex items-start justify-between gap-2 sm:contents">
-              <div className="flex items-center gap-2 flex-wrap">
-                <button
-                  type="button"
-                  className="text-left rounded-sm hover:underline focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    openRow();
-                  }}
-                  title={txn.description.length > DESCRIPTION_LIMIT ? txn.description : undefined}
-                >
-                  {truncate(txn.description)}
-                </button>
-                {!opts.suppressStateMarkers && txn.recurring !== null && (
-                  <span className="text-xs italic text-ink-quiet">recurring</span>
-                )}
-                {txn.bank_linked && (
-                  <span
-                    className="inline-flex items-center gap-1 text-xs text-ink-quiet"
-                    title="Linked to a bank transaction"
-                  >
-                    <Landmark aria-hidden className="size-3" />
-                    bank
+                <div className="flex items-start justify-between gap-2 sm:contents">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      className="text-left rounded-sm hover:underline focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openRow();
+                      }}
+                      title={txn.description.length > DESCRIPTION_LIMIT ? txn.description : undefined}
+                    >
+                      {truncate(txn.description)}
+                    </button>
+                    {!opts.suppressStateMarkers && txn.recurring !== null && (
+                      <span className="text-xs italic text-ink-quiet">recurring</span>
+                    )}
+                    {txn.bank_linked && (
+                      <span
+                        className="inline-flex items-center gap-1 text-xs text-ink-quiet"
+                        title="Linked to a bank transaction"
+                      >
+                        <Landmark aria-hidden className="size-3" />
+                        bank
+                      </span>
+                    )}
+                    {!opts.suppressStateMarkers && !txn.is_paid && !isGoalDeposit && (
+                      <span className="text-xs italic text-fund">{isIncome ? "pending" : "unpaid"}</span>
+                    )}
+                    {isGoalDeposit && <Badge variant="warning">Goal</Badge>}
+                    {isSplit && (
+                      /* Stops at the row so expanding a split does not also open the editor. */
+                      <button
+                        type="button"
+                        className="text-xs text-muted-foreground hover:text-ink rounded-sm focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setExpandedId(isExpanded ? null : txn.id);
+                        }}
+                      >
+                        {isExpanded ? "Hide" : `${txn.lines.length} items`}
+                      </button>
+                    )}
+                  </div>
+                  <span className={`sm:hidden shrink-0 font-medium tabular-nums ${amountClass}`}>
+                    {isExpense ? "−" : isIncome ? "+" : ""}
+                    {fmtConverted(txn.total_amount, txn.exchange_rate_to_usd, userRate, symbol)}
+                    <span className="sr-only">
+                      {isIncome ? " income" : isGoalDeposit ? " goal deposit" : " expense"}
+                    </span>
                   </span>
-                )}
-                {!opts.suppressStateMarkers && !txn.is_paid && !isGoalDeposit && (
-                  <span className="text-xs italic text-fund">{isIncome ? "pending" : "unpaid"}</span>
-                )}
-                {isGoalDeposit && <Badge variant="warning">Goal</Badge>}
-                {isSplit && (
-                  /* Stops at the row so expanding a split does not also open the editor. */
-                  <button
-                    type="button"
-                    className="text-xs text-muted-foreground hover:text-ink rounded-sm focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setExpandedId(isExpanded ? null : txn.id);
-                    }}
-                  >
-                    {isExpanded ? "Hide" : `${txn.lines.length} items`}
-                  </button>
-                )}
-              </div>
-              <span className={`sm:hidden shrink-0 font-medium tabular-nums ${amountClass}`}>
-                {isExpense ? "−" : isIncome ? "+" : ""}
-                {fmtConverted(txn.total_amount, txn.exchange_rate_to_usd, userRate, symbol)}
-                <span className="sr-only">{isIncome ? " income" : isGoalDeposit ? " goal deposit" : " expense"}</span>
-              </span>
-            </div>
-            {/* The date lives here at every width rather than in a column of its own. It is what makes
+                </div>
+                {/* The date lives here at every width rather than in a column of its own. It is what makes
                 the ordering legible, so it is the one field that never drops — and keeping it in the
                 primary cell leaves category and method as the only two that come and go. An unpaid
                 row has no paid_date to show, so it shows what it is actually waiting on instead. */}
-            <div className="mt-1 text-xs text-muted-foreground flex items-center gap-1.5 flex-wrap">
-              {txn.paid_date ? (
-                <span className="tabular-nums">{fmtDate(txn.paid_date)}</span>
-              ) : (
-                <span className="text-fund">
-                  Due <span className="tabular-nums">{fmtDate(txn.due_date)}</span>
-                </span>
-              )}
-              {txn.currency !== userCurrencyCode && (
-                /* Only below sm: from sm up the amount column carries the original currency itself. */
-                <span className="sm:hidden flex items-center gap-1.5">
-                  <span aria-hidden>·</span>
-                  <span className="tabular-nums">
-                    {fmt(txn.total_amount)} {txn.currency}
-                  </span>
-                </span>
-              )}
-            </div>
+                <div className="mt-1 text-xs text-muted-foreground flex items-center gap-1.5 flex-wrap">
+                  {txn.paid_date ? (
+                    <span className="tabular-nums">{fmtDate(txn.paid_date)}</span>
+                  ) : (
+                    <span className="text-fund">
+                      Due <span className="tabular-nums">{fmtDate(txn.due_date)}</span>
+                    </span>
+                  )}
+                  {txn.currency !== userCurrencyCode && (
+                    /* Only below sm: from sm up the amount column carries the original currency itself. */
+                    <span className="sm:hidden flex items-center gap-1.5">
+                      <span aria-hidden>·</span>
+                      <span className="tabular-nums">
+                        {fmt(txn.total_amount)} {txn.currency}
+                      </span>
+                    </span>
+                  )}
+                </div>
+              </div>
+            </SwipeToDelete>
           </TableCell>
 
           {opts.includeDueColumn && (
@@ -1445,6 +1488,32 @@ export default function Transactions({
                 disabled={bulkBusy}
               >
                 {bulkBusy ? "Working…" : "Confirm"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {deleteTarget && (
+        <Dialog open onOpenChange={(open) => !open && setDeleteTarget(null)}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Delete this transaction?</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground">
+              <span className="text-foreground">{deleteTarget.description}</span>
+              {" · "}
+              <span className="tabular-nums">
+                {fmtConverted(deleteTarget.total_amount, deleteTarget.exchange_rate_to_usd, userRate, symbol)}
+              </span>
+            </p>
+            <p className="text-xs text-alarm">This cannot be undone.</p>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={deleteBusy}>
+                Cancel
+              </Button>
+              <Button variant="destructive" onClick={() => void deleteOne()} disabled={deleteBusy}>
+                {deleteBusy ? "Deleting…" : "Delete"}
               </Button>
             </DialogFooter>
           </DialogContent>
