@@ -1,0 +1,22 @@
+{% extends "layouts/standalone.html" %}
+
+{% comment %} Allauth's own copy of this file is a bare unstyled page carrying a "Menu:" list of links to
+   every account URL it knows about. Overriding it here — rather than the per-page templates — is what
+   puts *every* Allauth page that isn't shadowed by an Inertia view onto the app's own shell:
+   allauth/layouts/entrance.html and allauth/layouts/manage.html both extend this file and add
+   nothing, so reauthenticate, account_inactive and confirm_login_code all come through here, as will
+   any page a future Allauth version adds.
+
+   This works because apps.base precedes allauth in INSTALLED_APPS, so the app-directories loader
+   finds our copy first.
+
+   The pages Budgeteer really cares about — sign in, sign up, password reset, email confirmation —
+   never reach this template: apps/accounts/views.py returns Inertia responses for those, registered
+ahead of include("allauth.urls") in config/urls.py. {% endcomment %}
+{% comment %} Only the title needs remapping: Allauth's pages set `head_title`, the shell reads `title`. The
+   `content` block passes straight through the chain, and the shell renders the message list itself,
+so Allauth's menu and message markup are simply dropped. {% endcomment %}
+{% block title %}
+  {% block head_title %}
+  {% endblock head_title %}
+{% endblock title %}

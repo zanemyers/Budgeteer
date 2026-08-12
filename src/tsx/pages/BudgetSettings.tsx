@@ -10,6 +10,7 @@ import type { RecurringFormChoice } from "@/components/settings/RecurringFormMod
 import { RecurringPanel, type RecurringPanelItem } from "@/components/settings/RecurringPanel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SELECT_TAB_EVENT, usePageTour } from "@/lib/onboardingTour";
+import { cn } from "@/lib/utils";
 
 interface TypeChoice {
   value: string;
@@ -146,11 +147,17 @@ export default function BudgetSettings({
             <label htmlFor="settings-tab-select" className="sr-only">
               Settings section
             </label>
+            {/* A native select rather than the Radix one: this only renders below md, where the
+                platform picker is the better control. Styled to match Input rather than reusing it,
+                since Input renders an input element. */}
             <select
               id="settings-tab-select"
               value={tab}
               onChange={(e) => changeTab(e.target.value)}
-              className="form-control h-11 w-full font-medium"
+              className={cn(
+                "h-11 w-full rounded-md border border-input bg-card px-3 py-1 font-medium text-base shadow-xs md:text-sm dark:bg-input/30",
+                "outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50",
+              )}
             >
               {VALID_TABS.map((value) => (
                 <option key={value} value={value}>

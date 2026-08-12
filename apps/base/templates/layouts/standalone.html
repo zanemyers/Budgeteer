@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+{% load vite %}
+
+<html lang="en" class="h-full">
+  <head>
+    <meta charset="utf-8">
+    {% comment %} viewport-fit=cover is what makes env(safe-area-inset-*) report real values; without it
+    they are all 0 and an installed PWA draws this page under the notch. {% endcomment %}
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <link rel="icon"
+          type="image/svg+xml"
+          href="/public/static/favicon2/favicon.svg">
+    <link rel="apple-touch-icon"
+          sizes="180x180"
+          href="/public/static/favicon2/apple-touch-icon.png">
+    <meta name="theme-color"
+          media="(prefers-color-scheme: light)"
+          content="#50663a">
+    <meta name="theme-color"
+          media="(prefers-color-scheme: dark)"
+          content="#1c1e1a">
+    <title>
+      {% block title %}
+      {% endblock title %}
+
+      {% if SITE_NAME %}- {{ SITE_NAME }}{% endif %}
+    </title>
+    {% vite_font_preload %}
+    {% comment %} Same pre-paint theme read as app.html, so a page reached mid-session doesn't flash the
+    wrong theme. {% endcomment %}
+    <script>
+      (function() {
+        var t = localStorage.getItem("theme") || "auto";
+        var e = t === "auto" ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : t;
+        if (e === "dark") document.documentElement.classList.add("dark");
+      })();
+    </script>
+    {% vite_asset 'css/main.css' %}
+  </head>
+  {% comment %} No React bundle: every page on this shell is a static server response, and none of them
+     has anything for Inertia to mount. The .standalone rules in main.css style the bare HTML that
+  Allauth's {% templatetag openblock %} element {% templatetag closeblock %} tags emit. {% endcomment %}
+  <body>
+    <main class="standalone">
+      {% if messages %}
+        <ul>
+          {% for message in messages %}<li>{{ message }}</li>{% endfor %}
+        </ul>
+      {% endif %}
+      {% block content %}
+      {% endblock content %}
+    </main>
+  </body>
+</html>

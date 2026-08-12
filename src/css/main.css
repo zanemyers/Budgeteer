@@ -450,137 +450,130 @@ input[type="number"],
   }
 }
 
-/* ── Allauth fallback templates ──────────────────────────────────────── */
-/* Inertia auth pages handle most cases; these keep edge Allauth templates
-   from looking totally broken. Re-mapped to the new tokens. */
-.btn {
-  display: inline-flex;
+/* ── Server-rendered standalone pages ────────────────────────────────── */
+/* The shell behind layouts/standalone.html: the 404 and 500 handlers, and whichever Allauth
+   templates aren't shadowed by an Inertia page (reauthenticate, account_inactive,
+   confirm_login_code). None of them load the React bundle.
+
+   Styled by element rather than by class on purpose. This replaced a block of Bootstrap-shaped
+   utilities — .btn, .btn-primary, .form-control, .alert-* — whose comment claimed it kept
+   "edge Allauth templates from looking totally broken", but Allauth's own templates emit bare
+   HTML through {% element %} and never carried those class names. Only our own retired copies of
+   the auth templates did, so the utilities styled nothing that still existed. Element selectors
+   scoped to .standalone cover any Allauth page we haven't enumerated, including ones a future
+   version adds, and they need no Tailwind source scanning of the template directory. */
+.standalone {
+  display: flex;
+  min-height: 100dvh;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 0.4375rem 0.875rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  line-height: 1.5;
+  gap: 0.25rem;
+  padding: 3rem 1.5rem calc(3rem + env(safe-area-inset-bottom));
   text-align: center;
-  text-decoration: none;
-  cursor: pointer;
-  background-color: transparent;
-  border: 1px solid transparent;
-  border-radius: 0.375rem;
-  transition:
-    background-color 120ms cubic-bezier(0.22, 1, 0.36, 1),
-    border-color 120ms cubic-bezier(0.22, 1, 0.36, 1),
-    color 120ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-.btn:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-.btn-sm {
-  padding: 0.25rem 0.625rem;
-  font-size: 0.8125rem;
-}
-.btn-primary {
-  color: var(--moss-foreground);
-  background-color: var(--moss);
-  border-color: var(--moss);
-}
-.btn-primary:hover:not(:disabled) {
-  background-color: oklch(from var(--moss) calc(l - 0.05) c h);
-}
-.btn-success {
-  color: var(--moss-foreground);
-  background-color: var(--moss);
-  border-color: var(--moss);
-}
-.btn-success:hover:not(:disabled) {
-  background-color: oklch(from var(--moss) calc(l - 0.05) c h);
-}
-.btn-danger {
-  color: var(--moss-foreground);
-  background-color: var(--alarm);
-  border-color: var(--alarm);
-}
-.btn-danger:hover:not(:disabled) {
-  background-color: oklch(from var(--alarm) calc(l - 0.05) c h);
-}
-.btn-default {
-  color: var(--ink);
-  background-color: var(--paper);
-  border-color: var(--border-strong);
-}
-.btn-default:hover:not(:disabled) {
-  background-color: var(--surface);
-}
-.btn-close {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.75rem;
-  height: 1.75rem;
-  padding: 0;
-  font-size: 1.25rem;
-  color: var(--ink-quiet);
-  cursor: pointer;
-  background: none;
-  border: 0;
-  border-radius: 0.375rem;
-}
-.btn-close::before {
-  content: "×";
 }
 
-.form-control {
-  display: block;
+/* Forms are left-aligned inside the centred column — a labelled field reads badly centred. */
+.standalone > * {
   width: 100%;
-  padding: 0.4375rem 0.625rem;
-  font-size: 0.875rem;
-  line-height: 1.5;
-  color: var(--ink);
-  background-color: var(--paper);
-  border: 1px solid var(--border-strong);
-  border-radius: 0.375rem;
+  max-width: 24rem;
 }
-.form-control:focus {
-  border-color: var(--moss);
-  outline: none;
-  box-shadow: 0 0 0 3px color-mix(in oklch, var(--moss) 25%, transparent);
+
+.standalone svg {
+  margin: 0 auto 1rem;
+  color: var(--ink-quiet);
 }
-.form-label {
+
+.standalone h1 {
+  margin: 0 0 0.5rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.standalone h2 {
+  margin: 1.5rem 0 0.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.standalone p {
+  margin: 0 0 1.5rem;
+  color: var(--ink-quiet);
+}
+
+.standalone hr {
+  margin: 1.5rem 0;
+  border: 0;
+  border-top: 1px solid var(--rule);
+}
+
+.standalone a {
+  color: var(--moss);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+.standalone form {
+  text-align: left;
+}
+
+.standalone label {
   display: inline-block;
   margin-bottom: 0.25rem;
   font-size: 0.8125rem;
   font-weight: 500;
   color: var(--ink-quiet);
 }
-.text-danger {
-  color: var(--alarm);
+
+.standalone input {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  margin-bottom: 0.75rem;
+  padding: 0.4375rem 0.625rem;
+  font: inherit;
+  color: var(--ink);
+  background-color: var(--paper);
+  border: 1px solid var(--input);
+  border-radius: 0.375rem;
 }
-.text-secondary {
+
+.standalone input:focus-visible {
+  border-color: var(--moss);
+  outline: 2px solid var(--ring);
+  outline-offset: -1px;
+}
+
+.standalone button,
+.standalone a[role="button"] {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 1.25rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: var(--moss);
+  color: var(--moss-foreground);
+  font: inherit;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+/* Allauth renders field errors and its message list as bare <ul>s. */
+.standalone ul {
+  margin: 0 0 0.75rem;
+  padding-left: 1.25rem;
+  text-align: left;
+  font-size: 0.875rem;
   color: var(--ink-quiet);
 }
 
-.alert {
-  padding: 0.5rem 0.875rem;
-  margin-bottom: 0.75rem;
-  font-size: 0.875rem;
-  border: 1px solid transparent;
-  border-radius: 0.375rem;
-}
-.alert-success {
-  color: var(--moss);
-  background-color: var(--moss-soft);
-  border-color: color-mix(in oklch, var(--moss) 25%, transparent);
-}
-.alert-danger {
+.standalone .errorlist {
+  list-style: none;
+  padding-left: 0;
   color: var(--alarm);
-  background-color: color-mix(in oklch, var(--alarm) 8%, transparent);
-  border-color: color-mix(in oklch, var(--alarm) 25%, transparent);
-}
-.alert-warning {
-  color: var(--fund);
-  background-color: var(--fund-soft);
-  border-color: color-mix(in oklch, var(--fund) 25%, transparent);
 }
 
 /* ── Product tour (driver.js) — quiet/moss theming ───────────────────── */

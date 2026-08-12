@@ -2,6 +2,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import URLPattern, URLResolver, include, path
+from django.views.generic import RedirectView
 
 from apps.accounts.views import (
     AccountSettingsView,
@@ -53,6 +54,27 @@ urlpatterns += [
         name="account_reset_password_from_key_done",
     ),
     path("accounts/confirm-email/<key>/", ConfirmEmailView.as_view(), name="account_confirm_email"),
+    # Allauth's own pages for these three duplicate what AccountSettings already does — the Email
+    # addresses and Password rows — so they're shadowed by a redirect rather than reimplemented.
+    # Unshadowed they were reachable, and rendered a second, older account UI. The names are kept so
+    # anything reversing them (Allauth's internals, an old link in a sent email) lands in the app.
+    # `permanent=False`: these are app-routing decisions, not permanent moves, and a 301 would be
+    # cached in browsers past any future change.
+    path(
+        "accounts/email/",
+        RedirectView.as_view(pattern_name="account_settings", permanent=False),
+        name="account_email",
+    ),
+    path(
+        "accounts/password/change/",
+        RedirectView.as_view(pattern_name="account_settings", permanent=False),
+        name="account_change_password",
+    ),
+    path(
+        "accounts/password/set/",
+        RedirectView.as_view(pattern_name="account_settings", permanent=False),
+        name="account_set_password",
+    ),
     path("accounts/", include("allauth.urls")),
     path("banking/", BankingView.as_view(), name="banking"),
     path("banking/sync/", banking_sync, name="banking_sync"),

@@ -1,9 +1,29 @@
-{% extends "layouts/base.html" %}
+{% extends "layouts/standalone.html" %}
 
-{# djlint:off #}
-{% block title %}Ooops...{% endblock title %}
-{# djlint:on #}
+{% comment %} Django's handler500 renders this with an empty context — no request, no context processors —
+   so nothing here may depend on a template variable. {{ SITE_NAME }} in the shell's title resolves to
+   nothing, which the {% templatetag openblock %} if SITE_NAME {% templatetag closeblock %} guard there
+already expects. {% endcomment %}
+{% block title %}Something went wrong{% endblock title %}
+
 {% block content %}
-  <h1>Ooops....</h1>
-  <p>The server encountered a temporary error and could not complete your request.</p>
+  <svg width="32"
+       height="32"
+       viewBox="0 0 24 24"
+       fill="none"
+       stroke="currentColor"
+       stroke-width="2"
+       stroke-linecap="round"
+       stroke-linejoin="round"
+       aria-hidden="true">
+    <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"></path>
+    <path d="M12 9v4"></path>
+    <path d="M12 17h.01"></path>
+  </svg>
+  <h1>Something went wrong</h1>
+  <p>
+    An error on our end stopped this page from loading. Nothing you were working on has been lost — try again in a
+    moment.
+  </p>
+  <a href="/" role="button">Back to Budgeteer</a>
 {% endblock content %}

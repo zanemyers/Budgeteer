@@ -1,14 +1,22 @@
-{% extends "layouts/base.html" %}
+{% extends "layouts/standalone.html" %}
 
-{# djlint:off #}
-{% block title %}Page Not Found{% endblock title %}
-{# djlint:on #}
+{% block title %}Page not found{% endblock title %}
+
 {% block content %}
-  <h1>Page Not Found</h1>
-  <p>
-    <strong>The page you requested could not be located.</strong>
-  </p>
-  <p>
-    The page you requested has moved or does not exist.  If you bookmarked this page you will need to update your bookmark.
-  </p>
+  <svg width="32"
+       height="32"
+       viewBox="0 0 24 24"
+       fill="none"
+       stroke="currentColor"
+       stroke-width="2"
+       stroke-linecap="round"
+       stroke-linejoin="round"
+       aria-hidden="true">
+    <circle cx="11" cy="11" r="8"></circle>
+    <path d="m21 21-4.3-4.3"></path>
+    <path d="M8 11h6"></path>
+  </svg>
+  <h1>Page not found</h1>
+  <p>There's nothing at this address. If you followed a bookmark, the page has probably moved since you saved it.</p>
+  <a href="/" role="button">Back to Budgeteer</a>
 {% endblock content %}
