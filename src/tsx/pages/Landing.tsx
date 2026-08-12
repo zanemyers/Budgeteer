@@ -156,12 +156,11 @@ export default function Landing({ github_url }: Props) {
             <Button asChild variant="ghost" size="sm">
               <a href="/accounts/login/">Sign in</a>
             </Button>
+            {/* "Sign up" at every width. It pairs with "Sign in" beside it, and the hero's
+                "Create account" is the fuller call to action — this one is just the shortcut for
+                someone who already knows why they came. */}
             <Button asChild size="sm">
-              {/* "Sign up" on a phone, the fuller "Create account" once there is room for it. */}
-              <a href="/accounts/signup/">
-                <span className="sm:hidden">Sign up</span>
-                <span className="hidden sm:inline">Create account</span>
-              </a>
+              <a href="/accounts/signup/">Sign up</a>
             </Button>
           </div>
         </nav>
