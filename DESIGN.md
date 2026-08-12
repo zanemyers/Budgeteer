@@ -75,7 +75,7 @@ To keep shadcn components on-brand without forking them, the standard tokens red
 
 ## Typography
 
-**Body:** Inter (Google Fonts). Replaces DM Sans. Inter has tabular-nums and feels honestly neutral.
+**Body:** Inter, self-hosted. Replaces DM Sans. Inter has tabular-nums and feels honestly neutral. The variable face is served from `src/fonts/` in two `unicode-range` subsets (latin, latin-ext) rather than from Google Fonts, so there's no third-party round trip before text can be styled and no flash of system-ui — see the CLAUDE.md note on the preload.
 
 **Numerics:** Inter with `font-variant-numeric: tabular-nums` applied globally on numeric cells. Decimals align. No proportional figures in tables.
 
@@ -137,7 +137,7 @@ Icon-only buttons must carry `aria-label`.
 
 - **Page transitions:** instant. Inertia SPA — feels snappy, no fade-on-nav.
 - **Inline-edit focus:** 120ms `cubic-bezier(0.22, 1, 0.36, 1)` (ease-out-quart).
-- **Modal:** 180ms fade + 4px translate, same curve.
+- **Modal:** 200ms fade, same curve. From `sm` up the centred card also scales from 95%; the full-screen phone sheet fades only — scaling something that fills the viewport reads as a glitch rather than an entrance.
 - **Hover:** 120ms color/background transitions only. Never animate layout properties.
 - **Reduced motion:** `@media (prefers-reduced-motion: reduce)` collapses durations to zero.
 
