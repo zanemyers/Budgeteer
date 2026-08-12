@@ -556,8 +556,11 @@ class TestBudgetCopy(BudgetViewTestCase):
         Goal.objects.create(
             category=self.goal_cat, target=Decimal("9000.00"), due_date=datetime.date(2027, 6, 1), ongoing=False
         )
-        # Created on demand for transfers; a fresh budget should not inherit one.
-        Category.get_or_create_transfers(self.budget)
+        # A system category is created by the feature that needs it, so a copy should not inherit one.
+        # The retired Transfers placeholder is the only kind left, kept because old lines point at it.
+        Category.objects.create(
+            budget=self.budget, name="Transfers", category_type=Category.TYPE_EXPENSE, is_system=True
+        )
 
     def _copy(self):
         res = self.client.post(
@@ -603,7 +606,7 @@ class TestBudgetCopy(BudgetViewTestCase):
         roof = Category.objects.get(budget=copy, name="Roof")
         self.assertEqual(TransactionLine.objects.filter(category=roof).count(), 0)
 
-    def test_the_transfers_system_category_is_not_copied(self):
+    def test_a_system_category_is_not_copied(self):
         copy = self._copy()
         self.assertFalse(Category.objects.filter(budget=copy, is_system=True).exists())
 

@@ -149,7 +149,7 @@ Shadcn/ui is the substrate. Components inherit the new tokens automatically thro
 
 - **Inline-edit cells:** wrap the affordance in a real `<button>` (keyboard-reachable). Never `<span onClick>`. Focus ring uses `--ring` (mapped to `--moss`).
 - **Sidebar:** `--moss` background in both themes, white text, active item gets a `--paper` strip on the left edge or a `--moss-soft`-on-`--moss` lift. All colors come from tokens — no hex literals.
-- **Status pills** (Active, Inactive, Paid, etc.): replaced wherever possible by typographic micro-labels in `--ink-quiet`. Reserve Badge component for genuinely state-bearing labels (Recurring, Transfer).
+- **Status pills** (Active, Inactive, Paid, etc.): replaced wherever possible by typographic micro-labels in `--ink-quiet`. Reserve Badge component for genuinely state-bearing labels (Recurring, Goal).
 
 ## Numeric & data conventions
 

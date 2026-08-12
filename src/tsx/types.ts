@@ -41,14 +41,13 @@ export interface Transaction {
   payment_method_name: string | null;
   lines: TransactionLine[];
   total_amount: string;
+  /** "transfer" is a goal deposit — all that is left of the retired two-leg transfer feature. */
   transaction_type: "income" | "expense" | "transfer" | "";
   currency: string;
   exchange_rate_to_usd: string;
   created_at: string;
   bank_linked?: boolean;
   linked_bank_transactions?: LinkedBankTransaction[];
-  transfer_partner_id?: number | null;
-  is_transfer?: boolean;
 }
 
 export interface LinkedBankTransaction {

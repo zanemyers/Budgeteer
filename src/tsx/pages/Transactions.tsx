@@ -111,12 +111,7 @@ function SelectionBar({
       </Button>
       <div className="hidden sm:flex sm:flex-wrap sm:items-center sm:gap-2">
         {secondary.map((a) => (
-          <Button
-            key={a.label}
-            size="sm"
-            variant={a.destructive ? "destructive" : "outline"}
-            onClick={a.run}
-          >
+          <Button key={a.label} size="sm" variant={a.destructive ? "destructive" : "outline"} onClick={a.run}>
             {a.label}
           </Button>
         ))}
@@ -570,8 +565,10 @@ export default function Transactions({
     const primaryCategory = txn.lines[0];
     const isExpense = txn.transaction_type === "expense";
     const isIncome = txn.transaction_type === "income";
-    const isTransfer = txn.transaction_type === "transfer";
-    const amountClass = isIncome ? "text-income" : isTransfer ? "text-fund" : "text-expense";
+    // transaction_type "transfer" survives the retired transfer feature: the goal-deposit flow is
+    // the only thing that still writes it, and the ready-to-assign maths keys off it.
+    const isGoalDeposit = txn.transaction_type === "transfer";
+    const amountClass = isIncome ? "text-income" : isGoalDeposit ? "text-fund" : "text-expense";
     const isSelected = selected.has(txn.id);
     const openRow = () => (selectMode ? toggleSelected(txn.id) : setEditTxn(txn));
 
@@ -631,10 +628,10 @@ export default function Transactions({
                     bank
                   </span>
                 )}
-                {!opts.suppressStateMarkers && !txn.is_paid && !isTransfer && (
+                {!opts.suppressStateMarkers && !txn.is_paid && !isGoalDeposit && (
                   <span className="text-xs italic text-fund">{isIncome ? "pending" : "unpaid"}</span>
                 )}
-                {isTransfer && <Badge variant="warning">Transfer</Badge>}
+                {isGoalDeposit && <Badge variant="warning">Goal</Badge>}
                 {isSplit && (
                   /* Stops at the row so expanding a split does not also open the editor. */
                   <button
@@ -652,7 +649,7 @@ export default function Transactions({
               <span className={`sm:hidden shrink-0 font-medium tabular-nums ${amountClass}`}>
                 {isExpense ? "−" : isIncome ? "+" : ""}
                 {fmtConverted(txn.total_amount, txn.exchange_rate_to_usd, userRate, symbol)}
-                <span className="sr-only">{isIncome ? " income" : isTransfer ? " transfer" : " expense"}</span>
+                <span className="sr-only">{isIncome ? " income" : isGoalDeposit ? " goal deposit" : " expense"}</span>
               </span>
             </div>
             {/* The date lives here at every width rather than in a column of its own. It is what makes
@@ -707,7 +704,7 @@ export default function Transactions({
             <span>
               {isExpense ? "−" : isIncome ? "+" : ""}
               {fmtConverted(txn.total_amount, txn.exchange_rate_to_usd, userRate, symbol)}
-              <span className="sr-only">{isIncome ? " income" : isTransfer ? " transfer" : " expense"}</span>
+              <span className="sr-only">{isIncome ? " income" : isGoalDeposit ? " goal deposit" : " expense"}</span>
             </span>
             {txn.currency !== userCurrencyCode && (
               <div className="text-muted-foreground font-normal text-[0.7rem]">
@@ -761,8 +758,8 @@ export default function Transactions({
     () => transactions.filter((t) => !t.paid_date).sort((a, b) => a.due_date.localeCompare(b.due_date)),
     [transactions],
   );
-  // Everything paid, transfers included. They used to be filtered out into a tab of their own; with
-  // that tab gone, excluding them here would drop them out of the register altogether.
+  // Everything paid, goal deposits included. They used to be filtered out into a Transfers tab of
+  // their own; with that tab gone, excluding them here would drop them out of the register.
   const rest = useMemo(() => transactions.filter((t) => Boolean(t.paid_date)), [transactions]);
   const sortedRest = useMemo(() => sortTransactions(rest, sortOrder), [rest, sortOrder]);
 
@@ -1299,7 +1296,6 @@ export default function Transactions({
                   )}
                 </Card>
               </TabsContent>
-
             </Tabs>
           );
         })()
@@ -1473,9 +1469,7 @@ export default function Transactions({
                   to discard. Those are left as they are.
                 </p>
               )}
-              {bulkAction === "delete" && (
-                <p className="text-xs text-alarm">This cannot be undone. A transfer takes its matching side with it.</p>
-              )}
+              {bulkAction === "delete" && <p className="text-xs text-alarm">This cannot be undone.</p>}
             </div>
 
             <DialogFooter>

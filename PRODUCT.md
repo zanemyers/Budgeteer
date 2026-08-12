@@ -39,6 +39,6 @@ Quiet, candid, considered. Feels like a private notebook with good typography, n
 WCAG 2.1 AA. Specific commitments:
 
 - Every inline-edit affordance must be a real button reachable by keyboard. No `<span onClick>`.
-- Status communicated by more than color. Sign prefixes, icons, or text labels alongside hue (income vs expense vs transfer).
+- Status communicated by more than color. Sign prefixes, icons, or text labels alongside hue (income vs expense vs goal deposit).
 - 44 by 44 minimum touch targets on mobile. Row-action buttons that fall below this on desktop must expand or move into a kebab menu on touch.
 - Reduced-motion honored. Animation durations collapse to zero when `prefers-reduced-motion: reduce`.

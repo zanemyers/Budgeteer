@@ -23,12 +23,12 @@ If the diagram doesn't render in your viewer, open [`database.svg`](database.svg
 | --- | --- | --- |
 | `User` | accounts | Custom `AbstractUser`; login by email |
 | `Budget`, `BudgetMembership` | budget | Multi-member budget container |
-| `Category` | budget | Income/expense; `is_system=True` for hidden system categories (Transfers) |
+| `Category` | budget | Income/expense; `is_system=True` for hidden system categories (only the retired Transfers placeholder) |
 | `Goal` | budget | 1:1 with Category; savings target with optional due-date or ongoing monthly |
 | `CategoryBudget` | budget | Per-month assigned amount for a category |
 | `PaymentMethod` | budget | Per-budget cards/accounts; maps into a `BankAccount` when SimpleFIN-linked |
 | `RecurringTransaction` | budget | Schedule template; generates `Transaction` instances via cron |
-| `Transaction`, `TransactionLine` | budget | The ledger. `transfer_partner_id` links two legs of a movement between accounts. |
+| `Transaction`, `TransactionLine` | budget | The ledger. A transaction is a header; money lives on its lines. |
 | `Currency` | base | ISO-4217 lookup; `rate_to_usd` refreshed daily |
 | `SimpleFINConnection`, `BankAccount`, `BankTransaction` | banking | SimpleFIN sync. `access_url` stored encrypted. |
 | `BalanceSnapshot` | banking | Balance history. `BankAccount.balance` is overwritten every sync, so each reading is kept here, keyed on the bridge's `balance-date`. |

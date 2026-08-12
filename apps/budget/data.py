@@ -4,7 +4,7 @@ import calendar
 import datetime
 from decimal import Decimal
 
-from django.db.models import Q, Sum
+from django.db.models import Sum
 from django.db.models.functions import Coalesce, TruncMonth
 from django.utils import timezone
 
@@ -125,11 +125,6 @@ def serialize_transaction(txn) -> dict:
     total_amount = sum((line.amount for line in all_lines), Decimal("0.00"))
     linked_bt = getattr(txn, "bank_transaction", None) if txn.pk else None
     linked = [linked_bt] if linked_bt else []
-    is_transfer = (
-        txn.transaction_type == "transfer"
-        or txn.transfer_partner_id is not None
-        or any(line.category.is_system for line in all_lines)
-    )
     return {
         "id": txn.pk,
         "description": txn.description,
@@ -149,131 +144,7 @@ def serialize_transaction(txn) -> dict:
         "created_at": txn.created_at.isoformat(),
         "bank_linked": bool(linked),
         "linked_bank_transactions": [serialize_bank_transaction(bt) for bt in linked],
-        "transfer_partner_id": txn.transfer_partner_id,
-        "is_transfer": is_transfer,
     }
-
-
-def find_transfer_candidates(txn: Transaction, *, day_window: int = 3) -> list[Transaction]:
-    """
-    Return likely transfer-partner Transactions for `txn`.
-
-    Match criteria: same budget, different payment_method, paid in opposite
-    direction (one expense + one income/transfer), absolute total matches,
-    paid/due dates within ±day_window. Self and already-linked candidates
-    are excluded.
-    """
-    if not txn.pk:
-        return []
-    amount = abs(txn.total_amount)
-    if amount == 0:
-        return []
-    anchor_date = txn.paid_date or txn.due_date
-    window_start = anchor_date - datetime.timedelta(days=day_window)
-    window_end = anchor_date + datetime.timedelta(days=day_window)
-
-    txn_type = txn.derive_transaction_type()
-    opposite_types = ("expense",) if txn_type in ("income", "transfer") else ("income", "transfer")
-
-    candidates = (
-        Transaction.objects.filter(budget_id=txn.budget_id)
-        .exclude(pk=txn.pk)
-        .filter(transfer_partner__isnull=True)
-        .filter(
-            Q(paid_date__range=(window_start, window_end))
-            | Q(paid_date__isnull=True, due_date__range=(window_start, window_end))
-        )
-        .select_related("payment_method")
-        .prefetch_related("lines__category")
-    )
-    if txn.payment_method_id:
-        candidates = candidates.exclude(payment_method_id=txn.payment_method_id)
-
-    matches: list[Transaction] = []
-    for other in candidates:
-        if abs(other.total_amount) != amount:
-            continue
-        if other.derive_transaction_type() not in opposite_types:
-            continue
-        matches.append(other)
-    return matches
-
-
-def _bank_txn_owner(bank_txn):
-    """Return the user behind a synced row, or None for an imported one, which has no connection."""
-    account = bank_txn.bank_account
-    return account.connection.user if account.connection_id else None
-
-
-def find_pending_bank_transfer_candidates(bt, budget, *, day_window: int = 3) -> list:
-    """
-    Other pending BankTransactions that look like the matching leg of a transfer.
-
-    Same |amount|, opposite sign, ±day_window from this bank txn's posted date,
-    different bank account, both still pending (neither yet promoted to a budget
-    Transaction). Bank account must be mapped into the same budget.
-    """
-    from apps.banking.models import BankTransaction
-
-    amount = abs(bt.amount)
-    if amount == 0:
-        return []
-    posted = bt.posted_at.date()
-    qs = (
-        BankTransaction.objects.for_budget(budget, user=_bank_txn_owner(bt))
-        .filter(
-            status=BankTransaction.Status.PENDING,
-            posted_at__date__range=(
-                posted - datetime.timedelta(days=day_window),
-                posted + datetime.timedelta(days=day_window),
-            ),
-        )
-        .exclude(pk=bt.pk)
-        .exclude(bank_account_id=bt.bank_account_id)
-        .select_related("bank_account")
-    )
-    return [other for other in qs if abs(other.amount) == amount and (other.amount > 0) != (bt.amount > 0)]
-
-
-def find_transfer_candidates_for_bank_txn(bt, budget, *, day_window: int = 3) -> list[Transaction]:
-    """
-    Like find_transfer_candidates but for an as-yet-unconfirmed BankTransaction.
-
-    Determines direction from the signed bank amount (negative = outflow, treat
-    like expense; positive = inflow, treat like income/transfer).
-    """
-    amount = abs(bt.amount)
-    if amount == 0:
-        return []
-    posted = bt.posted_at.date()
-    window_start = posted - datetime.timedelta(days=day_window)
-    window_end = posted + datetime.timedelta(days=day_window)
-    bank_pm_id = bt.bank_account.payment_method_id
-
-    # Outflow bank rows pair with income/transfer-type Transactions and vice versa.
-    opposite_types = ("income", "transfer") if bt.amount < 0 else ("expense",)
-
-    candidates = (
-        Transaction.objects.filter(budget=budget)
-        .filter(transfer_partner__isnull=True)
-        .filter(
-            Q(paid_date__range=(window_start, window_end))
-            | Q(paid_date__isnull=True, due_date__range=(window_start, window_end))
-        )
-        .select_related("payment_method")
-        .prefetch_related("lines__category")
-    )
-    if bank_pm_id:
-        candidates = candidates.exclude(payment_method_id=bank_pm_id)
-
-    matches: list[Transaction] = []
-    for other in candidates:
-        if abs(other.total_amount) != amount:
-            continue
-        if other.derive_transaction_type() not in opposite_types:
-            continue
-        matches.append(other)
-    return matches
 
 
 def serialize_recurring(rt) -> dict:
@@ -337,7 +208,6 @@ def get_budget_overview(budget, month_str: str | None, user_rate: "Decimal" = De
             transaction__paid_date__range=(period_start, period_end),
         )
         .exclude(transaction__transaction_type="transfer")
-        .exclude(transaction__transfer_partner__isnull=False)
         .values("category_id")
         .annotate(total=Sum("amount_usd"))
     )
@@ -352,7 +222,6 @@ def get_budget_overview(budget, month_str: str | None, user_rate: "Decimal" = De
             category__category_type=Category.TYPE_INCOME,
             transaction__paid_date__isnull=False,
         )
-        .exclude(transaction__transfer_partner__isnull=False)
         .alias(eff_month=eff_month)
         .filter(eff_month=period_start)
         .values("category_id")
@@ -436,7 +305,6 @@ def get_budget_overview(budget, month_str: str | None, user_rate: "Decimal" = De
             transaction__transaction_type="income",
             transaction__paid_date__isnull=False,
         )
-        .exclude(transaction__transfer_partner__isnull=False)
         .alias(eff_month=eff_month)
         .filter(eff_month=period_start)
         .aggregate(total=Sum("amount_usd"))
@@ -493,7 +361,6 @@ def get_budget_overview(budget, month_str: str | None, user_rate: "Decimal" = De
                 transaction__paid_date__gte=start,
                 transaction__paid_date__lte=period_end,
             )
-            .exclude(transaction__transfer_partner__isnull=False)
             .annotate(m=TruncMonth("transaction__paid_date"))
             .values("m")
             .annotate(total=Sum("amount_usd"))

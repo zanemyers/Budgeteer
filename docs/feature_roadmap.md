@@ -137,7 +137,7 @@ Confirmed by reading `/Users/zane/Sites/Budgeteer/apps/budget/models.py` and `/U
 | 8 | Goals / sinking funds | Have | `Category.is_goal` + related `Goal` row (target/due/ongoing/monthly_goal), all-time `total_saved` math |
 | 9 | Investment tracking | Have | `apps/investments.Holding` populated from SimpleFIN; Investments page shows positions, gain $/%, weights per account |
 | 10 | Mobile parity | Partial | Inertia/React SPA is responsive but no native app, no PWA manifest confirmed |
-| 11 | Transfer detection | Partial | `transaction_type="transfer"` exists; no two-leg link or auto-detection |
+| 11 | Transfer detection | Won't do | Decided against 2026-08-12. Two-leg pairing was built, then retired (migrations 0002/0003) — ignoring the bank row is simpler and needs nothing kept in step. `transaction_type="transfer"` remains, used only by goal deposits |
 | 12 | Debt payoff simulator | Missing | No loan model |
 | 13 | Multi-currency + historical FX | Have | `currency`, `exchange_rate_to_usd` on `Transaction`, `amount_usd` on `TransactionLine`, `update_exchange_rates` cron |
 | 14 | Receipt OCR | Missing | No attachments on `Transaction`; MinIO is wired generally but unused here |
@@ -163,7 +163,7 @@ gantt
     section Phase 1 — Foundation
     Account model + balance history          :p1a, 2026-05-15, 21d
     CSV/OFX import + dedup                   :p1b, after p1a, 14d
-    Transfer linking (two-leg)               :p1c, after p1a, 10d
+    Transfer linking (two-leg) DROPPED       :p1c, after p1a, 10d
     Notifications scaffold (email digest)    :p1d, 2026-05-15, 14d
     Tags (orthogonal to categories)          :p1e, after p1c, 7d
 
@@ -199,10 +199,11 @@ gantt
 - **What:** Upload page → preview/dedup screen → commit. Match merchants to existing transactions by date+amount+description with a configurable window.
 - **Stack notes:** `ofxparse` and standard CSV libs; staging table for pre-commit review; Inertia page with a step-wizard; new `import_transactions` management command for CLI.
 
-#### 1.3 Transfer linking — **S**
-- **Why:** Without it, "I moved $500 from checking to savings" double-counts in reports and inflates spending.
-- **What:** When `transaction_type="transfer"` is set, allow linking to a counterpart `Transaction` on another account. Heuristic auto-match: same amount, opposite sign, within 3 days, different accounts.
-- **Stack notes:** `Transaction.transfer_partner = ForeignKey("self", null=True)` plus a reconciliation pass in the import flow.
+#### 1.3 Transfer linking — **S** — ~~planned~~ **dropped 2026-08-12**
+- **Why it was wanted:** without it, "I moved $500 from checking to savings" double-counts in reports and inflates spending.
+- **What was built, then removed:** a `transfer_partner` 1:1 self-FK with candidate-matching (same amount, opposite direction, within 3 days, different payment method), a two-leg confirm flow for bank rows, and a Transfers tab.
+- **Why it was dropped:** the double-count is already prevented more cheaply. Ignoring the bank row keeps the movement out of the totals without a second transaction to create, pair, keep in step, and delete together — and the pairing was the source of the awkward cases (half a pair left behind, re-linking, orphaned legs). `transaction_type="transfer"` was kept because goal deposits use it and `data.py` excludes it from both income and category activity.
+- **Removal:** migration `0002_retire_transfer_pairs` (unpair, return bank-backed legs to `pending`) then `0003_drop_transfer_partner`.
 
 #### 1.4 Notifications scaffold — **M**
 - **Why:** Bill reminders, recurring alerts, and at-risk forecasts all need this rail. No existing infra confirmed.

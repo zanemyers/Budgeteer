@@ -54,7 +54,7 @@ Budgeteer is a personal, self-hosted app — one owner managing their own money 
 ## Features
 
 - **Budgets** — create multiple budgets, invite members, assign owner/member roles
-- **Transactions** — log income, expense, and transfer transactions with line-item categorization
+- **Transactions** — log income and expense transactions with line-item categorization
 - **Categories** — define income/expense categories with monthly spend targets
 - **Goals** — save toward one-time or ongoing targets, with monthly-needed math and progress tracking
 - **Recurring transactions** — schedule monthly, every-N-months, or annual transactions that auto-generate instances

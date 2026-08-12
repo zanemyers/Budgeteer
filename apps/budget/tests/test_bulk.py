@@ -2,8 +2,8 @@
 Tests for applying one change to many transactions.
 
 The hazards are all about doing too much: acting on a transaction from another budget, destroying a
-split by recategorising it, rewriting a date on something already paid, or leaving half a transfer
-behind. Each has a test, because a bulk action is the one place where a small mistake is multiplied.
+split by recategorising it, or rewriting a date on something already paid. Each has a test, because
+a bulk action is the one place where a small mistake is multiplied.
 """
 
 import datetime
@@ -68,16 +68,6 @@ class TestBulkDelete(BulkTestCase):
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.json()["changed"], 2)
         self.assertEqual([t.pk for t in Transaction.objects.all()], [c.pk])
-
-    def test_a_transfer_takes_its_partner_with_it(self):
-        """Half a transfer is a row pointing at nothing, so both sides go."""
-        out_txn = self._txn("To savings", transaction_type="transfer")
-        in_txn = self._txn("From checking", transaction_type="transfer")
-        out_txn.link_transfer(in_txn)
-
-        res = self._post(action="delete", ids=[out_txn.pk])
-        self.assertEqual(res.json()["changed"], 2, "the partner was left behind")
-        self.assertEqual(Transaction.objects.count(), 0)
 
     def test_another_budgets_transaction_is_untouched(self):
         other = Budget.objects.create(created_by=self.user, name="Other")

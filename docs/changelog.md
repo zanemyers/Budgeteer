@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## 2026-08-12
+
+### Removed
+
+* **Transfers (two-leg pairing)** — retired the whole feature added on 2026-07-23. Gone: `Transaction.transfer_partner` and its column, `link_transfer()` / `unlink_transfer()`, `Category.get_or_create_transfers()`, the three candidate-matching helpers in `data.py` (`find_transfer_candidates`, `find_pending_bank_transfer_candidates`, `find_transfer_candidates_for_bank_txn`), the `TransferCandidatesView` / `TransferLinkView` / `BankTransactionConfirmAsTransferView` views and their three routes, the `is_transfer` and `transfer_partner_id` serializer fields, and all user-facing "transfer" wording. An account-to-account movement is handled by **ignoring the bank row** instead — simpler, and nothing has to be kept in step.
+* Migrations: `0002_retire_transfer_pairs` unpairs every row, deleting bank-backed legs and returning their bank rows to `pending` (the bank row still carries date, payee, amount and memo, so nothing is lost) while leaving hand-entered legs in place; `0003_drop_transfer_partner` removes the field.
+
+### Changed
+
+* `transaction_type="transfer"` **stays**, now meaning exactly one thing: a goal deposit. The ready-to-assign and goal-balance sums in `data.py` still exclude it, so money moved into a goal reads as neither income nor spending. The Transactions page badge reads **Goal** rather than Transfer, and the goal modal is titled "Deposit to Goal".
+* `test_transfers.py` replaced by `test_goal_deposits_do_not_distort_totals.py`, covering the invariant that outlived the feature.
+
 ## 2026-07-23
 
 ### Added

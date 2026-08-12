@@ -39,6 +39,7 @@ interface Props {
   transaction?: Transaction | null;
   onClose: () => void;
   defaultCategoryType?: "income" | "expense";
+  /** Goal deposits are written as transaction_type "transfer" — the last use of that value. */
   forceTransactionType?: "transfer";
   onIgnoreLinkedBankTxn?: (bt: LinkedBankTransaction) => Promise<void>;
 }
@@ -242,7 +243,7 @@ export default function TransactionModal({
   const title = isEdit
     ? "Edit Transaction"
     : forceTransactionType === "transfer"
-      ? "Transfer to Goal"
+      ? "Deposit to Goal"
       : form.categoryType === "income"
         ? "Add Income"
         : "Add Expense";

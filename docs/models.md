@@ -21,8 +21,7 @@ Budget
  ├── RecurringTransaction
  └── Transaction
       ├── TransactionLine    (one per category, splits a transaction)
-      ├── BankTransaction    (1:1, optional — set when reconciled from a bank sync)
-      └── Transaction        (1:1 self-FK: transfer_partner — the opposite leg of a transfer)
+      └── BankTransaction    (1:1, optional — set when reconciled from a bank sync)
 
 SimpleFINConnection
  └── BankAccount
@@ -45,7 +44,7 @@ Through table for `Budget.members`. Roles: `owner` or `member`. Owners can renam
 ### Category
 Belongs to a budget. `category_type` is `income` or `expense`. `monthly_budget` is a default target that can be overridden per-month via `CategoryBudget`. Self-FK `parent` allows 2-level nesting (parent + subcategory). `(budget, name, category_type)` is unique for root categories; `(parent, name)` is unique for subcategories.
 
-`is_system=True` marks hidden categories created by the app itself — currently only the per-budget "Transfers" category (created lazily via `Category.get_or_create_transfers(budget)`). System categories are excluded from every user-facing category list (dashboard, filters, modals) but still hold transaction lines.
+`is_system=True` marks hidden categories created by the app itself. The only one that exists is the per-budget "Transfers" placeholder, left over from the retired transfer feature — nothing creates one any more, but old lines still point at it and `TransactionLine.category` is `PROTECT`, so it cannot be deleted out from under them. System categories are excluded from every user-facing category list (dashboard, filters, modals) but still hold transaction lines.
 
 Convenience properties (`is_goal`, `goal_target`, `goal_due_date`, `goal_ongoing`, `goal_monthly`) read through to the optional related `Goal` row.
 
@@ -74,8 +73,8 @@ A single financial event. Belongs to a `Budget`. May reference a `RecurringTrans
 
 - `paid_date` is the single source of truth for paid/unpaid status. `paid_date IS NULL` ⇒ pending/unpaid; otherwise paid.
 - `total_amount` is the sum of all `TransactionLine` amounts.
-- `transaction_type` is `income`, `expense`, or `transfer`. Set explicitly by the "Confirm as transfer" bank flow; the model also derives a fallback from the first line's category when the field is blank.
-- `transfer_partner` is a 1:1 self-FK (`on_delete=SET_NULL`) linking the two legs of an account-to-account movement (e.g. checking → savings, credit-card payment). Both legs are excluded from headline income/expense totals. Use `Transaction.link_transfer(partner)` / `unlink_transfer()` — they update both sides atomically. The frontend also gets a computed `is_transfer` flag on the serializer that folds in three signals: `transaction_type == "transfer"`, `transfer_partner` set, or any line in a system category.
+- `transaction_type` is `income`, `expense`, or `transfer`. The model derives a fallback from the first line's category when the field is blank.
+- `transaction_type="transfer"` is all that remains of the retired two-leg transfer feature: the goal-deposit flow is the only thing that still writes it. `data.py` excludes it from both sides of the ledger — income_total matches `"income"` exactly, and category activity excludes `"transfer"` — so putting money into a goal reads as neither income nor spending.
 - `currency` is an ISO code; `exchange_rate_to_usd` snapshots the rate at the time of entry.
 
 ### TransactionLine
@@ -114,5 +113,4 @@ Fields: `symbol`, `description`, `shares`, `cost_basis`, `market_value`, `purcha
 - `RecurringTransaction.payment_method` and `Transaction.payment_method` are nullable (`SET_NULL`) — deleting a payment method doesn't cascade to transactions.
 - A `BankTransaction` is linked to at most one `Transaction` (OneToOne). Confirming/ignoring a BankTransaction sets its `status` and (for `linked`) the `transaction` FK; the reverse accessor on Transaction is `bank_transaction` (singular).
 - `BankAccount.payment_method` is what scopes bank data into a budget. An unmapped account's transactions sit in the connection-level inbox until the user wires it up.
-- The per-budget system "Transfers" category (`Category.is_system=True`) is auto-created lazily via `Category.get_or_create_transfers(budget)` and never exposed in user-facing category lists. Any transaction with a line in a system category is treated as a transfer by the frontend `is_transfer` flag, even if `transaction_type` and `transfer_partner` are unset.
-- A transfer's two legs are managed only via `Transaction.link_transfer()` / `unlink_transfer()` — never by touching `transfer_partner_id` directly. Both methods run inside `db_transaction.atomic()` so the OneToOne can never end up half-set.
+- There is no transfer pairing. Migration `0002_retire_transfer_pairs` unpaired every row (deleting bank-backed legs and returning their bank rows to `pending`), and `0003_drop_transfer_partner` removed the field. An account-to-account movement is handled by ignoring the bank row instead.

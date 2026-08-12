@@ -51,16 +51,6 @@ urlpatterns = [
         views.TransactionMarkPaidView.as_view(),
         name="transaction-mark-paid",
     ),
-    path(
-        "<int:budget_pk>/transactions/<int:pk>/transfer-candidates/",
-        views.TransferCandidatesView.as_view(),
-        name="transaction-transfer-candidates",
-    ),
-    path(
-        "<int:budget_pk>/transactions/<int:pk>/transfer-link/",
-        views.TransferLinkView.as_view(),
-        name="transaction-transfer-link",
-    ),
     # Recurring (lives in BudgetSettings; modal endpoints only)
     path("<int:budget_pk>/recurring/create/", views.RecurringCreateView.as_view(), name="recurring-create"),
     path("<int:budget_pk>/recurring/<int:pk>/", views.RecurringDetailView.as_view(), name="recurring-detail"),
@@ -80,11 +70,6 @@ urlpatterns = [
         "<int:budget_pk>/bank-transactions/<int:pk>/create-transaction/",
         views.BankTransactionCreateTxnView.as_view(),
         name="bank-txn-create",
-    ),
-    path(
-        "<int:budget_pk>/bank-transactions/<int:pk>/confirm-as-transfer/",
-        views.BankTransactionConfirmAsTransferView.as_view(),
-        name="bank-txn-confirm-transfer",
     ),
     path(
         "<int:budget_pk>/bank-transactions/<int:pk>/ignore/",

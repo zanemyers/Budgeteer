@@ -80,8 +80,8 @@ def _system_totals(now):
     User = get_user_model()
     thirty_days_ago = now - timedelta(days=30)
 
-    # "True" spend: expense-category lines, paid, excluding sinking-fund deposits
-    # and transfer transactions — matches the activity logic in apps/budget/data.py.
+    # "True" spend: expense-category lines, paid, excluding sinking-fund deposits and
+    # transfer-typed rows (goal deposits) — matches the activity logic in apps/budget/data.py.
     real_expense_lines = TransactionLine.objects.filter(
         category__category_type="expense",
         category__goal__isnull=True,
