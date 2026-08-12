@@ -507,9 +507,7 @@ export default function Dashboard({
           <div className="sm:hidden text-sm tabular-nums">
             {readOnlyFigure(cat.assigned, overTarget ? "text-expense" : assignedClass)}
             {showTarget && <span className="text-muted-foreground"> / {fmt(cat.budgeted, symbol)}</span>}
-            {overTarget && (
-              <span className="block text-xs text-expense">{fmt(String(overBy), symbol)} over</span>
-            )}
+            {overTarget && <span className="block text-xs text-expense">{fmt(String(overBy), symbol)} over</span>}
           </div>
           <div className="hidden sm:flex flex-wrap items-baseline justify-end gap-x-1">
             <CurrencyEditCell
@@ -592,20 +590,33 @@ export default function Dashboard({
     return (
       <TableRow key={cat.id} className="max-sm:cursor-pointer" onClick={rowClick(cat)}>
         <TableCell>
+          {/* `whitespace-normal` on the inner elements, not on the cell: TableCell hard-codes
+              md:whitespace-nowrap, and a competing md:whitespace-normal on the same cell would be
+              decided by Tailwind's internal property ordering rather than by source order. The cell
+              stays nowrap and the name wraps inside it, which is what actually matters — with nowrap
+              a single long goal name sets the column's min-content width, and one 50-character name
+              was dragging the table 68px past its column even at 1280px. */}
           {/* All time, like the Goals page: the balance beside it is a lifetime figure. */}
           <a
             href={`/budgets/${budget_pk}/transactions/?month=${month}&category=${cat.id}&all=1`}
-            className="hidden sm:inline no-underline hover:underline"
+            className="hidden sm:inline whitespace-normal no-underline hover:underline"
           >
             {cat.name}
           </a>
           <button
             type="button"
-            className="sm:hidden text-left rounded-sm hover:underline focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2 touch:inline-flex touch:min-h-11 touch:items-center"
+            className="sm:hidden whitespace-normal text-left rounded-sm hover:underline focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2 touch:inline-flex touch:min-h-11 touch:items-center"
             onClick={() => openRowEditor(cat)}
           >
             {cat.name}
           </button>
+          {/* The Saved column folds to here for the one band where it can't have a column of its
+              own. Same trick the tables use on phones, just at lg because this card lives in the
+              narrow sidebar rather than the full width. lg was measurably too early: at 1024px
+              the sidebar is ~290px and three figure columns still want ~340px. */}
+          <div className="hidden md:block xl:hidden text-xs text-muted-foreground tabular-nums">
+            {fmt(cat.goal_total_saved, symbol)} saved
+          </div>
         </TableCell>
         <TableCell className="text-right">
           <div className="sm:hidden text-sm tabular-nums whitespace-nowrap">
@@ -651,7 +662,7 @@ export default function Dashboard({
             )}
           </div>
         </TableCell>
-        <TableCell className="text-right" title="Balance in this goal, all time">
+        <TableCell className="text-right md:hidden xl:table-cell" title="Balance in this goal, all time">
           {fmt(cat.goal_total_saved, symbol)}
         </TableCell>
       </TableRow>
@@ -956,7 +967,11 @@ export default function Dashboard({
                             below that, where the grid is a single column. Held on one line here so
                             the auto layout has to widen the column rather than break the label. */}
                         <TableHead className="text-right whitespace-nowrap">Assigned / mo</TableHead>
-                        <TableHead className="text-right">Saved</TableHead>
+                        {/* Hidden md→lg only, in lockstep with its cell. Below md the grid is a
+                            single column and there's room; from xl the sidebar is wide enough
+                            again. In between it's 224–290px, which three figure columns don't
+                            fit — see renderGoalRow for where this figure goes instead. */}
+                        <TableHead className="text-right md:hidden xl:table-cell">Saved</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>{activeGoals.map((cat) => renderGoalRow(cat))}</TableBody>
