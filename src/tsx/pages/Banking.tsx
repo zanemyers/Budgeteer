@@ -70,6 +70,8 @@ interface PaymentMethodOption {
 
 interface Props {
   connections: Connection[];
+  /** Accounts from an uploaded file, which have no connection to hang under. */
+  imported_accounts: BankAccount[];
   payment_methods: PaymentMethodOption[];
 }
 
@@ -315,8 +317,9 @@ function AccountCard({
   );
 }
 
-export default function Banking({ connections: initialConnections, payment_methods }: Props) {
+export default function Banking({ connections: initialConnections, imported_accounts, payment_methods }: Props) {
   const [connections, setConnections] = useState(initialConnections);
+  const [imported, setImported] = useState(imported_accounts);
   const [syncing, setSyncing] = useState(false);
 
   async function syncNow() {
@@ -342,6 +345,7 @@ export default function Banking({ connections: initialConnections, payment_metho
         accounts: c.accounts.map((a) => (a.id === updated.id ? { ...a, ...updated } : a)),
       })),
     );
+    setImported((prev) => prev.map((a) => (a.id === updated.id ? { ...a, ...updated } : a)));
   }
 
   function setAccountHidden(account: BankAccount, hidden: boolean) {
@@ -351,8 +355,9 @@ export default function Banking({ connections: initialConnections, payment_metho
 
   // Counts describe what's on screen. Including hidden accounts here would read as "14 accounts ·
   // 37 pending" above a page showing five of them and no pending at all.
-  const hidden = connections.flatMap((c) => c.accounts.filter((a) => a.is_hidden));
-  const visibleAccounts = connections.flatMap((c) => c.accounts.filter((a) => !a.is_hidden));
+  const allAccounts = [...connections.flatMap((c) => c.accounts), ...imported];
+  const hidden = allAccounts.filter((a) => a.is_hidden);
+  const visibleAccounts = allAccounts.filter((a) => !a.is_hidden);
   const totalAccounts = visibleAccounts.length;
   // Same rule as the per-card badge: only rows that can actually be reviewed. Counting every
   // account's pending made the header advertise "37 pending transactions" when all 37 sat on

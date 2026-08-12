@@ -91,6 +91,34 @@ class TestBankingView(BankingViewTestCase):
         self.assertEqual([a["name"] for a in accounts], ["Ignored"])
         self.assertTrue(accounts[0]["is_hidden"])
 
+    def test_imported_accounts_reach_the_page(self):
+        """
+        An imported account has no connection, and the page only ever iterated connections.
+
+        So a file-imported account was invisible here while still feeding the register through its
+        payment method — you could not see it, remap it or hide it.
+        """
+        user = self.make_user()
+        budget = Budget.objects.create(name="Household")
+        BudgetMembership.objects.create(budget=budget, user=user, role="owner")
+        BankAccount.objects.create(connection=None, budget=budget, simplefin_id="i1", name="Statement")
+
+        self.client.force_login(user)
+        self.client.get(reverse("banking"))
+
+        imported = self.props()["imported_accounts"]
+        self.assertEqual([a["name"] for a in imported], ["Statement"])
+
+    def test_imported_accounts_of_other_budgets_are_not_shown(self):
+        user = self.make_user()
+        other = Budget.objects.create(name="Someone else's")
+        BankAccount.objects.create(connection=None, budget=other, simplefin_id="i2", name="Theirs")
+
+        self.client.force_login(user)
+        self.client.get(reverse("banking"))
+
+        self.assertEqual(self.props()["imported_accounts"], [])
+
     def test_excludes_other_users_connections(self):
         user = self.make_user()
         other = self.make_user(username="other")
@@ -185,6 +213,30 @@ class TestBankAccountUpdateView(BankingViewTestCase):
         self.assertEqual(response.status_code, 200)
         self.acct.refresh_from_db()
         self.assertTrue(self.acct.is_hidden)
+
+    def test_can_map_an_imported_account(self):
+        # get_object_or_404 required connection__user, so an imported account — which has no
+        # connection — was unreachable even for the person whose budget it belongs to.
+        self.client.force_login(self.user)
+        budget = Budget.objects.create(name="Household")
+        BudgetMembership.objects.create(budget=budget, user=self.user, role="owner")
+        pm = PaymentMethod.objects.create(budget=budget, name="Imported card")
+        acct = BankAccount.objects.create(connection=None, budget=budget, simplefin_id="i3", name="Statement")
+
+        response = _patch_json(self.client, reverse("banking_account", args=[acct.pk]), {"payment_method_id": pm.pk})
+
+        self.assertEqual(response.status_code, 200)
+        acct.refresh_from_db()
+        self.assertEqual(acct.payment_method_id, pm.pk)
+
+    def test_rejects_an_imported_account_from_another_budget(self):
+        self.client.force_login(self.user)
+        other = Budget.objects.create(name="Someone else's")
+        acct = BankAccount.objects.create(connection=None, budget=other, simplefin_id="i4", name="Theirs")
+
+        response = _patch_json(self.client, reverse("banking_account", args=[acct.pk]), {"is_hidden": True})
+
+        self.assertEqual(response.status_code, 404)
 
     def test_rejects_another_users_account(self):
         other = self.make_user(username="other")

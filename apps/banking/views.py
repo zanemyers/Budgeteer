@@ -1,5 +1,5 @@
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views import View
@@ -42,13 +42,29 @@ def _serialize_bank_account(acct: BankAccount, *, include_transactions: bool = T
     return data
 
 
+def _visible_to(user) -> Q:
+    """
+    Every account a user is entitled to, however it got here.
+
+    A synced account proves ownership through its connection. An imported one has no connection at
+    all — it exists so a file from another tool has somewhere to hang — and reaches the user through
+    the budget it was filed against instead. Only the first half was ever checked, so an imported
+    account was invisible on the Banking page and could not be mapped or hidden even by its owner,
+    while still feeding the register through its payment method.
+    """
+    return Q(connection__user=user) | Q(budget__members=user)
+
+
 class BankingView(LoginRequiredMixin, View):
     """Persistent view of bank data — reads from the DB, not SimpleFIN."""
 
     def get(self, request):
         user = request.user
         pending_counts = dict(
-            BankTransaction.objects.filter(bank_account__connection__user=user, status=BankTransaction.Status.PENDING)
+            BankTransaction.objects.filter(
+                Q(bank_account__connection__user=user) | Q(bank_account__budget__members=user),
+                status=BankTransaction.Status.PENDING,
+            )
             .values("bank_account_id")
             .annotate(c=Count("id"))
             .values_list("bank_account_id", "c")
@@ -89,11 +105,22 @@ class BankingView(LoginRequiredMixin, View):
             )
         ]
 
+        imported = []
+        for acct in (
+            BankAccount.objects.filter(connection__isnull=True, budget__members=user)
+            .prefetch_related("bank_transactions", "holdings")
+            .distinct()
+        ):
+            serialized = _serialize_bank_account(acct)
+            serialized["pending_count"] = pending_counts.get(acct.pk, 0)
+            imported.append(serialized)
+
         return inertia_render(
             request,
             "Banking",
             {
                 "connections": connections,
+                "imported_accounts": imported,
                 "payment_methods": payment_methods,
             },
         )
@@ -122,7 +149,7 @@ class BankAccountUpdateView(LoginRequiredMixin, View):
     """Set the PaymentMethod a BankAccount maps to (or hide it)."""
 
     def patch(self, request, pk):
-        acct = get_object_or_404(BankAccount, pk=pk, connection__user=request.user)
+        acct = get_object_or_404(BankAccount, _visible_to(request.user), pk=pk)
         data = parse_json_body(request)
         if "payment_method_id" in data:
             pm_id = data["payment_method_id"]
