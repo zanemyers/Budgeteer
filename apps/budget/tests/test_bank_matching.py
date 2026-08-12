@@ -110,8 +110,8 @@ class TestDirectionMatching(BankMatchingTestCase):
         suggestions = suggest_matches(self.bank_txn("50.00", payee="Paycheck"), self.budget)
         self.assertEqual([s["transaction_id"] for s in suggestions], [expected.pk])
 
-    def test_transfers_are_matchable_in_either_direction(self):
-        """A transfer has a leg in each direction, so direction must not exclude it."""
+    def test_transfer_typed_rows_are_matchable_in_either_direction(self):
+        """A goal deposit can leave or arrive, so direction must not exclude a transfer-typed row."""
         for bank_amount in ("-50.00", "50.00"):
             with self.subTest(bank_amount=bank_amount):
                 Transaction.objects.all().delete()
@@ -265,6 +265,36 @@ class TestMerchantRule(BankMatchingTestCase):
         rules = [s for s in suggest_matches(bt, self.budget) if s["kind"] == "merchant_rule"]
         self.assertEqual([r["category_id"] for r in rules], [self.expense_cat.pk])
         self.assertEqual(rules[0]["payment_method_id"], self.pm.pk)
+
+    def test_a_system_category_is_never_proposed(self):
+        """
+        A hidden system category must never be offered as a destination.
+
+        The retired confirm-as-transfer flow wrote its lines into the system "Transfers" category,
+        and that history kept scoring afterwards: "Create in Transfers — Suggested 85%". The user
+        could not have picked that category themselves, so it must not be proposed.
+        """
+        system_cat = Category.objects.create(
+            budget=self.budget, name="Transfers", category_type=Category.TYPE_EXPENSE, is_system=True
+        )
+        past_txn = self.txn(
+            "22.00",
+            category=system_cat,
+            paid=POSTED.date() - datetime.timedelta(days=30),
+            description="ONLINE TRANSFER TO SAVINGS",
+        )
+        linked = self.bank_txn(
+            "-22.00",
+            payee="ONLINE TRANSFER TO SAVINGS",
+            posted=POSTED - datetime.timedelta(days=30),
+            status=BankTransaction.Status.LINKED,
+        )
+        linked.transaction = past_txn
+        linked.save(update_fields=["transaction"])
+
+        bt = self.bank_txn("-31.00", payee="ONLINE TRANSFER TO SAVINGS")
+        rules = [s for s in suggest_matches(bt, self.budget) if s["kind"] == "merchant_rule"]
+        self.assertEqual(rules, [], "a hidden system category was offered as a destination")
 
     def test_a_dissimilar_past_link_proposes_nothing(self):
         past_txn = self.txn("22.00", paid=POSTED.date() - datetime.timedelta(days=30), description="SHELL")

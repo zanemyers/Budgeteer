@@ -78,8 +78,8 @@ def _direction_conflicts(bank_amount: Decimal, txn: Transaction) -> bool:
     SimpleFIN signs outflows negative, while local amounts are always stored positive with
     the direction carried by transaction_type. _amount_matches compares magnitudes only, so
     without this an incoming $50 paycheck would be offered as the match for a $50 card
-    charge. Transfers and untyped transactions have no unambiguous direction, so they are
-    never rejected here.
+    charge. Transfer-typed rows (goal deposits) and untyped transactions have no unambiguous
+    direction, so they are never rejected here.
     """
     txn_type = txn.derive_transaction_type()
     if txn_type == Category.TYPE_INCOME:
@@ -187,6 +187,12 @@ def suggest_matches(bank_txn: BankTransaction, budget: Budget) -> list[dict]:
         if sim < 0.6:
             continue
         for line in past.transaction.lines.all():  # type: ignore[union-attr]
+            # A system category is hidden from every user-facing category list, so proposing one
+            # offers a destination the user could not have chosen themselves. This bites because
+            # the retired confirm-as-transfer flow wrote its lines into the system "Transfers"
+            # category, and that history still scores: "Create in Transfers — Suggested 85%".
+            if line.category.is_system:
+                continue
             existing = category_scores.get(line.category_id)
             if existing is None or sim > existing[0]:
                 category_scores[line.category_id] = (sim, line.category.name)
