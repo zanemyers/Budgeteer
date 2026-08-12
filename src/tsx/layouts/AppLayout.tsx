@@ -328,6 +328,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             aria-label="Open navigation"
             aria-expanded={sidebarOpen}
             aria-controls="app-sidebar"
+            // Where the tour points below lg, since the sidebar it would otherwise highlight is a
+            // closed drawer there. See navStep in lib/onboardingTour.
+            data-tour="nav-menu"
           >
             <Menu />
           </Button>

@@ -1,7 +1,8 @@
 import { router } from "@inertiajs/react";
-import { type DriveStep, driver } from "driver.js";
+// Type-only, so it is erased at build time and pulls nothing into the bundle. The library and its
+// stylesheet are loaded on demand in `runStage` — see the note there.
+import type { DriveStep } from "driver.js";
 import { useEffect, useRef } from "react";
-import "driver.js/dist/driver.css";
 import { getCsrfToken } from "./api";
 
 /**
@@ -24,6 +25,41 @@ const STAGE_ORDER: TourStage[] = ["dashboard", "transactions", "goals", "setting
  * synthetic click, so we drive its own state setter instead).
  */
 export const SELECT_TAB_EVENT = "budgeteer:select-settings-tab";
+
+/**
+ * Is this element actually on screen?
+ *
+ * `runStage` drops steps whose anchor is missing, but presence in the DOM was the wrong test for the
+ * sidebar: below lg it is a closed drawer held off-screen with `visibility: hidden`, so every
+ * sidebar-anchored step survived the filter and driver.js dutifully highlighted something the user
+ * could not see. On a phone — the primary target — that was the *first* thing a new account saw,
+ * since the full run auto-starts on the dashboard.
+ *
+ * `visibility` inherits, so reading it off the element covers an ancestor having hidden it, and a
+ * zero-size rect covers `display: none`.
+ */
+function isVisible(el: Element): boolean {
+  if (getComputedStyle(el).visibility === "hidden") return false;
+  const rect = el.getBoundingClientRect();
+  return rect.width > 0 && rect.height > 0;
+}
+
+/**
+ * A step anchored to the sidebar, falling back to the mobile header's menu button.
+ *
+ * Below lg the sidebar is a drawer, so the thing to point at is what opens it. Copy has to read
+ * correctly against either anchor, since driver.js popovers are fixed per step.
+ */
+function navStep(title: string, description: string): DriveStep {
+  return {
+    element: () => {
+      const sidebar = document.querySelector('[data-tour="account"]');
+      if (sidebar && isVisible(sidebar)) return sidebar as Element;
+      return document.querySelector('[data-tour="nav-menu"]') as Element;
+    },
+    popover: { title, description },
+  };
+}
 
 /**
  * A settings step anchored to a tab; the highlight handler switches to it.
@@ -54,11 +90,10 @@ const TOURS: Record<TourStage, DriveStep[]> = {
         description: "A quick tour of where things live and how each page works. You can exit any time.",
       },
     },
+    navStep("Your budgets", "Switch between budgets, or create a new one, from the navigation menu."),
     {
-      element: '[data-tour="account"]',
-      popover: { title: "Your budgets", description: "Switch between budgets or create a new one from this menu." },
-    },
-    {
+      // Sidebar-only, and dropped below lg by the visibility filter rather than pointing at a drawer
+      // that isn't open. The dashboard is already on screen there, so nothing is lost by skipping it.
       element: '[data-tour="dashboard"]',
       popover: {
         title: "Dashboard",
@@ -208,22 +243,46 @@ function markOnboarded() {
  * stayed set and every page for the rest of the browser session re-armed a tour whose overlay blocked
  * anything it was not pointing at.
  */
-let activeTour: ReturnType<typeof driver> | null = null;
+let activeTour: { destroy: () => void } | null = null;
+
+/**
+ * Bumped by every `endActiveTour`, so a `runStage` still awaiting its dynamic import can tell that
+ * the page it was starting for has since unmounted. Without it, leaving a page during those few
+ * milliseconds would raise an overlay over the *next* page with nothing left to tear it down —
+ * the same stranded-overlay failure the `activeTour` handle above exists to prevent.
+ */
+let runToken = 0;
 
 /** Tear down whatever tour is showing. Called when a page unmounts. */
 export function endActiveTour() {
+  runToken += 1;
   activeTour?.destroy();
   activeTour = null;
 }
 
-/** Run one stage's tour. In full mode, advances to the next stage on completion. */
-function runStage(stage: TourStage, opts: { full: boolean }) {
+/**
+ * Run one stage's tour. In full mode, advances to the next stage on completion.
+ *
+ * driver.js and its stylesheet are imported here rather than at module scope: they are ~25 KB of
+ * JavaScript plus a stylesheet that only matter once a tour actually runs, and AppLayout imports
+ * this module on every page for the "Replay tour" menu item — so a static import put the whole
+ * library in the shared entry chunk that even the logged-out landing page downloads.
+ *
+ * main.css's `.driver-popover.budgeteer-tour` overrides are more specific than driver.css's own
+ * rules, so they still win no matter which stylesheet the browser applies last.
+ */
+async function runStage(stage: TourStage, opts: { full: boolean }) {
+  const token = runToken;
+  const [{ driver }] = await Promise.all([import("driver.js"), import("driver.js/dist/driver.css")]);
+  // Unmounted while the import was in flight — drop it rather than stranding an overlay.
+  if (token !== runToken) return;
   const steps = TOURS[stage].filter((s) => {
     if (!s.element) return true;
-    // Steps may resolve their anchor at runtime (see tabStep), so call it rather than treating the
-    // function itself as a selector — querySelector would throw on it.
-    if (typeof s.element === "function") return Boolean(s.element());
-    return Boolean(document.querySelector(s.element as string));
+    // Steps may resolve their anchor at runtime (see tabStep/navStep), so call it rather than
+    // treating the function itself as a selector — querySelector would throw on it.
+    const el = typeof s.element === "function" ? s.element() : document.querySelector(s.element as string);
+    // Visible, not merely present: the off-screen sidebar drawer is still in the DOM below lg.
+    return Boolean(el) && isVisible(el as Element);
   });
   if (steps.length === 0) {
     if (opts.full) advance(stage);
@@ -304,7 +363,8 @@ export function usePageTour(stage: TourStage, budgetPk?: number, opts?: { firstR
       markStageSeen(stage);
       // Pages that know their budget refresh the flag, so a run started without one is corrected.
       if (budgetPk != null) setFullRun(budgetPk);
-      runStage(stage, { full: true });
+      // Fire and forget: the cleanup below bumps the run token, which the loader checks.
+      void runStage(stage, { full: true });
     }, 400);
     // Leaving the page ends the tour rather than abandoning its overlay. Without this, an overlay
     // outlived the page that raised it and silently ate every click on the next one.
@@ -318,7 +378,7 @@ export function usePageTour(stage: TourStage, budgetPk?: number, opts?: { firstR
 
 /** Launch a single page's tour on demand (no navigation, no completion side effects). */
 export function startPageTour(stage: TourStage) {
-  runStage(stage, { full: false });
+  void runStage(stage, { full: false });
 }
 
 /** Start the chained full walkthrough from the dashboard. Used by first-run and "Replay tour". */
@@ -331,7 +391,7 @@ export function startFullTour(budgetPk?: number) {
   }
   setFullRun(budgetPk);
   if (window.location.pathname === stageUrl("dashboard", budgetPk)) {
-    runStage("dashboard", { full: true });
+    void runStage("dashboard", { full: true });
   } else {
     router.visit(stageUrl("dashboard", budgetPk));
   }
