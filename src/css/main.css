@@ -388,6 +388,26 @@ input[type="number"],
    were the smallest targets in the drawer. Sized on pointer, not width, so a coarse-pointer tablet
    gets it too. */
 @media (pointer: coarse) {
+  /* iOS Safari zooms the viewport when a focused text field is under 16px, and does not zoom back
+     out afterwards — you are left at a magnification the layout was never designed for, scrolling
+     sideways to read a row. The usual workaround, `maximum-scale=1` on the viewport meta, fixes it
+     by disabling pinch zoom entirely, which is a worse accessibility failure than the one it
+     solves. Sizing the field is the fix that costs nothing.
+
+     shadcn already guards this by putting `text-base` on Input and Textarea, but `text-base` is
+     1rem and this app sets :root to 0.9375rem — so every field rendered at 15px and zoomed anyway.
+     A literal 16px is used rather than a rem for that reason.
+
+     Unlayered on purpose. Tailwind's utilities sit in @layer utilities and unlayered CSS beats any
+     layer, so this also wins over the `md:text-sm` those primitives carry — which would otherwise
+     re-break a coarse-pointer tablet, where md is very much active. Element selectors rather than
+     classes so it covers the two bare fields outside the primitives, and anything added later. */
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+
   .sidebar-link,
   .sidebar-user,
   .sidebar-brand {

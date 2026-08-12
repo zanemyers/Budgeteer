@@ -12,7 +12,6 @@ import {
   Wallet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import ThemeToggle from "../components/ThemeToggle";
 
 interface Props {
   github_url: string;
@@ -148,8 +147,12 @@ export default function Landing({ github_url }: Props) {
               </a>
             </Button>
           </div>
+          {/* No theme toggle here. The header's job is Sign in and Sign up, and a third control
+              never sat cleanly beside them for a preference that costs nothing to leave alone: the
+              pre-paint script in app.html already applies whatever is in localStorage, and the
+              default "auto" follows prefers-color-scheme, so a visitor gets their system theme
+              without asking. The toggle is waiting in the sidebar once they're in. */}
           <div className="flex items-center gap-1 sm:gap-2">
-            <ThemeToggle />
             <Button asChild variant="ghost" size="sm">
               <a href="/accounts/login/">Sign in</a>
             </Button>
