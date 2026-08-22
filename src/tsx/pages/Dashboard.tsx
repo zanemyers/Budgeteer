@@ -696,11 +696,18 @@ export default function Dashboard({
   // month's budget. This is the figure Remaining is measured against.
   const totalSpent = expense.reduce((sum, c) => sum + parseFloat(c.activity), 0);
   const rta = parseFloat(overview.ready_to_assign);
-  // Income that hasn't gone out the door, deliberately the difference between the first two
-  // boxes on this strip so the three can be checked against each other by eye. Not the same
+  // Income that hasn't gone out the door, deliberately the difference between the first three
+  // boxes on this strip so the four can be checked against each other by eye. Not the same
   // question as `rta`, which is income that hasn't been *assigned* — money can sit assigned but
   // unspent in a category, and then what's assignable is the smaller of the two.
-  const remaining = parseFloat(overview.income_total) - totalSpent;
+  //
+  // Money deposited into a goal has left the month's pool as surely as money spent, so it is
+  // subtracted here exactly as `ready_to_assign` subtracts it server-side. The two deposit routes
+  // land differently and both need this: a Goals-page deposit is transaction_type "transfer" and
+  // touches neither of the other terms, while the modal's "Deposit" writes an income-type line to
+  // a goal category, which lands in income_total — so without this it *raised* Remaining. Netting
+  // it against saved_to_goals_total leaves that case at zero rather than double-counting it.
+  const remaining = parseFloat(overview.income_total) - totalSpent - parseFloat(overview.saved_to_goals_total);
 
   // The fourth box changes character with the month. While there is money to assign it is the
   // place you assign it; once there isn't, leading with a 0.00 said nothing, so it becomes a
@@ -865,7 +872,7 @@ export default function Dashboard({
                 {(hasToAssign || overAssigned) && showRemainingLine && (
                   <p
                     className="mt-1 text-sm text-ink-quiet"
-                    title="Income minus expenses. Differs from what is assignable when money is assigned but not yet spent."
+                    title="Income minus expenses and money saved to goals. Differs from what is assignable when money is assigned but not yet spent."
                   >
                     <span className="tabular-nums text-ink">{fmt(remaining, symbol)}</span> remaining
                   </p>
