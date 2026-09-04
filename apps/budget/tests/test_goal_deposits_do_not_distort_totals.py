@@ -2,10 +2,14 @@
 Tests that a `transaction_type="transfer"` row stays out of the headline numbers.
 
 This is what is left of the retired two-leg transfer feature. The type value survives because goal
-deposits are written with it, and `data.py` leans on that in both directions: income_total matches
-`transaction_type="income"` exactly, and category activity excludes "transfer" outright. Move $500
-into a goal and it must not read as $500 of income *or* $500 of spending, or Ready to Assign — the
-one number PRODUCT.md says the app exists to deliver — drifts.
+deposits are written with it, and category activity excludes "transfer" outright. Move $500 into a
+goal and it must not read as $500 of income *or* $500 of spending, or Ready to Assign — the one
+number PRODUCT.md says the app exists to deliver — drifts.
+
+Income no longer leans on the type at all: it is the *category* that keeps deposits out, since the
+two deposit routes disagree about the type. See test_derived_transaction_type_totals.py, which
+covers that and the other two things this file's first draft got wrong about the column — that it
+is usually blank, and that a goal opening balance is not a monthly flow.
 """
 
 import datetime

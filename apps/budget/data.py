@@ -4,11 +4,28 @@ import calendar
 import datetime
 from decimal import Decimal
 
-from django.db.models import Sum
+from django.db.models import Case, CharField, F, Sum, When
 from django.db.models.functions import Coalesce, TruncMonth
 from django.utils import timezone
 
 from apps.budget.models import Category, CategoryBudget, Transaction, TransactionLine, add_months
+
+# `Transaction.transaction_type` is blank on roughly one transaction in five, by design:
+# `derive_transaction_type()` falls back to the first line's category type and the column is only
+# written when something needs to override that (a goal deposit, which is stored as "transfer").
+# Aggregate queries can't call that method, so filtering the raw column silently dropped every
+# blank-type row — which is how four April paychecks went missing from the Income box while still
+# showing in the income category rows below it, since those filter on the category instead.
+#
+# This is the SQL port of the same fallback, for use as `.alias(eff_type=EFF_TYPE).filter(...)`.
+# It resolves per line rather than from the transaction's first line; the two differ only for a
+# split whose lines straddle income and expense, where per-line is the more useful answer for a
+# sum anyway.
+EFF_TYPE = Case(
+    When(transaction__transaction_type="", then=F("category__category_type")),
+    default=F("transaction__transaction_type"),
+    output_field=CharField(),
+)
 
 
 def serialize_category(cat, total_saved: "Decimal | None" = None) -> dict:
@@ -37,13 +54,13 @@ def get_goal_total_saved(budget, category_id: int, user_rate: "Decimal" = Decima
     credits = TransactionLine.objects.filter(
         transaction__budget=budget,
         category_id=category_id,
-        transaction__transaction_type__in=("income", "transfer"),
-    ).aggregate(total=Sum("amount_usd"))["total"] or Decimal("0.00")
+    ).alias(eff_type=EFF_TYPE).filter(eff_type__in=("income", "transfer")).aggregate(total=Sum("amount_usd"))[
+        "total"
+    ] or Decimal("0.00")
     expense = TransactionLine.objects.filter(
         transaction__budget=budget,
         category_id=category_id,
-        transaction__transaction_type="expense",
-    ).aggregate(total=Sum("amount_usd"))["total"] or Decimal("0.00")
+    ).alias(eff_type=EFF_TYPE).filter(eff_type="expense").aggregate(total=Sum("amount_usd"))["total"] or Decimal("0.00")
     return (credits - expense) * user_rate
 
 
@@ -207,7 +224,8 @@ def get_budget_overview(budget, month_str: str | None, user_rate: "Decimal" = De
             category__category_type=Category.TYPE_EXPENSE,
             transaction__paid_date__range=(period_start, period_end),
         )
-        .exclude(transaction__transaction_type="transfer")
+        .alias(eff_type=EFF_TYPE)
+        .exclude(eff_type="transfer")
         .values("category_id")
         .annotate(total=Sum("amount_usd"))
     )
@@ -215,6 +233,10 @@ def get_budget_overview(budget, month_str: str | None, user_rate: "Decimal" = De
 
     # Income activity for regular (non-goal) categories: bucketed by effective budget month
     # so income targeted at this month shows here even if it was received earlier/later.
+    #
+    # Filtered on the effective type as well as the category, so these rows sum to the Income
+    # figure above them. Without it, a purchase misfiled into an income category was counted as
+    # income here while the total correctly excluded it, and the two disagreed by that amount.
     income_activity_qs = (
         TransactionLine.objects.filter(
             transaction__budget=budget,
@@ -222,8 +244,8 @@ def get_budget_overview(budget, month_str: str | None, user_rate: "Decimal" = De
             category__category_type=Category.TYPE_INCOME,
             transaction__paid_date__isnull=False,
         )
-        .alias(eff_month=eff_month)
-        .filter(eff_month=period_start)
+        .alias(eff_month=eff_month, eff_type=EFF_TYPE)
+        .filter(eff_month=period_start, eff_type="income")
         .values("category_id")
         .annotate(total=Sum("amount_usd"))
     )
@@ -237,9 +259,10 @@ def get_budget_overview(budget, month_str: str | None, user_rate: "Decimal" = De
         for row in TransactionLine.objects.filter(
             transaction__budget=budget,
             category__goal__isnull=False,
-            transaction__transaction_type="expense",
             transaction__paid_date__isnull=False,
         )
+        .alias(eff_type=EFF_TYPE)
+        .filter(eff_type="expense")
         .values("category_id")
         .annotate(total=Sum("amount_usd"))
     }
@@ -255,9 +278,10 @@ def get_budget_overview(budget, month_str: str | None, user_rate: "Decimal" = De
         TransactionLine.objects.filter(
             transaction__budget=budget,
             category__goal__isnull=False,
-            transaction__transaction_type__in=("income", "transfer"),
             transaction__paid_date__isnull=False,
         )
+        .alias(eff_type=EFF_TYPE)
+        .filter(eff_type__in=("income", "transfer"))
         .values("category_id")
         .annotate(total=Sum("amount_usd"))
     )
@@ -272,41 +296,54 @@ def get_budget_overview(budget, month_str: str | None, user_rate: "Decimal" = De
         saved_map[cat_id] = saved_map.get(cat_id, Decimal("0.00")) - expense_total
 
     # Monthly SF spending (paid expenses only) for dashboard totals
-    goal_monthly_expense_qs = TransactionLine.objects.filter(
-        transaction__budget=budget,
-        category__goal__isnull=False,
-        transaction__transaction_type="expense",
-        transaction__paid_date__range=(period_start, period_end),
-    ).aggregate(total=Sum("amount_usd"))
+    goal_monthly_expense_qs = (
+        TransactionLine.objects.filter(
+            transaction__budget=budget,
+            category__goal__isnull=False,
+            transaction__paid_date__range=(period_start, period_end),
+        )
+        .alias(eff_type=EFF_TYPE)
+        .filter(eff_type="expense")
+        .aggregate(total=Sum("amount_usd"))
+    )
     goal_monthly_spending = (goal_monthly_expense_qs["total"] or Decimal("0.00")) * user_rate
 
-    # Saved to goals this month — any income or transfer line landing in a goal (paid only).
-    # Income-to-goal counts here so the dashboard reflects it; net effect on RTA is zero because
-    # income-type lines also appear in income_total below.
+    # Saved to goals this month — money actually moved into a goal (paid only), by either route:
+    # the Goals page writes transaction_type "transfer", a goal balance adjustment writes "income".
+    #
+    # Opening balances are excluded. They are savings that already existed when the goal was
+    # created, so nothing moved and no month should show them leaving; they still give the goal its
+    # balance through `saved_credits_qs` above, which deliberately does not filter them out.
     goal_transfers_qs = (
         TransactionLine.objects.filter(
             transaction__budget=budget,
-            transaction__transaction_type__in=("transfer", "income"),
             category__goal__isnull=False,
             transaction__paid_date__isnull=False,
+            transaction__is_opening_balance=False,
         )
-        .alias(eff_month=eff_month)
-        .filter(eff_month=period_start)
+        .alias(eff_month=eff_month, eff_type=EFF_TYPE)
+        .filter(eff_month=period_start, eff_type__in=("transfer", "income"))
         .aggregate(total=Sum("amount_usd"))
     )
     goal_transfers_month = (goal_transfers_qs["total"] or Decimal("0.00")) * user_rate
 
-    # Total income this month — any income-type line, regardless of which category it lands in,
-    # bucketed by effective budget month. An income line to a goal category counts here AND in
-    # goal_transfers_month, so net RTA = 0 for income that went straight to a goal.
+    # Total income this month — income-type lines landing in a non-goal category, bucketed by
+    # effective budget month.
+    #
+    # Goal categories are excluded because a deposit into a goal is not new money: the paycheck it
+    # came out of was already counted as income when it arrived, so counting the deposit again
+    # inflated this figure by the amount moved. Both deposit routes land here — the Goals page
+    # writes transaction_type "transfer", while a goal balance adjustment writes "income" — and it
+    # is the *category* that identifies them, not the type. What leaves the assignable pool is
+    # handled by `goal_transfers_month` below.
     income_qs = (
         TransactionLine.objects.filter(
             transaction__budget=budget,
-            transaction__transaction_type="income",
+            category__goal__isnull=True,
             transaction__paid_date__isnull=False,
         )
-        .alias(eff_month=eff_month)
-        .filter(eff_month=period_start)
+        .alias(eff_month=eff_month, eff_type=EFF_TYPE)
+        .filter(eff_month=period_start, eff_type="income")
         .aggregate(total=Sum("amount_usd"))
     )
     income_total = (income_qs["total"] or Decimal("0.00")) * user_rate
@@ -357,10 +394,11 @@ def get_budget_overview(budget, month_str: str | None, user_rate: "Decimal" = De
             TransactionLine.objects.filter(
                 transaction__budget=budget,
                 category_id=cat.pk,
-                transaction__transaction_type="expense",
                 transaction__paid_date__gte=start,
                 transaction__paid_date__lte=period_end,
             )
+            .alias(eff_type=EFF_TYPE)
+            .filter(eff_type="expense")
             .annotate(m=TruncMonth("transaction__paid_date"))
             .values("m")
             .annotate(total=Sum("amount_usd"))
@@ -454,14 +492,20 @@ def get_budget_overview(budget, month_str: str | None, user_rate: "Decimal" = De
         }
         rows.append(row)
 
-    # Ready to Assign is per-month: this month's income (by effective budget month) minus what's
-    # been assigned and saved to goals this month. Surplus is not carried forward automatically —
-    # to fund a future month, target income at it via its budget month.
+    # Ready to Assign is per-month: this month's income (by effective budget month) minus what has
+    # been assigned out of it. Surplus is not carried forward automatically — to fund a future
+    # month, target income at it via its budget month.
+    #
+    # Assignment is what commits money, for goals exactly as for any other category: a goal's
+    # CategoryBudget row is already part of `expense_assigned`, and the deposit that follows moves
+    # money inside the goal rather than out of the pool. So `goal_transfers_month` is not subtracted
+    # here — doing both charged the same money twice, which only looked right while income_total was
+    # inflated by the same deposits.
     #
     # One exception: releasing a rollover category's carried balance contributes a negative
     # assignment, so RTA can exceed this month's income by the amount released. That money was
     # funded by an earlier month and would otherwise be stranded.
-    ready_to_assign = income_total - expense_assigned - goal_transfers_month
+    ready_to_assign = income_total - expense_assigned
 
     return {
         "income_total": str(income_total),

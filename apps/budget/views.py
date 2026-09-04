@@ -23,6 +23,7 @@ from apps.banking.models import BankTransaction
 from apps.base.http import parse_json_body
 from apps.base.models import Currency as CurrencyModel
 from apps.budget.data import (
+    EFF_TYPE,
     get_budget_overview,
     get_goal_total_saved,
     get_pending_count,
@@ -609,8 +610,9 @@ class BudgetSettingsView(BudgetMemberMixin, View):
             for row in TransactionLine.objects.filter(
                 transaction__budget=budget,
                 category_id__in=goal_ids,
-                transaction__transaction_type__in=("income", "transfer"),
             )
+            .alias(eff_type=EFF_TYPE)
+            .filter(eff_type__in=("income", "transfer"))
             .values("category_id")
             .annotate(total=Sum("amount_usd"))
         }
@@ -619,8 +621,9 @@ class BudgetSettingsView(BudgetMemberMixin, View):
             for row in TransactionLine.objects.filter(
                 transaction__budget=budget,
                 category_id__in=goal_ids,
-                transaction__transaction_type="expense",
             )
+            .alias(eff_type=EFF_TYPE)
+            .filter(eff_type="expense")
             .values("category_id")
             .annotate(total=Sum("amount_usd"))
         }
@@ -834,6 +837,10 @@ class CategoryCreateView(BudgetMemberMixin, View):
                         due_date=today,
                         paid_date=today,
                         transaction_type="income",
+                        # Savings that already existed, not income arriving. Without this the
+                        # figure reads as a hole the size of the balance in the month it is
+                        # recorded — see migration 0006.
+                        is_opening_balance=True,
                         created_by=request.user,
                         currency=currency,
                         exchange_rate_to_usd=exchange_rate,

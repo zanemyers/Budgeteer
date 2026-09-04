@@ -702,11 +702,9 @@ export default function Dashboard({
   // unspent in a category, and then what's assignable is the smaller of the two.
   //
   // Money deposited into a goal has left the month's pool as surely as money spent, so it is
-  // subtracted here exactly as `ready_to_assign` subtracts it server-side. The two deposit routes
-  // land differently and both need this: a Goals-page deposit is transaction_type "transfer" and
-  // touches neither of the other terms, while the modal's "Deposit" writes an income-type line to
-  // a goal category, which lands in income_total — so without this it *raised* Remaining. Netting
-  // it against saved_to_goals_total leaves that case at zero rather than double-counting it.
+  // subtracted. It is not added back: `income_total` counts only non-goal categories, because the
+  // paycheck a deposit came out of was already counted as income when it arrived. Goal opening
+  // balances are in neither term — nothing moved when those were recorded.
   const remaining = parseFloat(overview.income_total) - totalSpent - parseFloat(overview.saved_to_goals_total);
 
   // The fourth box changes character with the month. While there is money to assign it is the

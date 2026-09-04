@@ -647,6 +647,13 @@ class Transaction(models.Model):
     )
     notes = models.TextField(blank=True)
     transaction_type = models.CharField(max_length=10, blank=True, default="")
+    is_opening_balance = models.BooleanField(
+        default=False,
+        help_text=(
+            "Savings that already existed when a goal was created, not money that moved. It gives "
+            "the goal its starting balance and is excluded from every monthly flow figure."
+        ),
+    )
     currency = models.CharField(max_length=3, default="USD")
     exchange_rate_to_usd = models.DecimalField(max_digits=20, decimal_places=8, default=Decimal("1"))
     created_at = models.DateTimeField(auto_now_add=True)
