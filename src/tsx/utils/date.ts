@@ -32,6 +32,31 @@ export function fmtDate(iso: string | null | undefined): string {
 }
 
 /**
+ * Format a YYYY-MM month string as "September 2026".
+ *
+ * Same `T00:00:00` reasoning as `fmtDate` — a bare "2026-09-01" parses as UTC midnight,
+ * which is August 31st west of UTC and would name the wrong month.
+ */
+export function fmtMonth(ym: string): string {
+  return new Date(`${ym}-01T00:00:00`).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+}
+
+/**
+ * A run of YYYY-MM month strings around `anchor` (itself a YYYY-MM), from `before` months
+ * earlier through `after` months later. Built by walking a Date so year boundaries and
+ * month lengths take care of themselves.
+ */
+export function monthRange(anchor: string, before: number, after: number): string[] {
+  const [year, month] = anchor.split("-").map(Number);
+  const out: string[] = [];
+  for (let offset = -before; offset <= after; offset++) {
+    const d = new Date(year, month - 1 + offset, 1);
+    out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+  }
+  return out;
+}
+
+/**
  * Format an ISO datetime string (with time component) as a medium-style date + short time.
  * Returns "never" when the input is null/empty — meant for "last synced at" displays.
  */

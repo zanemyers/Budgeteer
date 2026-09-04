@@ -26,7 +26,7 @@ import type {
   TransactionLine,
 } from "../types";
 import { fmtSigned, useCurrencySymbol } from "../utils/currency";
-import { fmtDate } from "../utils/date";
+import { fmtDate, fmtMonth, monthRange } from "../utils/date";
 
 type CategoryWithGoal = Category & { is_goal?: boolean };
 
@@ -128,6 +128,16 @@ export default function TransactionModal({
   const visibleCategories = (categories as CategoryWithGoal[]).filter(
     (c) => c.category_type === form.categoryType || c.is_goal,
   );
+  // Months offered for "funds budget month", anchored on the date the money arrives — a month back
+  // for late-entered pay, a year forward for budgeting ahead. An existing value outside that window
+  // is kept in the list so editing an old transaction can't silently drop it.
+  const budgetMonthAnchor = (form.paid_date || form.due_date || todayLocal()).slice(0, 7);
+  const budgetMonthOptions = monthRange(budgetMonthAnchor, 1, 12);
+  if (form.budget_month && !budgetMonthOptions.includes(form.budget_month)) {
+    budgetMonthOptions.push(form.budget_month);
+    budgetMonthOptions.sort();
+  }
+
   const allLinesSF =
     form.lines.length > 0 &&
     form.lines.every((l) => {
@@ -271,9 +281,9 @@ export default function TransactionModal({
               </Alert>
             )}
 
-            {/* A segmented control whose selection was expressed only as a background colour,
+            {/* A segmented control whose selection was expressed only as a background color,
                 on the one input that decides whether money is coming in or going out.
-                aria-pressed states it; the check mark is the non-colour cue. */}
+                aria-pressed states it; the check mark is the non-color cue. */}
             {!isEdit && (
               <fieldset className="flex w-full min-w-0 rounded-md overflow-hidden border border-border-strong">
                 {/* sr-only legend rather than aria-label on a div: a real fieldset/legend is
@@ -559,13 +569,23 @@ export default function TransactionModal({
             {form.categoryType === "income" && (
               <div className="flex flex-col gap-2">
                 <Label htmlFor="txn-budget-month">Funds budget month</Label>
-                <Input
-                  id="txn-budget-month"
-                  type="month"
-                  value={form.budget_month}
-                  onChange={(e) => update("budget_month", e.target.value)}
-                />
-                <p className="text-xs text-muted-foreground">Leave blank to use your pay schedule's default.</p>
+                <Select
+                  value={form.budget_month || "default"}
+                  onValueChange={(v) => update("budget_month", v === "default" ? "" : v)}
+                >
+                  <SelectTrigger id="txn-budget-month" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="default">— Pay schedule default —</SelectItem>
+                    {budgetMonthOptions.map((ym) => (
+                      <SelectItem key={ym} value={ym}>
+                        {fmtMonth(ym)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">Which month's budget this income funds.</p>
               </div>
             )}
           </div>
