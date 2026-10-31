@@ -33,7 +33,7 @@ RUN --mount=type=cache,target=/root/.cache/uv,id=budgeteer-uv \
 # ------------------------------------------------------------
 # STAGE 2: Dev layer
 # ------------------------------------------------------------
-FROM python:3.14-slim-bookworm AS dev
+FROM python:3.15-slim-bookworm AS dev
 
 # Set the locale
 # mime-support installs /etc/mime.types so static files are served with correct mime types
